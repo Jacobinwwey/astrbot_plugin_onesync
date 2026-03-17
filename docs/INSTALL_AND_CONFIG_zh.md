@@ -13,10 +13,11 @@
 
 核心特性：
 
-- 支持多个目标软件（`targets_json` 中按名称扩展）。
+- 支持多个目标软件（`human_targets` 可视化列表或 `targets_json` 开发者模式）。
 - 支持两种更新策略：`cargo_path_git` 与 `command`。
 - 支持自动更新、手动检查、强制更新。
 - 支持镜像回退、多远端候选，提高更新可用性。
+- 支持更新前自动探测远端质量（连通性与延迟）并按质量排序。
 - 支持状态持久化与事件日志，便于排障与审计。
 
 ## 2. 环境要求
@@ -85,35 +86,15 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 
 ### 4.1 3 分钟配置法（zeroclaw）
 
-1. 插件配置页设置：`poll_interval_minutes = 5`。
-2. 在 `targets_json` 把 `zeroclaw.check_interval_hours` 改为目标值。
+1. 插件配置页设置：`target_config_mode = human`，并把 `poll_interval_minutes = 5`。
+2. 在 `human_targets` 中找到/新增 `zeroclaw` 条目，把 `check_interval_hours` 改为目标值。
 3. 保存配置，建议重启 AstrBot（尤其改了 `poll_interval_minutes` 时）。
 4. 执行 `/updater status` 验证。
 
 示例：每 6 小时检查一次。
 
-```json
-{
-  "zeroclaw": {
-    "enabled": true,
-    "strategy": "cargo_path_git",
-    "check_interval_hours": 6,
-    "repo_path": "/home/jacob/zeroclaw",
-    "binary_path": "/root/.cargo/bin/zeroclaw",
-    "branch": "",
-    "auto_add_safe_directory": true,
-    "upstream_repo": "https://github.com/zeroclaw-labs/zeroclaw.git",
-    "mirror_prefixes": ["", "https://gh-proxy.com/", "https://ghfast.top/"],
-    "remote_candidates": [],
-    "build_commands": ["cargo install --path {repo_path}"],
-    "verify_cmd": "{binary_path} --version",
-    "check_timeout_s": 120,
-    "update_timeout_s": 1800,
-    "verify_timeout_s": 120,
-    "current_version_pattern": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.\\-]+)?)"
-  }
-}
-```
+`human_targets` 是动态列表（`template_list`），可无限新增条目；每条是一个软件目标卡片。
+首次使用 human 模式时，插件会自动将已有 `targets_json` 条目迁移到 `human_targets`。
 
 ### 4.2 常见频率换算
 
@@ -128,7 +109,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 仅管理员可用。
 
 - `/updater status`
-  - 查看全局状态、定时参数和各目标最近状态。
+  - 查看全局状态、定时参数、各目标最近状态和最近一次 `best_remote`。
 - `/updater check [target]`
   - 立即检查版本，不执行更新。
 - `/updater run [target]`
@@ -158,9 +139,11 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `notify_on_schedule_noop` | bool | `false` | 无更新/无异常时是否也通知。 |
 | `dry_run` | bool | `false` | 演练模式，不真正执行更新命令。 |
 | `admin_sid_list` | list | `[]` | 接收定时通知的管理员 SID 列表。 |
-| `targets_json` | text(json) | 内置 zeroclaw 示例 | 多目标配置入口。 |
+| `target_config_mode` | string | `human` | `human` 使用可视化目标列表，`developer` 使用 JSON。 |
+| `human_targets` | template_list | 内置 zeroclaw 条目 | 可视化目标列表，无槽位上限。 |
+| `targets_json` | text(json) | 内置 zeroclaw 示例 | 开发者模式目标配置。 |
 
-### 6.2 `targets_json` 通用字段
+### 6.2 目标通用字段（human_targets / targets_json 通用）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -182,8 +165,13 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `upstream_repo` | 建议 | 上游仓库 URL（与镜像前缀组合）。 |
 | `mirror_prefixes` | 否 | 镜像前缀列表，如 `https://gh-proxy.com/`。 |
 | `remote_candidates` | 否 | 远端候选 URL 列表。 |
+| `append_default_mirror_prefixes` | 否 | 自动补齐内置 GitHub 镜像前缀（默认开启）。 |
 | `branch` | 否 | 分支；不填则自动检测当前分支。 |
 | `auto_add_safe_directory` | 否 | 自动执行 git safe.directory 配置。 |
+| `probe_remotes` | 否 | 更新前是否自动测速并排序远端（默认开启）。 |
+| `probe_timeout_s` | 否 | 单个远端测速超时时间（秒）。 |
+| `probe_parallelism` | 否 | 并发测速数量。 |
+| `probe_cache_ttl_minutes` | 否 | 测速缓存 TTL（分钟），避免频繁重复测速。 |
 | `build_commands` | 否 | 更新后构建命令，默认 `cargo install --path {repo_path}`。 |
 | `current_version_cmd` | 否 | 默认 `{binary_path} --version`。 |
 
@@ -201,6 +189,9 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 
 ### 7.1 增加第二个软件（command 策略）
 
+人类模式（推荐）：在 `human_targets` 中点击“添加条目”选择 `命令型软件` 模板，按表单填写。  
+开发者模式：在 `targets_json` 中追加对象。
+
 ```json
 {
   "zeroclaw": {
@@ -210,7 +201,11 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
     "repo_path": "/home/jacob/zeroclaw",
     "binary_path": "/root/.cargo/bin/zeroclaw",
     "upstream_repo": "https://github.com/zeroclaw-labs/zeroclaw.git",
-    "mirror_prefixes": ["", "https://gh-proxy.com/"],
+    "mirror_prefixes": ["", "https://edgeone.gh-proxy.com/", "https://gh-proxy.com/"],
+    "probe_remotes": true,
+    "probe_timeout_s": 15,
+    "probe_parallelism": 4,
+    "probe_cache_ttl_minutes": 30,
     "build_commands": ["cargo install --path {repo_path}"]
   },
   "mytool": {
@@ -242,6 +237,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 ## 8. 稳定性与鲁棒性建议
 
 - 对 GitHub 类源使用 `mirror_prefixes` + `remote_candidates` 双保险。
+- 保持 `probe_remotes=true`，让 OneSync 在更新前自动选择更快且可用的远端。
 - 把 `check_timeout_s`、`update_timeout_s` 调整到符合目标软件体量。
 - 给关键目标配置 `verify_cmd`，避免“更新命令成功但实际不可用”。
 - 使用 `admin_sid_list` 接收失败告警，建议开启 `notify_admin_on_schedule`。

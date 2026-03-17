@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,15 @@ from .updater_core import (
 
 PLUGIN_NAME = "astrbot_plugin_onesync"
 
+DEFAULT_GITHUB_MIRROR_PREFIXES = [
+    "",
+    "https://edgeone.gh-proxy.com/",
+    "https://hk.gh-proxy.com/",
+    "https://gh-proxy.com/",
+    "https://gh.llkk.cc/",
+    "https://ghfast.top/",
+]
+
 DEFAULT_TARGETS: dict[str, dict[str, Any]] = {
     "zeroclaw": {
         "enabled": True,
@@ -31,8 +41,13 @@ DEFAULT_TARGETS: dict[str, dict[str, Any]] = {
         "branch": "",
         "auto_add_safe_directory": True,
         "upstream_repo": "https://github.com/zeroclaw-labs/zeroclaw.git",
-        "mirror_prefixes": ["", "https://gh-proxy.com/", "https://ghfast.top/"],
+        "mirror_prefixes": DEFAULT_GITHUB_MIRROR_PREFIXES,
         "remote_candidates": [],
+        "append_default_mirror_prefixes": True,
+        "probe_remotes": True,
+        "probe_timeout_s": 15,
+        "probe_parallelism": 4,
+        "probe_cache_ttl_minutes": 30,
         "build_commands": ["cargo install --path {repo_path}"],
         "verify_cmd": "{binary_path} --version",
         "check_timeout_s": 120,
@@ -95,10 +110,36 @@ def _to_float(value: Any, default: float, min_value: float | None = None) -> flo
     return parsed
 
 
+def _to_str_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        result: list[str] = []
+        for item in value:
+            text = str(item or "").strip()
+            if text:
+                result.append(text)
+        return result
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = json.loads(text)
+                return _to_str_list(parsed)
+            except Exception:
+                pass
+        parts = [seg.strip() for seg in re.split(r"[\n,]+", text) if seg.strip()]
+        return parts
+    return []
+
+
 class OneSyncPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
+        self._config_obj = config if hasattr(config, "save_config") else None
         self.runner = CommandRunner()
 
         self.plugin_data_dir = Path(get_astrbot_data_path()) / "plugin_data" / PLUGIN_NAME
@@ -115,6 +156,7 @@ class OneSyncPlugin(Star):
     async def initialize(self) -> None:
         self.plugin_data_dir.mkdir(parents=True, exist_ok=True)
         self._load_state()
+        self._bootstrap_human_targets_if_needed()
 
         if _to_bool(self.config.get("enabled", True), True):
             poll_interval = _to_int(self.config.get("poll_interval_minutes", 30), 30, 1)
@@ -141,7 +183,7 @@ class OneSyncPlugin(Star):
                 logger.error("[onesync] scheduled loop exit error: %s", exc)
         await self._save_state()
 
-    def _load_targets(self) -> dict[str, dict[str, Any]]:
+    def _load_targets_from_json(self) -> dict[str, dict[str, Any]]:
         raw = self.config.get("targets_json", "")
         if isinstance(raw, dict):
             parsed = raw
@@ -150,17 +192,16 @@ class OneSyncPlugin(Star):
                 parsed = json.loads(raw)
             except Exception as exc:
                 logger.error(
-                    "[onesync] invalid targets_json, fallback to default: %s",
+                    "[onesync] invalid targets_json, fallback to empty: %s",
                     exc,
                 )
                 parsed = {}
         else:
             parsed = {}
 
-        if not isinstance(parsed, dict) or not parsed:
-            parsed = DEFAULT_TARGETS
-
         normalized: dict[str, dict[str, Any]] = {}
+        if not isinstance(parsed, dict):
+            return normalized
         for name, cfg in parsed.items():
             if not isinstance(cfg, dict):
                 continue
@@ -169,6 +210,223 @@ class OneSyncPlugin(Star):
                 continue
             normalized[target_name] = dict(cfg)
         return normalized
+
+    def _normalize_human_target_config(
+        self,
+        raw_cfg: Any,
+        *,
+        forced_name: str | None = None,
+    ) -> tuple[str, dict[str, Any]] | None:
+        if not isinstance(raw_cfg, dict):
+            return None
+
+        target_name = forced_name or str(raw_cfg.get("name", "")).strip()
+        if not target_name:
+            return None
+
+        template_key = str(raw_cfg.get("__template_key", "")).strip().lower()
+        strategy = str(raw_cfg.get("strategy", template_key or "command")).strip().lower()
+        if strategy not in {"command", "cmd", "cargo_path_git", "git_cargo"}:
+            strategy = "command"
+
+        check_interval_default = _to_float(
+            self.config.get("default_check_interval_hours", 24),
+            24.0,
+            0.0,
+        )
+        cfg: dict[str, Any] = {
+            "enabled": _to_bool(raw_cfg.get("enabled", True), True),
+            "strategy": strategy,
+            "check_interval_hours": _to_float(
+                raw_cfg.get("check_interval_hours", check_interval_default),
+                check_interval_default,
+                0.0,
+            ),
+            "check_timeout_s": _to_int(raw_cfg.get("check_timeout_s", 120), 120, 1),
+            "update_timeout_s": _to_int(raw_cfg.get("update_timeout_s", 900), 900, 1),
+            "verify_timeout_s": _to_int(raw_cfg.get("verify_timeout_s", 120), 120, 1),
+            "verify_cmd": str(raw_cfg.get("verify_cmd", "")).strip(),
+            "current_version_pattern": str(raw_cfg.get("current_version_pattern", "")).strip(),
+        }
+
+        if strategy in {"cargo_path_git", "git_cargo"}:
+            mirror_prefixes = _to_str_list(raw_cfg.get("mirror_prefixes", DEFAULT_GITHUB_MIRROR_PREFIXES))
+            if not mirror_prefixes:
+                mirror_prefixes = [""]
+            cfg.update(
+                {
+                    "repo_path": str(raw_cfg.get("repo_path", "")).strip(),
+                    "binary_path": str(raw_cfg.get("binary_path", "")).strip(),
+                    "branch": str(raw_cfg.get("branch", "")).strip(),
+                    "auto_add_safe_directory": _to_bool(raw_cfg.get("auto_add_safe_directory", True), True),
+                    "upstream_repo": str(raw_cfg.get("upstream_repo", "")).strip(),
+                    "mirror_prefixes": mirror_prefixes,
+                    "remote_candidates": _to_str_list(raw_cfg.get("remote_candidates", [])),
+                    "append_default_mirror_prefixes": _to_bool(raw_cfg.get("append_default_mirror_prefixes", True), True),
+                    "probe_remotes": _to_bool(raw_cfg.get("probe_remotes", True), True),
+                    "probe_timeout_s": _to_int(raw_cfg.get("probe_timeout_s", 15), 15, 1),
+                    "probe_parallelism": _to_int(raw_cfg.get("probe_parallelism", 4), 4, 1),
+                    "probe_cache_ttl_minutes": _to_float(raw_cfg.get("probe_cache_ttl_minutes", 30), 30.0, 0.0),
+                    "build_commands": _to_str_list(raw_cfg.get("build_commands", ["cargo install --path {repo_path}"])),
+                    "current_version_cmd": str(raw_cfg.get("current_version_cmd", "")).strip(),
+                },
+            )
+        else:
+            cfg.update(
+                {
+                    "current_version_cmd": str(raw_cfg.get("current_version_cmd", "")).strip(),
+                    "latest_version_cmd": str(raw_cfg.get("latest_version_cmd", "")).strip(),
+                    "latest_version_pattern": str(raw_cfg.get("latest_version_pattern", "")).strip(),
+                    "update_commands": _to_str_list(raw_cfg.get("update_commands", [])),
+                },
+            )
+        return target_name, cfg
+
+    def _target_cfg_to_human_template_entry(
+        self,
+        target_name: str,
+        target_cfg: dict[str, Any],
+    ) -> dict[str, Any]:
+        strategy = str(target_cfg.get("strategy", "command")).strip().lower()
+        entry: dict[str, Any] = {
+            "name": target_name,
+            "enabled": _to_bool(target_cfg.get("enabled", True), True),
+            "check_interval_hours": _to_float(target_cfg.get("check_interval_hours", 24), 24.0, 0.0),
+            "check_timeout_s": _to_int(target_cfg.get("check_timeout_s", 120), 120, 1),
+            "update_timeout_s": _to_int(target_cfg.get("update_timeout_s", 900), 900, 1),
+            "verify_timeout_s": _to_int(target_cfg.get("verify_timeout_s", 120), 120, 1),
+            "verify_cmd": str(target_cfg.get("verify_cmd", "")).strip(),
+            "current_version_pattern": str(target_cfg.get("current_version_pattern", "")).strip(),
+        }
+
+        if strategy in {"cargo_path_git", "git_cargo"}:
+            entry["__template_key"] = "cargo_path_git"
+            entry["strategy"] = "cargo_path_git"
+            entry.update(
+                {
+                    "repo_path": str(target_cfg.get("repo_path", "")).strip(),
+                    "binary_path": str(target_cfg.get("binary_path", "")).strip(),
+                    "branch": str(target_cfg.get("branch", "")).strip(),
+                    "auto_add_safe_directory": _to_bool(target_cfg.get("auto_add_safe_directory", True), True),
+                    "upstream_repo": str(target_cfg.get("upstream_repo", "")).strip(),
+                    "mirror_prefixes": _to_str_list(target_cfg.get("mirror_prefixes", DEFAULT_GITHUB_MIRROR_PREFIXES)),
+                    "remote_candidates": _to_str_list(target_cfg.get("remote_candidates", [])),
+                    "append_default_mirror_prefixes": _to_bool(target_cfg.get("append_default_mirror_prefixes", True), True),
+                    "probe_remotes": _to_bool(target_cfg.get("probe_remotes", True), True),
+                    "probe_timeout_s": _to_int(target_cfg.get("probe_timeout_s", 15), 15, 1),
+                    "probe_parallelism": _to_int(target_cfg.get("probe_parallelism", 4), 4, 1),
+                    "probe_cache_ttl_minutes": _to_float(target_cfg.get("probe_cache_ttl_minutes", 30), 30.0, 0.0),
+                    "build_commands": _to_str_list(target_cfg.get("build_commands", ["cargo install --path {repo_path}"])),
+                    "current_version_cmd": str(target_cfg.get("current_version_cmd", "")).strip(),
+                },
+            )
+        else:
+            entry["__template_key"] = "command"
+            entry["strategy"] = "command"
+            entry.update(
+                {
+                    "current_version_cmd": str(target_cfg.get("current_version_cmd", "")).strip(),
+                    "latest_version_cmd": str(target_cfg.get("latest_version_cmd", "")).strip(),
+                    "latest_version_pattern": str(target_cfg.get("latest_version_pattern", "")).strip(),
+                    "update_commands": _to_str_list(target_cfg.get("update_commands", [])),
+                },
+            )
+        return entry
+
+    def _persist_plugin_config(self) -> None:
+        cfg_obj = self._config_obj
+        if cfg_obj is None:
+            return
+        try:
+            cfg_obj.save_config(replace_config=dict(self.config))
+        except Exception as exc:
+            logger.warning("[onesync] persist plugin config failed: %s", exc)
+
+    def _bootstrap_human_targets_if_needed(self) -> None:
+        mode = str(self.config.get("target_config_mode", "human")).strip().lower()
+        if mode != "human":
+            return
+
+        existing = self.config.get("human_targets", [])
+        if isinstance(existing, list) and existing:
+            return
+
+        source_targets = self._load_targets_from_json() or DEFAULT_TARGETS
+        entries: list[dict[str, Any]] = []
+        for name, cfg in source_targets.items():
+            if not isinstance(cfg, dict):
+                continue
+            target_name = str(name).strip()
+            if not target_name:
+                continue
+            entries.append(self._target_cfg_to_human_template_entry(target_name, cfg))
+
+        if not entries:
+            return
+
+        self.config["human_targets"] = entries
+        self._persist_plugin_config()
+        logger.info(
+            "[onesync] initialized human_targets from existing targets (%d entries)",
+            len(entries),
+        )
+
+    def _load_targets_from_human_config(self) -> dict[str, dict[str, Any]]:
+        result: dict[str, dict[str, Any]] = {}
+
+        entries = self.config.get("human_targets", [])
+        if isinstance(entries, list):
+            for index, entry in enumerate(entries):
+                parsed = self._normalize_human_target_config(entry)
+                if not parsed:
+                    continue
+                name, cfg = parsed
+                if name in result:
+                    logger.warning(
+                        "[onesync] duplicated target name in human_targets: %s (index=%s)",
+                        name,
+                        index,
+                    )
+                result[name] = cfg
+
+        # 兼容旧版固定槽位配置
+        zeroclaw_cfg = self._normalize_human_target_config(
+            self.config.get("target_zeroclaw", {}),
+            forced_name="zeroclaw",
+        )
+        if zeroclaw_cfg and zeroclaw_cfg[0] not in result:
+            result[zeroclaw_cfg[0]] = zeroclaw_cfg[1]
+        for slot_key in ("target_slot_1", "target_slot_2", "target_slot_3"):
+            parsed = self._normalize_human_target_config(self.config.get(slot_key, {}))
+            if not parsed:
+                continue
+            name, cfg = parsed
+            if name in result:
+                logger.warning(
+                    "[onesync] duplicated target name in human mode: %s (slot=%s)",
+                    name,
+                    slot_key,
+                )
+            result[name] = cfg
+
+        return result
+
+    def _load_targets(self) -> dict[str, dict[str, Any]]:
+        mode = str(self.config.get("target_config_mode", "human")).strip().lower()
+
+        if mode == "developer":
+            parsed = self._load_targets_from_json()
+            return parsed or DEFAULT_TARGETS
+
+        human_targets = self._load_targets_from_human_config()
+        if human_targets:
+            return human_targets
+
+        json_targets = self._load_targets_from_json()
+        if json_targets:
+            return json_targets
+
+        return DEFAULT_TARGETS
 
     def _load_state(self) -> None:
         if not self.state_path.exists():
@@ -218,6 +476,7 @@ class OneSyncPlugin(Star):
             f"enabled={_to_bool(self.config.get('enabled', True), True)}",
             f"poll_interval_minutes={_to_int(self.config.get('poll_interval_minutes', 30), 30, 1)}",
             f"auto_update_on_schedule={_to_bool(self.config.get('auto_update_on_schedule', True), True)}",
+            f"target_config_mode={str(self.config.get('target_config_mode', 'human')).strip().lower() or 'human'}",
             "",
             f"targets={len(targets)}",
         ]
@@ -231,7 +490,8 @@ class OneSyncPlugin(Star):
                     f"last_checked={st.get('last_checked_at', '-')} "
                     f"status={st.get('last_status', '-')} "
                     f"current={st.get('current_version', '-')} "
-                    f"latest={st.get('latest_version', '-')}"
+                    f"latest={st.get('latest_version', '-')} "
+                    f"best_remote={st.get('last_best_remote', '-')}"
                 ),
             )
         return "\n".join(lines)
@@ -322,6 +582,11 @@ class OneSyncPlugin(Star):
         check_result: CheckResult = await strategy.check(target_name, target_cfg, runtime_ctx)
         result_record["current_version"] = check_result.current_version
         result_record["latest_version"] = check_result.latest_version
+        if isinstance(check_result.extra, dict):
+            best_remote = str(check_result.extra.get("best_remote", "")).strip()
+            if best_remote:
+                result_record["best_remote"] = best_remote
+                state["last_best_remote"] = best_remote
 
         state["last_checked_at"] = now_iso
         state["current_version"] = check_result.current_version
