@@ -133,7 +133,7 @@ class CommandRunner:
         started = time.monotonic()
         proc = await asyncio.create_subprocess_exec(
             "/bin/bash",
-            "-lc",
+            "-c",
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -427,6 +427,17 @@ class CommandStrategy(BaseStrategy):
 
 
 class CargoPathGitStrategy(CommandStrategy):
+    async def _ensure_safe_directory(
+        self,
+        repo_path: str,
+        timeout_s: int,
+    ) -> ExecResult:
+        command = (
+            "git config --global --add safe.directory "
+            f"{shlex.quote(repo_path)}"
+        )
+        return await self.runner.run(command, timeout_s=timeout_s)
+
     async def _detect_branch(
         self,
         repo_path: str,
@@ -513,6 +524,13 @@ class CargoPathGitStrategy(CommandStrategy):
             return CheckResult(target=target_name, ok=False, message="missing repo_path")
         if not binary_path:
             return CheckResult(target=target_name, ok=False, message="missing binary_path")
+
+        auto_safe_dir = bool(target_cfg.get("auto_add_safe_directory", True))
+        if auto_safe_dir:
+            safe_res = await self._ensure_safe_directory(repo_path, timeout_s=check_timeout)
+            diagnostics.append(
+                f"safe.directory add exit={safe_res.exit_code} duration={safe_res.duration_s:.2f}s",
+            )
 
         current_cmd = _safe_str(target_cfg.get("current_version_cmd")).strip()
         if not current_cmd:
@@ -630,6 +648,12 @@ class CargoPathGitStrategy(CommandStrategy):
 
         old_version = check_result.current_version
         update_timeout = int(target_cfg.get("update_timeout_s", 1200))
+        auto_safe_dir = bool(target_cfg.get("auto_add_safe_directory", True))
+        if auto_safe_dir:
+            safe_res = await self._ensure_safe_directory(repo_path, timeout_s=update_timeout)
+            diagnostics.append(
+                f"safe.directory add exit={safe_res.exit_code} duration={safe_res.duration_s:.2f}s",
+            )
         branch = _safe_str(target_cfg.get("branch")).strip()
         if not branch:
             try:

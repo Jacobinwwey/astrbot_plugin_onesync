@@ -29,6 +29,7 @@ DEFAULT_TARGETS: dict[str, dict[str, Any]] = {
         "repo_path": "/home/jacob/zeroclaw",
         "binary_path": "/root/.cargo/bin/zeroclaw",
         "branch": "",
+        "auto_add_safe_directory": True,
         "upstream_repo": "https://github.com/zeroclaw-labs/zeroclaw.git",
         "mirror_prefixes": ["", "https://gh-proxy.com/", "https://ghfast.top/"],
         "remote_candidates": [],

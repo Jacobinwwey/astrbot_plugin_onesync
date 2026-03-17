@@ -49,6 +49,6 @@
     "editor_mode": true,
     "editor_language": "json",
     "hint": "可配置多个软件目标。新增目标后无需改代码。",
-    "default": "{\"zeroclaw\":{\"enabled\":true,\"strategy\":\"cargo_path_git\",\"check_interval_hours\":12,\"repo_path\":\"/home/jacob/zeroclaw\",\"binary_path\":\"/root/.cargo/bin/zeroclaw\",\"branch\":\"\",\"upstream_repo\":\"https://github.com/zeroclaw-labs/zeroclaw.git\",\"mirror_prefixes\":[\"\",\"https://gh-proxy.com/\",\"https://ghfast.top/\"],\"remote_candidates\":[],\"build_commands\":[\"cargo install --path {repo_path}\"],\"verify_cmd\":\"{binary_path} --version\",\"check_timeout_s\":120,\"update_timeout_s\":1800,\"verify_timeout_s\":120,\"current_version_pattern\":\"(\\\\d+\\\\.\\\\d+\\\\.\\\\d+(?:[-+][0-9A-Za-z.\\\\-]+)?)\"}}"
+    "default": "{\"zeroclaw\":{\"enabled\":true,\"strategy\":\"cargo_path_git\",\"check_interval_hours\":12,\"repo_path\":\"/home/jacob/zeroclaw\",\"binary_path\":\"/root/.cargo/bin/zeroclaw\",\"branch\":\"\",\"auto_add_safe_directory\":true,\"upstream_repo\":\"https://github.com/zeroclaw-labs/zeroclaw.git\",\"mirror_prefixes\":[\"\",\"https://gh-proxy.com/\",\"https://ghfast.top/\"],\"remote_candidates\":[],\"build_commands\":[\"cargo install --path {repo_path}\"],\"verify_cmd\":\"{binary_path} --version\",\"check_timeout_s\":120,\"update_timeout_s\":1800,\"verify_timeout_s\":120,\"current_version_pattern\":\"(\\\\d+\\\\.\\\\d+\\\\.\\\\d+(?:[-+][0-9A-Za-z.\\\\-]+)?)\"}}"
   }
 }
