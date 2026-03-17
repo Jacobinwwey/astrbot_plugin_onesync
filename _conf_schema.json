@@ -4,6 +4,13 @@
     "type": "bool",
     "default": true
   },
+  "software_overview": {
+    "description": "软件与版本总览（自动生成）",
+    "type": "text",
+    "editor_mode": true,
+    "hint": "此字段由插件自动刷新，用于快速查看软件名称与版本。建议勿手动修改。",
+    "default": ""
+  },
   "poll_interval_minutes": {
     "description": "定时轮询间隔（分钟）",
     "type": "int",
@@ -57,12 +64,12 @@
       "human",
       "developer"
     ],
-    "hint": "human：使用下方“软件目标列表”可视化配置；developer：使用 targets_json 高级模式。"
+    "hint": "human：面向用户的简洁配置；developer：展开高级参数并直接编辑 targets_json。"
   },
   "human_targets": {
     "type": "template_list",
     "description": "软件目标列表（人类交互模式，无槽位上限）",
-    "hint": "仅在 target_config_mode=human 时生效。点击“添加条目”可无限新增软件目标；已配置目标会在这里逐条显示。",
+    "hint": "仅在 target_config_mode=human 时生效。这里保留常用基础项；镜像、超时、正则等高级项请切换 developer 模式配置。",
     "default": [],
     "templates": {
       "cargo_path_git": {
@@ -99,104 +106,20 @@
             "description": "可执行文件路径",
             "default": ""
           },
-          "branch": {
-            "type": "string",
-            "description": "分支名（留空自动检测）",
-            "default": ""
-          },
-          "auto_add_safe_directory": {
-            "type": "bool",
-            "description": "自动添加 git safe.directory",
-            "default": true
-          },
           "upstream_repo": {
             "type": "string",
             "description": "上游仓库 URL",
             "default": ""
           },
-          "mirror_prefixes": {
-            "type": "list",
-            "description": "镜像前缀列表",
-            "default": [
-              "",
-              "https://edgeone.gh-proxy.com/",
-              "https://hk.gh-proxy.com/",
-              "https://gh-proxy.com/",
-              "https://gh.llkk.cc/",
-              "https://ghfast.top/"
-            ]
-          },
-          "remote_candidates": {
-            "type": "list",
-            "description": "额外远端候选地址",
-            "default": []
-          },
-          "append_default_mirror_prefixes": {
-            "type": "bool",
-            "description": "自动补齐内置 GitHub 镜像前缀",
-            "default": true
-          },
-          "probe_remotes": {
-            "type": "bool",
-            "description": "更新前自动测速远端",
-            "default": true
-          },
-          "probe_timeout_s": {
-            "type": "int",
-            "description": "单远端测速超时（秒）",
-            "default": 15
-          },
-          "probe_parallelism": {
-            "type": "int",
-            "description": "并发测速数",
-            "default": 4
-          },
-          "probe_cache_ttl_minutes": {
-            "type": "float",
-            "description": "测速缓存 TTL（分钟）",
-            "default": 30
-          },
-          "build_commands": {
-            "type": "list",
-            "description": "构建命令列表",
-            "default": [
-              "cargo install --path {repo_path}"
-            ]
-          },
           "current_version_cmd": {
             "type": "string",
-            "description": "当前版本命令（可选）",
+            "description": "当前版本命令（可选，默认使用 binary_path --version）",
             "default": ""
-          },
-          "current_version_pattern": {
-            "type": "string",
-            "description": "当前版本提取正则",
-            "default": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.\\-]+)?)"
           },
           "verify_cmd": {
             "type": "string",
             "description": "更新后验证命令",
             "default": ""
-          },
-          "required_commands": {
-            "type": "list",
-            "description": "环境检测附加命令（可选）",
-            "default": []
-          },
-          "check_timeout_s": {
-            "type": "int",
-            "description": "检查超时（秒）",
-            "default": 120
-          },
-          "update_timeout_s": {
-            "type": "int",
-            "description": "更新超时（秒）",
-            "default": 1800
-          },
-          "verify_timeout_s": {
-            "type": "int",
-            "description": "验证超时（秒）",
-            "default": 120
           }
         }
       },
@@ -229,20 +152,10 @@
             "description": "当前版本命令",
             "default": ""
           },
-          "current_version_pattern": {
-            "type": "string",
-            "description": "当前版本提取正则",
-            "default": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.\\-]+)?)"
-          },
           "latest_version_cmd": {
             "type": "string",
             "description": "最新版本命令",
             "default": ""
-          },
-          "latest_version_pattern": {
-            "type": "string",
-            "description": "最新版本提取正则",
-            "default": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.\\-]+)?)"
           },
           "update_commands": {
             "type": "list",
@@ -253,37 +166,17 @@
             "type": "string",
             "description": "更新后验证命令",
             "default": ""
-          },
-          "required_commands": {
-            "type": "list",
-            "description": "环境检测附加命令（可选）",
-            "default": []
-          },
-          "check_timeout_s": {
-            "type": "int",
-            "description": "检查超时（秒）",
-            "default": 120
-          },
-          "update_timeout_s": {
-            "type": "int",
-            "description": "更新超时（秒）",
-            "default": 900
-          },
-          "verify_timeout_s": {
-            "type": "int",
-            "description": "验证超时（秒）",
-            "default": 120
           }
         }
       }
     }
   },
   "targets_json": {
-    "description": "更新目标配置（JSON，高级开发者模式）",
+    "description": "开发者设置（targets_json）",
     "type": "text",
     "editor_mode": true,
     "editor_language": "json",
-    "hint": "仅在 target_config_mode=developer 时生效。支持任意数量目标与完整字段。",
-    "default": "{\n  \"zeroclaw\": {\n    \"enabled\": true,\n    \"strategy\": \"cargo_path_git\",\n    \"check_interval_hours\": 12,\n    \"repo_path\": \"/home/jacob/zeroclaw\",\n    \"binary_path\": \"/root/.cargo/bin/zeroclaw\",\n    \"branch\": \"\",\n    \"auto_add_safe_directory\": true,\n    \"upstream_repo\": \"https://github.com/zeroclaw-labs/zeroclaw.git\",\n    \"mirror_prefixes\": [\n      \"\",\n      \"https://edgeone.gh-proxy.com/\",\n      \"https://hk.gh-proxy.com/\",\n      \"https://gh-proxy.com/\",\n      \"https://gh.llkk.cc/\",\n      \"https://ghfast.top/\"\n    ],\n    \"remote_candidates\": [],\n    \"append_default_mirror_prefixes\": true,\n    \"probe_remotes\": true,\n    \"probe_timeout_s\": 15,\n    \"probe_parallelism\": 4,\n    \"probe_cache_ttl_minutes\": 30,\n    \"build_commands\": [\n      \"cargo install --path {repo_path}\"\n    ],\n    \"verify_cmd\": \"{binary_path} --version\",\n    \"check_timeout_s\": 120,\n    \"update_timeout_s\": 1800,\n    \"verify_timeout_s\": 120,\n    \"current_version_pattern\": \"(\\\\d+\\\\.\\\\d+\\\\.\\\\d+(?:[-+][0-9A-Za-z.\\\\-]+)?)\"\n  }\n}"
+    "hint": "仅在 target_config_mode=developer 时生效。可配置镜像策略、超时、正则、附加命令等完整高级参数。",
+    "default": "{\n  \"zeroclaw\": {\n    \"enabled\": true,\n    \"strategy\": \"cargo_path_git\",\n    \"check_interval_hours\": 12,\n    \"repo_path\": \"/path/to/zeroclaw\",\n    \"binary_path\": \"/path/to/.cargo/bin/zeroclaw\",\n    \"branch\": \"\",\n    \"auto_add_safe_directory\": true,\n    \"upstream_repo\": \"https://github.com/zeroclaw-labs/zeroclaw.git\",\n    \"mirror_prefixes\": [\n      \"\",\n      \"https://edgeone.gh-proxy.com/\",\n      \"https://hk.gh-proxy.com/\",\n      \"https://gh-proxy.com/\",\n      \"https://gh.llkk.cc/\",\n      \"https://ghfast.top/\"\n    ],\n    \"remote_candidates\": [],\n    \"append_default_mirror_prefixes\": true,\n    \"probe_remotes\": true,\n    \"probe_timeout_s\": 15,\n    \"probe_parallelism\": 4,\n    \"probe_cache_ttl_minutes\": 30,\n    \"build_commands\": [\n      \"cargo install --path {repo_path}\"\n    ],\n    \"verify_cmd\": \"{binary_path} --version\",\n    \"check_timeout_s\": 120,\n    \"update_timeout_s\": 1800,\n    \"verify_timeout_s\": 120,\n    \"current_version_pattern\": \"(\\\\d+\\\\.\\\\d+\\\\.\\\\d+(?:[-+][0-9A-Za-z.\\\\-]+)?)\"\n  }\n}"
   }
 }

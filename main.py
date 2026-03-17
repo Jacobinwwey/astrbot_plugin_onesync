@@ -224,6 +224,7 @@ class OneSyncPlugin(Star):
         self.plugin_data_dir.mkdir(parents=True, exist_ok=True)
         self._load_state()
         self._bootstrap_human_targets_if_needed()
+        self._refresh_software_overview()
 
         if _to_bool(self.config.get("enabled", True), True):
             poll_interval = _to_int(self.config.get("poll_interval_minutes", 30), 30, 1)
@@ -547,6 +548,37 @@ class OneSyncPlugin(Star):
                 f.write(line + "\n")
         except Exception as exc:
             logger.error("[onesync] append events log failed: %s", exc)
+
+    def _render_software_overview(self) -> str:
+        targets = self._load_targets()
+        lines = [
+            "软件与版本总览（自动生成）",
+            "说明：此字段用于展示，不建议手动编辑。",
+            f"targets={len(targets)}",
+        ]
+        if not targets:
+            lines.append("- 暂无已配置软件目标")
+            return "\n".join(lines)
+
+        for name, cfg in targets.items():
+            st = self._target_state(name)
+            lines.append(
+                (
+                    f"- {name} strategy={cfg.get('strategy', 'command')} "
+                    f"enabled={_to_bool(cfg.get('enabled', True), True)} "
+                    f"current={st.get('current_version', '-')} "
+                    f"latest={st.get('latest_version', '-')}"
+                ),
+            )
+        return "\n".join(lines)
+
+    def _refresh_software_overview(self) -> None:
+        overview = self._render_software_overview()
+        current = str(self.config.get("software_overview", ""))
+        if current == overview:
+            return
+        self.config["software_overview"] = overview
+        self._persist_plugin_config()
 
     def _collect_required_commands_for_target(self, target_cfg: dict[str, Any]) -> list[str]:
         commands: list[str] = []
@@ -1059,6 +1091,7 @@ class OneSyncPlugin(Star):
                 )
                 results.append(result)
             await self._save_state()
+            self._refresh_software_overview()
 
         ok_count = sum(1 for item in results if item.get("ok"))
         changed_count = sum(1 for item in results if item.get("changed"))
@@ -1137,6 +1170,7 @@ class OneSyncPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def updater_status(self, event: AstrMessageEvent):
         """查看更新器状态。"""
+        self._refresh_software_overview()
         yield event.plain_result(self._render_status())
 
     @updater.command("env")

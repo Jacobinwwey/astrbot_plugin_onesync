@@ -19,6 +19,7 @@
 - 支持镜像回退、多远端候选，提高更新可用性。
 - 支持更新前自动探测远端质量（连通性与延迟）并按质量排序。
 - 支持状态持久化与事件日志，便于排障与审计。
+- 设置页包含“软件与版本总览（自动生成）”，可快速查看当前/最新版本。
 
 ## 2. 环境要求
 
@@ -73,6 +74,10 @@ systemctl restart astrbot.service
 - `Software Updater Status`
 - `targets=...`
 - 每个目标的 `strategy/interval_h/last_checked/status`
+
+设置页中还可直接查看：
+
+- `software_overview`：自动生成的软件与版本摘要（无需手动维护）。
 
 ## 4. 快速设置同步时间（重点）
 
@@ -143,6 +148,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `enabled` | bool | `true` | 是否启用插件。 |
+| `software_overview` | text | `""` | 软件与版本总览（自动生成，只用于展示）。 |
 | `poll_interval_minutes` | int | `30` | 后台轮询间隔（分钟）。 |
 | `default_check_interval_hours` | float | `24` | 目标未设置 `check_interval_hours` 时的默认值。 |
 | `auto_update_on_schedule` | bool | `true` | 定时发现新版本后是否自动更新。 |
@@ -151,11 +157,13 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `dry_run` | bool | `false` | 演练模式，不真正执行更新命令。 |
 | `env_check_timeout_s` | int | `8` | `/updater env` 中单条环境检测命令超时秒数。 |
 | `admin_sid_list` | list | `[]` | 接收定时通知的管理员 SID 列表。 |
-| `target_config_mode` | string | `human` | `human` 使用可视化目标列表，`developer` 使用 JSON。 |
-| `human_targets` | template_list | 内置 zeroclaw 条目 | 可视化目标列表，无槽位上限。 |
-| `targets_json` | text(json) | 内置 zeroclaw 示例 | 开发者模式目标配置。 |
+| `target_config_mode` | string | `human` | `human` 为简洁用户模式；`developer` 为高级配置模式。 |
+| `human_targets` | template_list | 内置 zeroclaw 条目 | 简洁模式目标列表（基础字段，无槽位上限）。 |
+| `targets_json` | text(json) | 内置 zeroclaw 示例 | 开发者模式配置（完整高级字段）。 |
 
 ### 6.2 目标通用字段（human_targets / targets_json 通用）
+
+说明：`human_targets` 只显示常用基础字段；下表包含 `targets_json` 可用的完整字段。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
