@@ -154,12 +154,12 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `auto_update_on_schedule` | bool | `true` | 定时发现新版本后是否自动更新。 |
 | `notify_admin_on_schedule` | bool | `true` | 定时任务后是否通知管理员。 |
 | `notify_on_schedule_noop` | bool | `false` | 无更新/无异常时是否也通知。 |
-| `dry_run` | bool | `false` | 演练模式，不真正执行更新命令。 |
-| `env_check_timeout_s` | int | `8` | `/updater env` 中单条环境检测命令超时秒数。 |
+| `dry_run` | bool | `false` | 演练模式，不真正执行更新命令（仅 developer 模式显示）。 |
+| `env_check_timeout_s` | int | `8` | `/updater env` 中单条环境检测命令超时秒数（仅 developer 模式显示）。 |
 | `admin_sid_list` | list | `[]` | 接收定时通知的管理员 SID 列表。 |
 | `target_config_mode` | string | `human` | `human` 为简洁用户模式；`developer` 为高级配置模式。 |
 | `human_targets` | template_list | 内置 zeroclaw 条目 | 简洁模式目标列表（基础字段，无槽位上限）。 |
-| `targets_json` | text(json) | 内置 zeroclaw 示例 | 开发者模式配置（完整高级字段）。 |
+| `targets_json` | text(json) | 内置 zeroclaw 示例 | 开发者模式配置（完整高级字段，仅 developer 模式显示）。 |
 
 ### 6.2 目标通用字段（human_targets / targets_json 通用）
 

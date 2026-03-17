@@ -41,12 +41,18 @@
   "dry_run": {
     "description": "演练模式（不真正执行更新命令）",
     "type": "bool",
+    "condition": {
+      "target_config_mode": "developer"
+    },
     "default": false
   },
   "env_check_timeout_s": {
     "description": "环境检测命令超时（秒）",
     "type": "int",
     "hint": "用于 /updater env 命令，检查 command -v 与 --version。",
+    "condition": {
+      "target_config_mode": "developer"
+    },
     "default": 8
   },
   "admin_sid_list": {
@@ -69,6 +75,9 @@
     "type": "template_list",
     "description": "软件目标列表（人类交互模式，无槽位上限）",
     "hint": "仅在 target_config_mode=human 时生效。这里保留常用基础项；镜像、超时、正则等高级项请切换 developer 模式配置。",
+    "condition": {
+      "target_config_mode": "human"
+    },
     "default": [],
     "templates": {
       "cargo_path_git": {
@@ -176,6 +185,9 @@
     "editor_mode": true,
     "editor_language": "json",
     "hint": "仅在 target_config_mode=developer 时生效。可配置镜像策略、超时、正则、附加命令等完整高级参数。",
+    "condition": {
+      "target_config_mode": "developer"
+    },
     "default": "{\n  \"zeroclaw\": {\n    \"enabled\": true,\n    \"strategy\": \"cargo_path_git\",\n    \"check_interval_hours\": 12,\n    \"repo_path\": \"/path/to/zeroclaw\",\n    \"binary_path\": \"/path/to/.cargo/bin/zeroclaw\",\n    \"branch\": \"\",\n    \"auto_add_safe_directory\": true,\n    \"upstream_repo\": \"https://github.com/zeroclaw-labs/zeroclaw.git\",\n    \"mirror_prefixes\": [\n      \"\",\n      \"https://edgeone.gh-proxy.com/\",\n      \"https://hk.gh-proxy.com/\",\n      \"https://gh-proxy.com/\",\n      \"https://gh.llkk.cc/\",\n      \"https://ghfast.top/\"\n    ],\n    \"remote_candidates\": [],\n    \"append_default_mirror_prefixes\": true,\n    \"probe_remotes\": true,\n    \"probe_timeout_s\": 15,\n    \"probe_parallelism\": 4,\n    \"probe_cache_ttl_minutes\": 30,\n    \"build_commands\": [\n      \"cargo install --path {repo_path}\"\n    ],\n    \"verify_cmd\": \"{binary_path} --version\",\n    \"check_timeout_s\": 120,\n    \"update_timeout_s\": 1800,\n    \"verify_timeout_s\": 120,\n    \"current_version_pattern\": \"(\\\\d+\\\\.\\\\d+\\\\.\\\\d+(?:[-+][0-9A-Za-z.\\\\-]+)?)\"\n  }\n}"
   }
 }
