@@ -45,7 +45,7 @@ OneSync 支持两种配置模式：
 4. 填写条目参数：
    - 必填：`name`（唯一名称）。
    - 调度：`check_interval_hours`。
-   - 稳定性：`append_default_mirror_prefixes`、`probe_remotes`、`probe_timeout_s`、`probe_parallelism`、`probe_cache_ttl_minutes`。
+   - 基础：仓库/二进制路径或版本命令/更新命令。
 5. 保存配置后，执行 `/updater check <name>` 验证目标可用。
 
 说明：
@@ -53,6 +53,7 @@ OneSync 支持两种配置模式：
 - 条目数量不受固定槽位限制，可持续新增。
 - 已存在目标会在列表里直接显示，可逐条修改或删除。
 - 首次切换到 `human` 模式时，插件会自动把已有 `targets_json` 目标迁移到 `human_targets` 以便可视化管理。
+- 镜像策略、超时、正则等高级项请切换 `developer` 模式配置。
 
 ## 新增软件配置指南（AI/开发者方案）
 
