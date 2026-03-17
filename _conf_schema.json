@@ -1,0 +1,54 @@
+{
+  "enabled": {
+    "description": "启用 OneSync 插件",
+    "type": "bool",
+    "default": true
+  },
+  "poll_interval_minutes": {
+    "description": "定时轮询间隔（分钟）",
+    "type": "int",
+    "hint": "插件后台循环的执行间隔。建议 5-60 分钟。",
+    "default": 30
+  },
+  "default_check_interval_hours": {
+    "description": "默认目标检查间隔（小时）",
+    "type": "float",
+    "hint": "当某个目标未配置 check_interval_hours 时使用此值。",
+    "default": 24
+  },
+  "auto_update_on_schedule": {
+    "description": "定时任务发现新版本后自动更新",
+    "type": "bool",
+    "default": true
+  },
+  "notify_admin_on_schedule": {
+    "description": "定时任务后通知管理员",
+    "type": "bool",
+    "default": true
+  },
+  "notify_on_schedule_noop": {
+    "description": "无更新/无异常时也通知管理员",
+    "type": "bool",
+    "hint": "关闭后仅在发生更新或失败时通知。",
+    "default": false
+  },
+  "dry_run": {
+    "description": "演练模式（不真正执行更新命令）",
+    "type": "bool",
+    "default": false
+  },
+  "admin_sid_list": {
+    "description": "管理员 SID 列表",
+    "type": "list",
+    "hint": "定时任务通知将发送到这些 SID。",
+    "default": []
+  },
+  "targets_json": {
+    "description": "更新目标配置（JSON）",
+    "type": "text",
+    "editor_mode": true,
+    "editor_language": "json",
+    "hint": "可配置多个软件目标。新增目标后无需改代码。",
+    "default": "{\"zeroclaw\":{\"enabled\":true,\"strategy\":\"cargo_path_git\",\"check_interval_hours\":12,\"repo_path\":\"/home/jacob/zeroclaw\",\"binary_path\":\"/root/.cargo/bin/zeroclaw\",\"branch\":\"\",\"upstream_repo\":\"https://github.com/zeroclaw-labs/zeroclaw.git\",\"mirror_prefixes\":[\"\",\"https://gh-proxy.com/\",\"https://ghfast.top/\"],\"remote_candidates\":[],\"build_commands\":[\"cargo install --path {repo_path}\"],\"verify_cmd\":\"{binary_path} --version\",\"check_timeout_s\":120,\"update_timeout_s\":1800,\"verify_timeout_s\":120,\"current_version_pattern\":\"(\\\\d+\\\\.\\\\d+\\\\.\\\\d+(?:[-+][0-9A-Za-z.\\\\-]+)?)\"}}"
+  }
+}
