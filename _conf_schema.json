@@ -6,10 +6,9 @@
   },
   "software_overview": {
     "description": "软件与版本总览（自动生成）",
-    "type": "text",
-    "editor_mode": true,
-    "hint": "此字段由插件自动刷新，用于快速查看软件名称与版本。建议勿手动修改。",
-    "default": ""
+    "type": "list",
+    "hint": "此字段由插件自动刷新，每条为一个软件目标的版本摘要。建议勿手动修改。",
+    "default": []
   },
   "poll_interval_minutes": {
     "description": "定时轮询间隔（分钟）",

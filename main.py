@@ -549,32 +549,30 @@ class OneSyncPlugin(Star):
         except Exception as exc:
             logger.error("[onesync] append events log failed: %s", exc)
 
-    def _render_software_overview(self) -> str:
+    def _render_software_overview(self) -> list[str]:
         targets = self._load_targets()
-        lines = [
-            "软件与版本总览（自动生成）",
-            "说明：此字段用于展示，不建议手动编辑。",
-            f"targets={len(targets)}",
-        ]
+        lines: list[str] = []
         if not targets:
-            lines.append("- 暂无已配置软件目标")
-            return "\n".join(lines)
+            lines.append("暂无已配置软件目标")
+            return lines
 
         for name, cfg in targets.items():
             st = self._target_state(name)
             lines.append(
                 (
-                    f"- {name} strategy={cfg.get('strategy', 'command')} "
-                    f"enabled={_to_bool(cfg.get('enabled', True), True)} "
-                    f"current={st.get('current_version', '-')} "
-                    f"latest={st.get('latest_version', '-')}"
+                    f"{name} | 当前: {st.get('current_version', '-')} | "
+                    f"最新: {st.get('latest_version', '-')} | "
+                    f"启用: {_to_bool(cfg.get('enabled', True), True)} | "
+                    f"策略: {cfg.get('strategy', 'command')}"
                 ),
             )
-        return "\n".join(lines)
+        return lines
 
     def _refresh_software_overview(self) -> None:
         overview = self._render_software_overview()
-        current = str(self.config.get("software_overview", ""))
+        current = self.config.get("software_overview", [])
+        if not isinstance(current, list):
+            current = []
         if current == overview:
             return
         self.config["software_overview"] = overview
