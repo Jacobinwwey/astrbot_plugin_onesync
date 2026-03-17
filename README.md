@@ -78,3 +78,27 @@ Edit `targets_json` and add one more target object. Example:
 - State: `data/plugin_data/astrbot_plugin_onesync/state.json`
 - Event log: `data/plugin_data/astrbot_plugin_onesync/events.jsonl`
 
+## Release Workflow
+
+Version is managed in `metadata.yaml` and changelog is tracked in `CHANGELOG.md`.
+
+Quick release:
+
+```bash
+cd /root/astrbot/data/plugins/astrbot_plugin_onesync
+./scripts/release.sh v0.1.1
+```
+
+What the script does:
+1. Validates version format (`vMAJOR.MINOR.PATCH`).
+2. Updates `metadata.yaml` `version`.
+3. Appends a changelog section when missing.
+4. Commits release changes.
+5. Creates an annotated git tag.
+6. Pushes branch and tag to `origin`.
+
+Dry run for local check (no push):
+
+```bash
+NO_PUSH=1 ./scripts/release.sh v0.1.1
+```
