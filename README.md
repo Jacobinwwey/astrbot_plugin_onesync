@@ -1,5 +1,7 @@
 # astrbot_plugin_onesync
 
+> 语言 / Language: [中文](./README.md) | [English](./README_en.md)
+
 OneSync 是一个面向 AstrBot 的通用可扩展软件更新器插件。
 
 - 支持定时检查、自动更新、手动触发。
@@ -8,6 +10,7 @@ OneSync 是一个面向 AstrBot 的通用可扩展软件更新器插件。
 - 支持更新前自动探测远端质量（连通性与延迟）并择优使用。
 - 支持状态持久化与事件日志，便于排障与审计。
 - 设置页支持“软件与版本总览（自动生成滚动列表）”，便于用户快速查看。
+- 支持内置 WebUI 管理端（无需改 AstrBot Dashboard 源码），提供“立即更新（当前筛选）/立即全部更新”并带确认弹窗。
 
 ## 配置模式（重要）
 
@@ -17,6 +20,52 @@ OneSync 支持两种配置模式：
 - `developer`：直接编辑 `targets_json` 的高级模式（镜像、超时、正则等）。
 
 通过配置项 `target_config_mode` 切换。
+
+## 软件总览（运维视图）
+
+`software_overview` 是插件自动生成的软件版本总览，只读展示，不支持手动编辑。
+
+为适配大规模运维场景，配置界面提供了多种切换能力：
+
+1. 视图模式切换：
+   - `表格`：适合高密度、多列对比（带粘性表头和滚动区）。
+   - `卡片`：适合快速浏览单个软件状态。
+   - `紧凑列表`：适合一次查看更多目标。
+2. 主题模式切换：
+   - `跟随系统`
+   - `浅色`
+   - `深色柔和`
+   - `深色蓝灰`
+   - `海军蓝`
+   - `暖灰夜`
+   - `高对比`
+3. 密度模式切换：
+   - `舒适`
+   - `紧凑`
+   - `极限紧凑`
+4. 运维筛选能力：
+   - 支持按关键字搜索（软件名/版本/策略）。
+   - 支持按状态筛选（已最新/可更新/待检查/已停用）。
+
+以上偏好会在浏览器本地保存，下次打开配置页会自动恢复。
+
+## 内置 WebUI（推荐）
+
+当你希望不修改 AstrBot Dashboard 源码但仍获得完整前端交互时，可启用 OneSync 内置 WebUI。
+
+1. 在插件配置中打开 `web_admin.enabled=true`。
+2. 设定 `web_admin.host` 与 `web_admin.port`（默认 `127.0.0.1:8099`）。
+3. （可选）设置 `web_admin.password` 开启 API 登录保护。
+4. 重启/热重载插件后，查看配置项 `web_admin_url`，浏览器打开即可。
+
+WebUI 关键能力：
+
+- 按关键字和状态筛选软件。
+- `立即更新（当前筛选）`：只更新当前筛选结果中的启用目标。
+- `立即全部更新（全部纳管）`：更新所有启用目标。
+- 两个操作均有确认弹窗，防止误触。
+- 内置 Debug 日志面板：支持多标签视图（运行/目标/调度/系统）、实时滚动、级别筛选、关键字过滤与一键清空。
+- 内置 i18n：WebUI 支持中英文切换（界面文案、按钮、筛选项、日志面板标签同步切换）。
 
 ## 快速设置同步时间（最短路径）
 
@@ -95,4 +144,7 @@ systemctl restart astrbot.service
 
 ## 文档导航
 
-- [安装与配置手册（用户）](docs/INSTALL_AND_CONFIG_zh.md)
+- [安装与配置手册（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
+- [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
+- [操作与同步手册（中文）](./docs/OPERATIONS_AND_SYNC_zh.md)
+- [Operations and Sync Manual (English)](./docs/OPERATIONS_AND_SYNC_en.md)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import secrets
 import shlex
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from .updater_core import (
     UpdateResult,
     build_strategy,
 )
+from .webui_server import OneSyncWebUIServer
 
 PLUGIN_NAME = "astrbot_plugin_onesync"
 
@@ -216,15 +218,29 @@ class OneSyncPlugin(Star):
         self.state: dict[str, Any] = {"targets": {}, "env": {}}
         self._run_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
+        self._web_job_lock = asyncio.Lock()
 
         self._stop_event = asyncio.Event()
         self._worker_task: asyncio.Task | None = None
+        self._webui_server: OneSyncWebUIServer | None = None
+        self._web_jobs: dict[str, dict[str, Any]] = {}
+        self._web_job_tasks: dict[str, asyncio.Task] = {}
+        self._max_web_jobs = 40
+        self._debug_logs: list[dict[str, Any]] = []
+        self._debug_log_seq = 0
+        self._max_debug_logs = 1200
 
     async def initialize(self) -> None:
         self.plugin_data_dir.mkdir(parents=True, exist_ok=True)
         self._load_state()
         self._bootstrap_human_targets_if_needed()
         self._refresh_software_overview()
+        self._push_debug_log(
+            "info",
+            "plugin initialize start",
+            source="lifecycle",
+        )
+        await self._init_webui_if_enabled()
 
         if _to_bool(self.config.get("enabled", True), True):
             poll_interval = _to_int(self.config.get("poll_interval_minutes", 30), 30, 1)
@@ -238,9 +254,25 @@ class OneSyncPlugin(Star):
             )
         else:
             logger.info("[onesync] plugin is disabled by config")
+            self._push_debug_log(
+                "warn",
+                "plugin is disabled by config",
+                source="lifecycle",
+            )
 
     async def terminate(self) -> None:
+        self._push_debug_log("info", "plugin terminate start", source="lifecycle")
         self._stop_event.set()
+
+        web_tasks = list(self._web_job_tasks.values())
+        for task in web_tasks:
+            if task.done():
+                continue
+            task.cancel()
+        if web_tasks:
+            await asyncio.gather(*web_tasks, return_exceptions=True)
+        self._web_job_tasks.clear()
+
         if self._worker_task and not self._worker_task.done():
             self._worker_task.cancel()
             try:
@@ -249,6 +281,18 @@ class OneSyncPlugin(Star):
                 pass
             except Exception as exc:
                 logger.error("[onesync] scheduled loop exit error: %s", exc)
+
+        if self._webui_server:
+            try:
+                await self._webui_server.stop()
+            except Exception as exc:
+                logger.warning("[onesync] webui stop failed: %s", exc)
+                self._push_debug_log(
+                    "warn",
+                    f"webui stop failed: {exc}",
+                    source="lifecycle",
+                )
+            self._webui_server = None
         await self._save_state()
 
     def _load_targets_from_json(self) -> dict[str, dict[str, Any]]:
@@ -497,6 +541,392 @@ class OneSyncPlugin(Star):
             return json_targets
 
         return DEFAULT_TARGETS
+
+    def _set_web_admin_url(self, url: str) -> None:
+        current = str(self.config.get("web_admin_url", "") or "")
+        if current == url:
+            return
+        self.config["web_admin_url"] = url
+        self._persist_plugin_config()
+
+    @staticmethod
+    def _overview_status(current_version: str, latest_version: str, enabled: bool) -> str:
+        if not enabled:
+            return "disabled"
+        current = str(current_version or "").strip().lower()
+        latest = str(latest_version or "").strip().lower()
+        if (
+            not current
+            or not latest
+            or current in {"-", "unknown"}
+            or latest in {"-", "unknown"}
+        ):
+            return "unknown"
+        if current == latest:
+            return "up_to_date"
+        return "outdated"
+
+    def _build_webui_rows(self) -> list[dict[str, Any]]:
+        targets = self._load_targets()
+        rows: list[dict[str, Any]] = []
+        for name, cfg in sorted(targets.items(), key=lambda item: str(item[0])):
+            st = self._target_state(name)
+            current = str(st.get("current_version", "-") or "-")
+            latest = str(st.get("latest_version", "-") or "-")
+            enabled = _to_bool(cfg.get("enabled", True), True)
+            rows.append(
+                {
+                    "software_name": name,
+                    "current_version": current,
+                    "latest_version": latest,
+                    "strategy": str(cfg.get("strategy", "command") or "command"),
+                    "enabled": enabled,
+                    "last_checked_at": str(st.get("last_checked_at", "-") or "-"),
+                    "status": self._overview_status(current, latest, enabled),
+                }
+            )
+        return rows
+
+    def _push_debug_log(
+        self,
+        level: str,
+        message: str,
+        *,
+        target: str = "",
+        source: str = "system",
+    ) -> None:
+        level_key = str(level or "info").strip().lower()
+        if level_key not in {"debug", "info", "warn", "error"}:
+            level_key = "info"
+        self._debug_log_seq += 1
+        item = {
+            "id": self._debug_log_seq,
+            "timestamp": _now_iso(),
+            "level": level_key,
+            "source": str(source or "system"),
+            "target": str(target or ""),
+            "message": str(message or "").strip(),
+        }
+        self._debug_logs.append(item)
+        if len(self._debug_logs) > self._max_debug_logs:
+            self._debug_logs = self._debug_logs[-self._max_debug_logs :]
+
+    def webui_get_debug_logs(
+        self,
+        *,
+        since_id: int = 0,
+        limit: int = 200,
+        level: str = "all",
+        keyword: str = "",
+        source_group: str = "all",
+    ) -> dict[str, Any]:
+        try:
+            since = max(0, int(since_id))
+        except Exception:
+            since = 0
+        try:
+            lim = max(1, min(int(limit), 500))
+        except Exception:
+            lim = 200
+        level_key = str(level or "all").strip().lower()
+        keyword_key = str(keyword or "").strip().lower()
+        source_group_key = str(source_group or "all").strip().lower()
+
+        run_sources = {"webui-run", "webui-job"}
+        target_sources = {"target-run"}
+        scheduler_sources = {"scheduler"}
+        system_sources = {"system", "lifecycle", "webui"}
+
+        items: list[dict[str, Any]] = []
+        for raw in self._debug_logs:
+            log_id = _to_int(raw.get("id", 0), 0, 0)
+            if log_id <= since:
+                continue
+            log_source = str(raw.get("source", "system")).strip().lower()
+            log_level = str(raw.get("level", "info")).strip().lower()
+            if level_key not in {"", "all"} and log_level != level_key:
+                continue
+            if keyword_key:
+                payload = (
+                    f"{raw.get('message', '')} {raw.get('target', '')} {raw.get('source', '')}"
+                ).lower()
+                if keyword_key not in payload:
+                    continue
+            if source_group_key not in {"", "all"}:
+                if source_group_key == "run" and log_source not in run_sources:
+                    continue
+                if source_group_key == "target" and log_source not in target_sources:
+                    continue
+                if source_group_key == "scheduler" and log_source not in scheduler_sources:
+                    continue
+                if source_group_key == "system" and log_source not in system_sources:
+                    continue
+            items.append(raw)
+
+        if len(items) > lim:
+            items = items[-lim:]
+        last_id = _to_int(self._debug_log_seq, 0, 0)
+        return {
+            "ok": True,
+            "items": json.loads(json.dumps(items, ensure_ascii=False)),
+            "last_id": last_id,
+            "buffer_size": len(self._debug_logs),
+        }
+
+    def webui_clear_debug_logs(self) -> dict[str, Any]:
+        removed = len(self._debug_logs)
+        self._debug_logs.clear()
+        self._push_debug_log(
+            "info",
+            f"debug logs cleared (removed={removed})",
+            source="webui",
+        )
+        return {"ok": True, "removed": removed}
+
+    def webui_get_job(self, job_id: str) -> dict[str, Any] | None:
+        job = self._web_jobs.get(job_id)
+        if not isinstance(job, dict):
+            return None
+        return json.loads(json.dumps(job, ensure_ascii=False))
+
+    def webui_get_latest_job(self) -> dict[str, Any] | None:
+        if not self._web_jobs:
+            return None
+        ordered = sorted(
+            self._web_jobs.values(),
+            key=lambda item: str(item.get("created_at", "")),
+            reverse=True,
+        )
+        if not ordered:
+            return None
+        return json.loads(json.dumps(ordered[0], ensure_ascii=False))
+
+    def webui_get_overview_payload(self) -> dict[str, Any]:
+        rows = self._build_webui_rows()
+        counts = {"up_to_date": 0, "outdated": 0, "unknown": 0, "disabled": 0}
+        for row in rows:
+            status = str(row.get("status", "unknown"))
+            if status in counts:
+                counts[status] += 1
+        return {
+            "ok": True,
+            "generated_at": _now_iso(),
+            "rows": rows,
+            "counts": counts,
+            "latest_job": self.webui_get_latest_job(),
+        }
+
+    async def webui_start_run(self, scope: str, targets: Any) -> dict[str, Any]:
+        scope_key = str(scope or "all").strip().lower()
+        all_targets = self._load_targets()
+        if scope_key == "filtered":
+            requested = _dedupe_keep_order(_to_str_list(targets))
+            selected = [
+                name
+                for name in requested
+                if name in all_targets and _to_bool(all_targets[name].get("enabled", True), True)
+            ]
+        else:
+            scope_key = "all"
+            selected = [
+                name
+                for name, cfg in all_targets.items()
+                if _to_bool(cfg.get("enabled", True), True)
+            ]
+
+        if not selected:
+            self._push_debug_log(
+                "warn",
+                f"webui run rejected: no enabled targets matched (scope={scope_key})",
+                source="webui-run",
+            )
+            return {
+                "ok": False,
+                "status": "invalid",
+                "message": "No enabled targets matched.",
+            }
+
+        async with self._web_job_lock:
+            for job in self._web_jobs.values():
+                if str(job.get("status", "")).lower() in {"queued", "running"}:
+                    self._push_debug_log(
+                        "warn",
+                        (
+                            "webui run rejected: another job running "
+                            f"(job_id={job.get('id', '')})"
+                        ),
+                        source="webui-run",
+                    )
+                    return {
+                        "ok": False,
+                        "status": "busy",
+                        "message": "Another OneSync WebUI job is running.",
+                        "job": json.loads(json.dumps(job, ensure_ascii=False)),
+                    }
+
+            job_id = secrets.token_hex(8)
+            now = _now_iso()
+            job = {
+                "id": job_id,
+                "status": "queued",
+                "scope": scope_key,
+                "created_at": now,
+                "started_at": "",
+                "finished_at": "",
+                "total_targets": len(selected),
+                "targets": selected,
+                "summary": "queued",
+                "results": [],
+            }
+            self._web_jobs[job_id] = job
+            task = asyncio.create_task(
+                self._webui_run_job_task(job_id, selected, scope_key),
+                name=f"onesync-webui-job-{job_id}",
+            )
+            self._web_job_tasks[job_id] = task
+
+            def _cleanup(done_task: asyncio.Task, *, jid: str = job_id):
+                self._web_job_tasks.pop(jid, None)
+                try:
+                    done_task.result()
+                except asyncio.CancelledError:
+                    pass
+                except Exception as exc:
+                    logger.error("[onesync] webui job task cleanup error (%s): %s", jid, exc)
+
+            task.add_done_callback(_cleanup)
+            self._push_debug_log(
+                "info",
+                (
+                    f"webui run accepted job_id={job_id} scope={scope_key} "
+                    f"targets={','.join(selected)}"
+                ),
+                source="webui-run",
+            )
+            return {
+                "ok": True,
+                "status": "accepted",
+                "job": json.loads(json.dumps(job, ensure_ascii=False)),
+            }
+
+    async def _webui_run_job_task(
+        self,
+        job_id: str,
+        selected_targets: list[str],
+        scope: str,
+    ) -> None:
+        async with self._web_job_lock:
+            job = self._web_jobs.get(job_id)
+            if not isinstance(job, dict):
+                return
+            job["status"] = "running"
+            job["started_at"] = _now_iso()
+            job["summary"] = "running"
+        self._push_debug_log(
+            "info",
+            (
+                f"job started id={job_id} scope={scope} "
+                f"targets={','.join(selected_targets)}"
+            ),
+            source="webui-job",
+        )
+
+        try:
+            summary, results = await self._run_targets(
+                selected_targets,
+                mode="run",
+                trigger=f"webui-{scope}",
+                force=False,
+                allow_update=True,
+            )
+            ok_all = all(bool(item.get("ok")) for item in results)
+            changed_any = any(bool(item.get("changed")) for item in results)
+            final_status = "success" if ok_all else "partial"
+            if not results:
+                final_status = "success"
+            async with self._web_job_lock:
+                target = self._web_jobs.get(job_id)
+                if isinstance(target, dict):
+                    target["status"] = final_status
+                    target["finished_at"] = _now_iso()
+                    target["summary"] = summary
+                    target["changed"] = changed_any
+                    target["results"] = results
+            self._push_debug_log(
+                "info" if final_status == "success" else "warn",
+                f"job finished id={job_id} status={final_status}",
+                source="webui-job",
+            )
+        except asyncio.CancelledError:
+            async with self._web_job_lock:
+                target = self._web_jobs.get(job_id)
+                if isinstance(target, dict):
+                    target["status"] = "cancelled"
+                    target["finished_at"] = _now_iso()
+                    target["summary"] = "cancelled"
+            self._push_debug_log(
+                "warn",
+                f"job cancelled id={job_id}",
+                source="webui-job",
+            )
+            raise
+        except Exception as exc:
+            async with self._web_job_lock:
+                target = self._web_jobs.get(job_id)
+                if isinstance(target, dict):
+                    target["status"] = "error"
+                    target["finished_at"] = _now_iso()
+                    target["summary"] = f"webui job error: {exc}"
+            logger.error("[onesync] webui job failed (%s): %s", job_id, exc)
+            self._push_debug_log(
+                "error",
+                f"job failed id={job_id}: {exc}",
+                source="webui-job",
+            )
+        finally:
+            async with self._web_job_lock:
+                ordered = sorted(
+                    self._web_jobs.items(),
+                    key=lambda item: str(item[1].get("created_at", "")),
+                    reverse=True,
+                )
+                if len(ordered) > self._max_web_jobs:
+                    for stale_id, _ in ordered[self._max_web_jobs :]:
+                        self._web_jobs.pop(stale_id, None)
+
+    async def _init_webui_if_enabled(self) -> None:
+        web_cfg = self.config.get("web_admin", {})
+        enabled = False
+        if isinstance(web_cfg, dict):
+            enabled = _to_bool(web_cfg.get("enabled", False), False)
+
+        if not enabled:
+            self._set_web_admin_url("")
+            self._push_debug_log(
+                "warn",
+                "webui disabled by config",
+                source="webui",
+            )
+            return
+
+        try:
+            self._webui_server = OneSyncWebUIServer(self)
+            await self._webui_server.start()
+            self._set_web_admin_url(self._webui_server.public_url)
+            self._push_debug_log(
+                "info",
+                f"webui started at {self._webui_server.public_url}",
+                source="webui",
+            )
+        except Exception as exc:
+            logger.error("[onesync] failed to start webui: %s", exc)
+            self._set_web_admin_url("")
+            self._webui_server = None
+            self._push_debug_log(
+                "error",
+                f"failed to start webui: {exc}",
+                source="webui",
+            )
 
     def _load_state(self) -> None:
         if not self.state_path.exists():
@@ -849,12 +1279,17 @@ class OneSyncPlugin(Star):
 
     def _render_status(self) -> str:
         targets = self._load_targets()
+        web_cfg = self.config.get("web_admin", {})
+        if not isinstance(web_cfg, dict):
+            web_cfg = {}
         lines = [
             "Software Updater Status",
             f"enabled={_to_bool(self.config.get('enabled', True), True)}",
             f"poll_interval_minutes={_to_int(self.config.get('poll_interval_minutes', 30), 30, 1)}",
             f"auto_update_on_schedule={_to_bool(self.config.get('auto_update_on_schedule', True), True)}",
             f"target_config_mode={str(self.config.get('target_config_mode', 'human')).strip().lower() or 'human'}",
+            f"web_admin_enabled={_to_bool(web_cfg.get('enabled', False), False)}",
+            f"web_admin_url={str(self.config.get('web_admin_url', '') or '-')}",
             "",
             f"targets={len(targets)}",
         ]
@@ -963,6 +1398,21 @@ class OneSyncPlugin(Star):
             "timestamp": now_iso,
         }
 
+        async def _finalize_result() -> dict[str, Any]:
+            level = "info" if _to_bool(result_record.get("ok", False), False) else "error"
+            self._push_debug_log(
+                level,
+                (
+                    f"{target_name} mode={mode} trigger={trigger} "
+                    f"ok={result_record.get('ok')} changed={result_record.get('changed')} "
+                    f"msg={result_record.get('message', '')}"
+                ),
+                target=target_name,
+                source="target-run",
+            )
+            await self._record_event(result_record)
+            return result_record
+
         try:
             strategy = build_strategy(
                 strategy_name,
@@ -975,8 +1425,7 @@ class OneSyncPlugin(Star):
             state["last_status"] = "error"
             state["last_message"] = result_record["message"]
             state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
-            await self._record_event(result_record)
-            return result_record
+            return await _finalize_result()
 
         check_result: CheckResult = await strategy.check(target_name, target_cfg, runtime_ctx)
         result_record["current_version"] = check_result.current_version
@@ -999,8 +1448,7 @@ class OneSyncPlugin(Star):
             state["last_status"] = "error"
             state["last_message"] = result_record["message"]
             state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
-            await self._record_event(result_record)
-            return result_record
+            return await _finalize_result()
 
         if mode == "check" or not allow_update:
             result_record["ok"] = True
@@ -1013,8 +1461,7 @@ class OneSyncPlugin(Star):
             state["last_status"] = "ok"
             state["last_message"] = result_record["message"]
             state["consecutive_failures"] = 0
-            await self._record_event(result_record)
-            return result_record
+            return await _finalize_result()
 
         if not force and not check_result.needs_update:
             result_record["ok"] = True
@@ -1022,8 +1469,7 @@ class OneSyncPlugin(Star):
             state["last_status"] = "ok"
             state["last_message"] = result_record["message"]
             state["consecutive_failures"] = 0
-            await self._record_event(result_record)
-            return result_record
+            return await _finalize_result()
 
         dry_run = _to_bool(self.config.get("dry_run", False), False)
         update_result: UpdateResult = await strategy.update(
@@ -1048,8 +1494,7 @@ class OneSyncPlugin(Star):
         else:
             state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
 
-        await self._record_event(result_record)
-        return result_record
+        return await _finalize_result()
 
     async def _run_targets(
         self,
@@ -1148,10 +1593,20 @@ class OneSyncPlugin(Star):
                     if should_notify and (has_change_or_error or notify_on_noop):
                         await self._notify_admins(summary)
                 logger.info("[onesync] scheduled tick: %s", summary)
+                self._push_debug_log(
+                    "info",
+                    f"scheduled tick: {summary}",
+                    source="scheduler",
+                )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 logger.error("[onesync] scheduled loop error: %s", exc)
+                self._push_debug_log(
+                    "error",
+                    f"scheduled loop error: {exc}",
+                    source="scheduler",
+                )
 
             try:
                 await asyncio.wait_for(

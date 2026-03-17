@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OneSync WebUI</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-soft: #16243a;
+      --panel: #17263d;
+      --panel-soft: #1e324f;
+      --border: #3f5575;
+      --text: #eef5ff;
+      --muted: #b6c7e1;
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --warn: #f59e0b;
+      --danger: #f87171;
+      --input: #233957;
+      --hover: #2b4466;
+      --mono: "JetBrains Mono", "Fira Code", monospace;
+      --sans: "Fira Sans", "Noto Sans SC", "Segoe UI", sans-serif;
+      --row-pad-y: 8px;
+      --row-pad-x: 10px;
+      --font-size: 13px;
+    }
+
+    [data-theme="light"] {
+      --bg: #f3f7fc;
+      --bg-soft: #eef4fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fbff;
+      --border: #d5e1f0;
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #2563eb;
+      --accent-2: #16a34a;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --input: #ffffff;
+      --hover: #f1f6fd;
+    }
+
+    [data-theme="ocean"] {
+      --bg: #10293a;
+      --bg-soft: #16384f;
+      --panel: #1a3f58;
+      --panel-soft: #21506f;
+      --border: #4e7390;
+      --text: #effbff;
+      --muted: #bfdbe9;
+      --accent: #67e8f9;
+      --accent-2: #34d399;
+      --warn: #fbbf24;
+      --danger: #fb7185;
+      --input: #265b79;
+      --hover: #2d6788;
+    }
+
+    [data-density="comfortable"] {
+      --row-pad-y: 10px;
+      --row-pad-x: 12px;
+      --font-size: 14px;
+    }
+
+    [data-density="compact"] {
+      --row-pad-y: 7px;
+      --row-pad-x: 10px;
+      --font-size: 13px;
+    }
+
+    [data-density="ultra-compact"] {
+      --row-pad-y: 5px;
+      --row-pad-x: 8px;
+      --font-size: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(150deg, var(--bg), var(--bg-soft));
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    .container {
+      width: min(1400px, 100% - 24px);
+      margin: 16px auto 20px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(150deg, var(--panel), var(--panel-soft));
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+      padding: 12px;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .title-sub {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 180px 140px 140px;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .quick-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      padding: 8px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .quick-actions .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input,
+    select,
+    button {
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: var(--input);
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    input::placeholder {
+      color: var(--muted);
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+    }
+
+    button {
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    button:hover {
+      background: var(--hover);
+    }
+
+    button.primary {
+      background: color-mix(in srgb, var(--accent) 20%, var(--input));
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    }
+
+    button.success {
+      background: color-mix(in srgb, var(--accent-2) 20%, var(--input));
+      border-color: color-mix(in srgb, var(--accent-2) 50%, var(--border));
+    }
+
+    button.warn {
+      background: color-mix(in srgb, var(--warn) 18%, var(--input));
+      border-color: color-mix(in srgb, var(--warn) 48%, var(--border));
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .table-wrap {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 64vh;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: collapse;
+      font-size: var(--font-size);
+      color: var(--text);
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      text-align: left;
+      font-size: calc(var(--font-size) - 1px);
+      letter-spacing: 0.02em;
+      color: var(--muted);
+      background: var(--panel-soft);
+      border-bottom: 1px solid var(--border);
+      padding: var(--row-pad-y) var(--row-pad-x);
+    }
+
+    tbody td {
+      border-bottom: 1px solid var(--border);
+      padding: var(--row-pad-y) var(--row-pad-x);
+      vertical-align: middle;
+    }
+
+    tbody tr:hover {
+      background: rgba(56, 189, 248, 0.09);
+    }
+
+    .mono {
+      font-family: var(--mono);
+      font-size: calc(var(--font-size) - 1px);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      font-size: calc(var(--font-size) - 1px);
+      font-weight: 700;
+      padding: 2px 9px;
+      border: 1px solid transparent;
+    }
+
+    .b-up_to_date {
+      color: #166534;
+      background: rgba(34, 197, 94, 0.16);
+    }
+
+    .b-outdated {
+      color: #92400e;
+      background: rgba(245, 158, 11, 0.22);
+    }
+
+    .b-unknown {
+      color: #1d4ed8;
+      background: rgba(96, 165, 250, 0.2);
+    }
+
+    .b-disabled {
+      color: #475569;
+      background: rgba(148, 163, 184, 0.2);
+    }
+
+    .job-panel {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .job-title {
+      margin: 0 0 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .job-body {
+      margin: 0;
+      white-space: pre-wrap;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    .debug-panel {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .debug-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .debug-title {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .debug-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .debug-tab {
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel) 70%, var(--input) 30%);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .debug-tab.active {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+      background: color-mix(in srgb, var(--accent) 24%, var(--input) 76%);
+      font-weight: 700;
+    }
+
+    .debug-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .debug-tools input {
+      min-width: 220px;
+    }
+
+    .debug-log-wrap {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel) 80%, #000 20%);
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    .debug-log-list {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 6px;
+    }
+
+    .debug-empty {
+      color: var(--muted);
+      padding: 8px 6px;
+    }
+
+    .debug-line {
+      border-bottom: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+      padding: 3px 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .debug-line:last-child {
+      border-bottom: none;
+    }
+
+    .debug-ts {
+      color: var(--muted);
+      margin-right: 6px;
+    }
+
+    .debug-level {
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .debug-source {
+      color: color-mix(in srgb, var(--text) 70%, var(--muted) 30%);
+      margin-right: 6px;
+    }
+
+    .debug-target {
+      color: var(--accent);
+      margin-right: 6px;
+    }
+
+    .l-debug .debug-level { color: #60a5fa; }
+    .l-info .debug-level { color: #34d399; }
+    .l-warn .debug-level { color: var(--warn); }
+    .l-error .debug-level { color: var(--danger); }
+
+    @media (max-width: 980px) {
+      .controls {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body data-theme="slate" data-density="compact">
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h1 class="title" id="mainTitle">OneSync 运维控制台</h1>
+        <p class="title-sub" id="lastRefresh">最后刷新: -</p>
+      </div>
+      <div class="top-actions">
+        <button id="refreshBtn">刷新</button>
+        <button id="themeBtn">切换主题</button>
+        <select id="langSelect">
+          <option value="zh" selected>中文</option>
+          <option value="en">English</option>
+        </select>
+        <select id="densitySelect">
+          <option value="comfortable">舒适</option>
+          <option value="compact" selected>紧凑</option>
+          <option value="ultra-compact">极限紧凑</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="chip-row" id="chipRow"></div>
+
+    <div class="quick-actions">
+      <button id="runFilteredBtn" class="success">立即更新（当前筛选）</button>
+      <button id="runAllBtn" class="warn">立即全部更新（全部纳管）</button>
+      <span class="hint" id="quickHint">按钮会二次确认，避免误触。当前运行中时会自动禁用。</span>
+    </div>
+
+    <div class="controls">
+      <input id="searchInput" type="text" placeholder="搜索软件 / 版本 / 策略">
+      <select id="statusFilter">
+        <option value="all" id="statusOptAll">全部状态</option>
+        <option value="up_to_date" id="statusOptUtd">已最新</option>
+        <option value="outdated" id="statusOptOutdated">可更新</option>
+        <option value="unknown" id="statusOptUnknown">待检查</option>
+        <option value="disabled" id="statusOptDisabled">已停用</option>
+      </select>
+      <button id="clearFilterBtn">清空筛选</button>
+      <button id="openConfigBtn" class="primary">打开插件配置</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th id="thSoftware">软件</th>
+            <th id="thCurrent">当前版本</th>
+            <th id="thLatest">最新版本</th>
+            <th id="thStatus">状态</th>
+            <th id="thStrategy">策略</th>
+            <th id="thEnabled">启用</th>
+            <th id="thCheckedAt">最近检查</th>
+          </tr>
+        </thead>
+        <tbody id="rowsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="job-panel">
+      <p class="job-title" id="jobTitle">最近执行任务</p>
+      <p class="job-body" id="jobInfo">暂无任务</p>
+    </div>
+
+    <div class="debug-panel">
+      <div class="debug-head">
+        <p class="debug-title" id="debugTitle">Debug 日志（实时）</p>
+        <div class="debug-tabs" id="debugTabs">
+          <button class="debug-tab active" data-group="all" id="tabAll">全部</button>
+          <button class="debug-tab" data-group="run" id="tabRun">运行日志</button>
+          <button class="debug-tab" data-group="target" id="tabTarget">目标日志</button>
+          <button class="debug-tab" data-group="scheduler" id="tabScheduler">调度日志</button>
+          <button class="debug-tab" data-group="system" id="tabSystem">系统日志</button>
+        </div>
+        <div class="debug-tools">
+          <select id="debugLevelFilter">
+            <option value="all" selected id="dbgLevelAll">全部级别</option>
+            <option value="info">INFO</option>
+            <option value="warn">WARN</option>
+            <option value="error">ERROR</option>
+            <option value="debug">DEBUG</option>
+          </select>
+          <input id="debugKeywordInput" type="text" placeholder="筛选关键字（target/source/message）">
+          <button id="debugToggleScrollBtn" class="primary">自动滚动: 开</button>
+          <button id="debugClearBtn">清空日志</button>
+        </div>
+      </div>
+      <div class="debug-log-wrap" id="debugLogWrap">
+        <div class="debug-log-list" id="debugLogList">
+          <div class="debug-empty">暂无调试日志</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      rows: [],
+      filteredRows: [],
+      status: "all",
+      keyword: "",
+      token: "",
+      latestJob: null,
+      pollingTimer: null,
+      lang: "zh",
+      themes: ["slate", "light", "ocean"],
+      themeIndex: 0,
+      density: "compact",
+      debugLogs: [],
+      debugSinceId: 0,
+      debugLevel: "all",
+      debugKeyword: "",
+      debugSourceGroup: "all",
+      debugAutoScroll: true,
+      debugPollingTimer: null,
+      debugKeywordTimer: null
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    const I18N = {
+      zh: {
+        app_title: "OneSync 运维控制台",
+        last_refresh: "最后刷新: {time}",
+        refresh: "刷新",
+        switch_theme: "切换主题",
+        density_comfortable: "舒适",
+        density_compact: "紧凑",
+        density_ultra: "极限紧凑",
+        run_filtered: "立即更新（当前筛选）",
+        run_all: "立即全部更新（全部纳管）",
+        quick_hint: "按钮会二次确认，避免误触。当前运行中时会自动禁用。",
+        search_placeholder: "搜索软件 / 版本 / 策略",
+        status_all: "全部状态",
+        status_up_to_date: "已最新",
+        status_outdated: "可更新",
+        status_unknown: "待检查",
+        status_disabled: "已停用",
+        clear_filter: "清空筛选",
+        open_config: "打开插件配置",
+        th_software: "软件",
+        th_current: "当前版本",
+        th_latest: "最新版本",
+        th_status: "状态",
+        th_strategy: "策略",
+        th_enabled: "启用",
+        th_checked_at: "最近检查",
+        yes: "是",
+        no: "否",
+        no_rows: "当前筛选条件下没有匹配目标。",
+        job_title: "最近执行任务",
+        job_none: "暂无任务",
+        job_id: "任务ID",
+        job_status: "状态",
+        job_scope: "范围",
+        job_target_count: "目标数",
+        job_started: "开始时间",
+        job_finished: "完成时间",
+        job_summary: "摘要",
+        debug_title: "Debug 日志（实时）",
+        tab_all: "全部",
+        tab_run: "运行日志",
+        tab_target: "目标日志",
+        tab_scheduler: "调度日志",
+        tab_system: "系统日志",
+        debug_level_all: "全部级别",
+        debug_keyword_placeholder: "筛选关键字（target/source/message）",
+        auto_scroll_on: "自动滚动: 开",
+        auto_scroll_off: "自动滚动: 关",
+        clear_logs: "清空日志",
+        debug_empty: "暂无调试日志",
+        chip_total: "总目标 {n}",
+        chip_up_to_date: "已最新 {n}",
+        chip_outdated: "可更新 {n}",
+        chip_unknown: "待检查 {n}",
+        chip_disabled: "已停用 {n}",
+        confirm_run_filtered: "确认立即更新当前筛选出的 {n} 个软件？\n\n{targets}",
+        confirm_run_all: "确认立即更新全部纳管软件（{n} 个）？\n\n{targets}",
+        alert_no_filtered: "当前筛选结果中没有可更新（启用）的软件目标。",
+        alert_no_all: "当前没有可更新（启用）的软件目标。",
+        err_run_filtered: "立即更新失败: {msg}",
+        err_run_all: "立即全部更新失败: {msg}",
+        err_poll_job: "任务轮询失败: {msg}",
+        err_init: "初始化失败: {msg}",
+        err_login_cancel: "登录已取消",
+        alert_open_config: "请在 AstrBot 插件管理页打开 OneSync 配置，修改目标与策略参数。",
+        confirm_clear_logs: "确认清空当前 WebUI 调试日志？",
+      },
+      en: {
+        app_title: "OneSync Operations Console",
+        last_refresh: "Last Refresh: {time}",
+        refresh: "Refresh",
+        switch_theme: "Switch Theme",
+        density_comfortable: "Comfortable",
+        density_compact: "Compact",
+        density_ultra: "Ultra Compact",
+        run_filtered: "Run Update (Filtered)",
+        run_all: "Run Update (All Managed)",
+        quick_hint: "Both actions require confirmation. Buttons are disabled while a job is running.",
+        search_placeholder: "Search software / version / strategy",
+        status_all: "All Status",
+        status_up_to_date: "Up to Date",
+        status_outdated: "Outdated",
+        status_unknown: "Unknown",
+        status_disabled: "Disabled",
+        clear_filter: "Clear Filters",
+        open_config: "Open Plugin Config",
+        th_software: "Software",
+        th_current: "Current Version",
+        th_latest: "Latest Version",
+        th_status: "Status",
+        th_strategy: "Strategy",
+        th_enabled: "Enabled",
+        th_checked_at: "Last Checked",
+        yes: "Yes",
+        no: "No",
+        no_rows: "No targets matched the current filters.",
+        job_title: "Latest Job",
+        job_none: "No job yet",
+        job_id: "Job ID",
+        job_status: "Status",
+        job_scope: "Scope",
+        job_target_count: "Target Count",
+        job_started: "Started At",
+        job_finished: "Finished At",
+        job_summary: "Summary",
+        debug_title: "Debug Logs (Realtime)",
+        tab_all: "All",
+        tab_run: "Run",
+        tab_target: "Target",
+        tab_scheduler: "Scheduler",
+        tab_system: "System",
+        debug_level_all: "All Levels",
+        debug_keyword_placeholder: "Filter keyword (target/source/message)",
+        auto_scroll_on: "Auto Scroll: On",
+        auto_scroll_off: "Auto Scroll: Off",
+        clear_logs: "Clear Logs",
+        debug_empty: "No debug logs",
+        chip_total: "Total {n}",
+        chip_up_to_date: "Up-to-date {n}",
+        chip_outdated: "Outdated {n}",
+        chip_unknown: "Unknown {n}",
+        chip_disabled: "Disabled {n}",
+        confirm_run_filtered: "Run update now for {n} filtered software targets?\n\n{targets}",
+        confirm_run_all: "Run update now for all managed targets ({n})?\n\n{targets}",
+        alert_no_filtered: "No enabled targets in current filtered result.",
+        alert_no_all: "No enabled targets found.",
+        err_run_filtered: "Filtered update failed: {msg}",
+        err_run_all: "All-target update failed: {msg}",
+        err_poll_job: "Job polling failed: {msg}",
+        err_init: "Initialization failed: {msg}",
+        err_login_cancel: "Login canceled",
+        alert_open_config: "Open OneSync config in AstrBot plugin settings to edit target strategies and parameters.",
+        confirm_clear_logs: "Clear current WebUI debug logs?",
+      },
+    };
+
+    function t(key, vars = {}) {
+      const langPack = I18N[state.lang] || I18N.zh;
+      let raw = langPack[key] || I18N.zh[key] || key;
+      Object.keys(vars || {}).forEach((name) => {
+        raw = raw.replace(new RegExp(`\\{${name}\\}`, "g"), String(vars[name]));
+      });
+      return raw;
+    }
+
+    function toLocalTime(text) {
+      if (!text || text === "-") return "-";
+      const ms = Date.parse(text);
+      if (Number.isNaN(ms)) return text;
+      return new Date(ms).toLocaleString();
+    }
+
+    function rowStatusLabel(status) {
+      const mapping = {
+        up_to_date: t("status_up_to_date"),
+        outdated: t("status_outdated"),
+        unknown: t("status_unknown"),
+        disabled: t("status_disabled")
+      };
+      return mapping[status] || t("status_unknown");
+    }
+
+    function applyPreferences() {
+      try {
+        const raw = localStorage.getItem("onesync:webui:prefs");
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed.theme && state.themes.includes(parsed.theme)) {
+          state.themeIndex = state.themes.indexOf(parsed.theme);
+        }
+        if (parsed.density && ["comfortable", "compact", "ultra-compact"].includes(parsed.density)) {
+          state.density = parsed.density;
+        }
+        if (parsed.lang && ["zh", "en"].includes(parsed.lang)) {
+          state.lang = parsed.lang;
+        }
+      } catch (_err) {}
+      document.body.dataset.theme = state.themes[state.themeIndex];
+      document.body.dataset.density = state.density;
+      $("densitySelect").value = state.density;
+      $("langSelect").value = state.lang;
+    }
+
+    function persistPreferences() {
+      const payload = {
+        theme: state.themes[state.themeIndex],
+        density: state.density,
+        lang: state.lang
+      };
+      try {
+        localStorage.setItem("onesync:webui:prefs", JSON.stringify(payload));
+      } catch (_err) {}
+    }
+
+    function applyI18nTexts() {
+      $("mainTitle").textContent = t("app_title");
+      $("refreshBtn").textContent = t("refresh");
+      $("themeBtn").textContent = t("switch_theme");
+      $("runFilteredBtn").textContent = t("run_filtered");
+      $("runAllBtn").textContent = t("run_all");
+      $("quickHint").textContent = t("quick_hint");
+      $("searchInput").placeholder = t("search_placeholder");
+      $("statusOptAll").textContent = t("status_all");
+      $("statusOptUtd").textContent = t("status_up_to_date");
+      $("statusOptOutdated").textContent = t("status_outdated");
+      $("statusOptUnknown").textContent = t("status_unknown");
+      $("statusOptDisabled").textContent = t("status_disabled");
+      $("clearFilterBtn").textContent = t("clear_filter");
+      $("openConfigBtn").textContent = t("open_config");
+      $("thSoftware").textContent = t("th_software");
+      $("thCurrent").textContent = t("th_current");
+      $("thLatest").textContent = t("th_latest");
+      $("thStatus").textContent = t("th_status");
+      $("thStrategy").textContent = t("th_strategy");
+      $("thEnabled").textContent = t("th_enabled");
+      $("thCheckedAt").textContent = t("th_checked_at");
+      $("jobTitle").textContent = t("job_title");
+      $("debugTitle").textContent = t("debug_title");
+      $("tabAll").textContent = t("tab_all");
+      $("tabRun").textContent = t("tab_run");
+      $("tabTarget").textContent = t("tab_target");
+      $("tabScheduler").textContent = t("tab_scheduler");
+      $("tabSystem").textContent = t("tab_system");
+      $("dbgLevelAll").textContent = t("debug_level_all");
+      $("debugKeywordInput").placeholder = t("debug_keyword_placeholder");
+      $("debugClearBtn").textContent = t("clear_logs");
+      $("densitySelect").options[0].textContent = t("density_comfortable");
+      $("densitySelect").options[1].textContent = t("density_compact");
+      $("densitySelect").options[2].textContent = t("density_ultra");
+      syncDebugAutoScrollBtn();
+      $("lastRefresh").textContent = t("last_refresh", { time: new Date().toLocaleString() });
+      buildChips(
+        {
+          up_to_date: state.rows.filter((x) => x.status === "up_to_date").length,
+          outdated: state.rows.filter((x) => x.status === "outdated").length,
+          unknown: state.rows.filter((x) => x.status === "unknown").length,
+          disabled: state.rows.filter((x) => x.status === "disabled").length,
+        },
+        state.rows.length,
+      );
+      applyFilters();
+      renderRows();
+      renderJob();
+      renderDebugLogs();
+    }
+
+    async function api(path, options = {}) {
+      const headers = Object.assign({}, options.headers || {});
+      if (!headers["Content-Type"] && options.method && options.method !== "GET") {
+        headers["Content-Type"] = "application/json";
+      }
+      if (state.token) {
+        headers["Authorization"] = `Bearer ${state.token}`;
+      }
+      const resp = await fetch(path, Object.assign({}, options, { headers }));
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(payload.message || payload.error || `${resp.status} ${resp.statusText}`);
+      }
+      return payload;
+    }
+
+    async function ensureAuth() {
+      const info = await api("/api/auth-info");
+      if (!info.auth_required) return;
+      const password = window.prompt(
+        state.lang === "en" ? "Enter OneSync WebUI password" : "请输入 OneSync WebUI 密码",
+      );
+      if (password === null) throw new Error(t("err_login_cancel"));
+      const login = await api("/api/login", {
+        method: "POST",
+        body: JSON.stringify({ password })
+      });
+      state.token = login.token || "";
+    }
+
+    function buildChips(counts, total) {
+      const chips = [
+        t("chip_total", { n: total }),
+        t("chip_up_to_date", { n: counts.up_to_date || 0 }),
+        t("chip_outdated", { n: counts.outdated || 0 }),
+        t("chip_unknown", { n: counts.unknown || 0 }),
+        t("chip_disabled", { n: counts.disabled || 0 }),
+      ];
+      $("chipRow").innerHTML = chips.map((item) => `<span class="chip">${item}</span>`).join("");
+    }
+
+    function applyFilters() {
+      const kw = state.keyword.trim().toLowerCase();
+      state.filteredRows = state.rows.filter((row) => {
+        if (state.status !== "all" && row.status !== state.status) return false;
+        if (!kw) return true;
+        const searchText = [
+          row.software_name,
+          row.current_version,
+          row.latest_version,
+          row.strategy,
+          row.enabled ? "enabled" : "disabled",
+          row.last_checked_at
+        ].join(" ").toLowerCase();
+        return searchText.includes(kw);
+      });
+    }
+
+    function renderRows() {
+      const body = $("rowsBody");
+      if (!state.filteredRows.length) {
+        body.innerHTML = `<tr><td colspan="7" style="color: var(--muted);">${t("no_rows")}</td></tr>`;
+        return;
+      }
+      body.innerHTML = state.filteredRows.map((row) => `
+        <tr>
+          <td>${row.software_name}</td>
+          <td class="mono">${row.current_version}</td>
+          <td class="mono">${row.latest_version}</td>
+          <td><span class="badge b-${row.status}">${rowStatusLabel(row.status)}</span></td>
+          <td>${row.strategy}</td>
+          <td>${row.enabled ? t("yes") : t("no")}</td>
+          <td>${toLocalTime(row.last_checked_at)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderJob() {
+      const target = $("jobInfo");
+      if (!state.latestJob) {
+        target.textContent = t("job_none");
+        return;
+      }
+      const job = state.latestJob;
+      const lines = [
+        `${t("job_id")}: ${job.id || "-"}`,
+        `${t("job_status")}: ${job.status || "-"}`,
+        `${t("job_scope")}: ${job.scope || "-"}`,
+        `${t("job_target_count")}: ${job.total_targets || 0}`,
+        `${t("job_started")}: ${toLocalTime(job.started_at || job.created_at || "-")}`,
+        `${t("job_finished")}: ${toLocalTime(job.finished_at || "-")}`,
+        `${t("job_summary")}: ${job.summary || "-"}`,
+      ];
+      target.textContent = lines.join("\n");
+    }
+
+    function escapeHtml(input) {
+      return String(input || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function syncDebugAutoScrollBtn() {
+      $("debugToggleScrollBtn").textContent = state.debugAutoScroll
+        ? t("auto_scroll_on")
+        : t("auto_scroll_off");
+    }
+
+    function syncDebugTabButtons() {
+      const tabRoot = $("debugTabs");
+      if (!tabRoot) return;
+      tabRoot.querySelectorAll("[data-group]").forEach((el) => {
+        const group = el.getAttribute("data-group") || "all";
+        if (group === state.debugSourceGroup) {
+          el.classList.add("active");
+        } else {
+          el.classList.remove("active");
+        }
+      });
+    }
+
+    function renderDebugLogs() {
+      const list = $("debugLogList");
+      const wrap = $("debugLogWrap");
+      if (!state.debugLogs.length) {
+        list.innerHTML = `<div class="debug-empty">${t("debug_empty")}</div>`;
+        return;
+      }
+      list.innerHTML = state.debugLogs.map((item) => {
+        const level = String(item.level || "info").toLowerCase();
+        const source = escapeHtml(item.source || "-");
+        const target = escapeHtml(item.target || "");
+        const msg = escapeHtml(item.message || "");
+        const ts = escapeHtml(toLocalTime(item.timestamp || "-"));
+        const levelText = level.toUpperCase();
+        const targetHtml = target ? `<span class="debug-target">@${target}</span>` : "";
+        return `
+          <div class="debug-line l-${level}">
+            <span class="debug-ts">${ts}</span>
+            <span class="debug-level">[${levelText}]</span>
+            <span class="debug-source">[${source}]</span>
+            ${targetHtml}
+            <span>${msg}</span>
+          </div>
+        `;
+      }).join("");
+      if (state.debugAutoScroll) {
+        wrap.scrollTop = wrap.scrollHeight;
+      }
+    }
+
+    function appendDebugLogs(items) {
+      if (!Array.isArray(items) || !items.length) return;
+      state.debugLogs = state.debugLogs.concat(items);
+      if (state.debugLogs.length > 1000) {
+        state.debugLogs = state.debugLogs.slice(-1000);
+      }
+    }
+
+    async function loadDebugLogs({ reset = false } = {}) {
+      const sinceId = reset ? 0 : state.debugSinceId;
+      const query = new URLSearchParams({
+        since_id: String(sinceId),
+        limit: "300",
+        level: state.debugLevel,
+        keyword: state.debugKeyword,
+        source_group: state.debugSourceGroup
+      });
+      const data = await api(`/api/debug/logs?${query.toString()}`);
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (reset) {
+        state.debugLogs = items;
+      } else {
+        appendDebugLogs(items);
+      }
+      if (items.length) {
+        const maxId = items.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+        state.debugSinceId = Math.max(state.debugSinceId, maxId);
+      } else if (reset) {
+        state.debugSinceId = Number(data.last_id) || state.debugSinceId;
+      }
+      renderDebugLogs();
+    }
+
+    function startDebugPolling() {
+      if (state.debugPollingTimer) {
+        clearInterval(state.debugPollingTimer);
+      }
+      state.debugPollingTimer = setInterval(async () => {
+        try {
+          await loadDebugLogs();
+        } catch (_err) {
+          // Keep polling; transient API errors should not break the page loop.
+        }
+      }, 2500);
+    }
+
+    function setRunningState(running) {
+      $("runFilteredBtn").disabled = running;
+      $("runAllBtn").disabled = running;
+      $("refreshBtn").disabled = running;
+    }
+
+    async function loadOverview() {
+      const data = await api("/api/overview");
+      state.rows = Array.isArray(data.rows) ? data.rows : [];
+      state.latestJob = data.latest_job || state.latestJob;
+      buildChips(data.counts || {}, state.rows.length);
+      applyFilters();
+      renderRows();
+      renderJob();
+      $("lastRefresh").textContent = t("last_refresh", { time: new Date().toLocaleString() });
+    }
+
+    async function loadLatestJob() {
+      const data = await api("/api/jobs/latest");
+      if (data.job) {
+        state.latestJob = data.job;
+        renderJob();
+      }
+    }
+
+    async function pollJob(jobId) {
+      if (state.pollingTimer) {
+        clearInterval(state.pollingTimer);
+      }
+      setRunningState(true);
+      state.pollingTimer = setInterval(async () => {
+        try {
+          const data = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
+          state.latestJob = data.job || null;
+          renderJob();
+          const status = state.latestJob ? state.latestJob.status : "";
+          if (["success", "partial", "error"].includes(status)) {
+            clearInterval(state.pollingTimer);
+            state.pollingTimer = null;
+            setRunningState(false);
+            await loadOverview();
+            state.debugSinceId = 0;
+            await loadDebugLogs({ reset: true });
+          }
+        } catch (err) {
+          clearInterval(state.pollingTimer);
+          state.pollingTimer = null;
+          setRunningState(false);
+          alert(t("err_poll_job", { msg: err.message }));
+        }
+      }, 2000);
+    }
+
+    async function submitRun(scope, targets) {
+      const payload = { scope, targets };
+      const data = await api("/api/run", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      state.latestJob = data.job || null;
+      renderJob();
+      if (state.latestJob && state.latestJob.id) {
+        await pollJob(state.latestJob.id);
+      } else {
+        await loadOverview();
+      }
+    }
+
+    function getEnabledFilteredTargets() {
+      return state.filteredRows.filter((row) => row.enabled).map((row) => row.software_name);
+    }
+
+    function getEnabledAllTargets() {
+      return state.rows.filter((row) => row.enabled).map((row) => row.software_name);
+    }
+
+    async function onRunFiltered() {
+      const targets = getEnabledFilteredTargets();
+      if (!targets.length) {
+        alert(t("alert_no_filtered"));
+        return;
+      }
+      const confirmed = window.confirm(
+        t("confirm_run_filtered", {
+          n: targets.length,
+          targets: targets.join(", "),
+        }),
+      );
+      if (!confirmed) return;
+      await submitRun("filtered", targets);
+    }
+
+    async function onRunAll() {
+      const targets = getEnabledAllTargets();
+      if (!targets.length) {
+        alert(t("alert_no_all"));
+        return;
+      }
+      const confirmed = window.confirm(
+        t("confirm_run_all", {
+          n: targets.length,
+          targets: targets.join(", "),
+        }),
+      );
+      if (!confirmed) return;
+      await submitRun("all", targets);
+    }
+
+    function bindEvents() {
+      $("searchInput").addEventListener("input", (evt) => {
+        state.keyword = evt.target.value || "";
+        applyFilters();
+        renderRows();
+      });
+
+      $("statusFilter").addEventListener("change", (evt) => {
+        state.status = evt.target.value || "all";
+        applyFilters();
+        renderRows();
+      });
+
+      $("clearFilterBtn").addEventListener("click", () => {
+        state.keyword = "";
+        state.status = "all";
+        $("searchInput").value = "";
+        $("statusFilter").value = "all";
+        applyFilters();
+        renderRows();
+      });
+
+      $("refreshBtn").addEventListener("click", async () => {
+        await loadOverview();
+        await loadLatestJob();
+        state.debugSinceId = 0;
+        await loadDebugLogs({ reset: true });
+      });
+
+      $("themeBtn").addEventListener("click", () => {
+        state.themeIndex = (state.themeIndex + 1) % state.themes.length;
+        document.body.dataset.theme = state.themes[state.themeIndex];
+        persistPreferences();
+      });
+
+      $("langSelect").addEventListener("change", (evt) => {
+        const lang = evt.target.value || "zh";
+        state.lang = ["zh", "en"].includes(lang) ? lang : "zh";
+        persistPreferences();
+        applyI18nTexts();
+      });
+
+      $("densitySelect").addEventListener("change", (evt) => {
+        state.density = evt.target.value || "compact";
+        document.body.dataset.density = state.density;
+        persistPreferences();
+      });
+
+      $("runFilteredBtn").addEventListener("click", async () => {
+        try {
+          await onRunFiltered();
+        } catch (err) {
+          alert(t("err_run_filtered", { msg: err.message }));
+        }
+      });
+
+      $("runAllBtn").addEventListener("click", async () => {
+        try {
+          await onRunAll();
+        } catch (err) {
+          alert(t("err_run_all", { msg: err.message }));
+        }
+      });
+
+      $("openConfigBtn").addEventListener("click", () => {
+        alert(t("alert_open_config"));
+      });
+
+      $("debugLevelFilter").addEventListener("change", async (evt) => {
+        state.debugLevel = evt.target.value || "all";
+        state.debugSinceId = 0;
+        await loadDebugLogs({ reset: true });
+      });
+
+      const tabRoot = $("debugTabs");
+      if (tabRoot) {
+        tabRoot.querySelectorAll("[data-group]").forEach((el) => {
+          el.addEventListener("click", async () => {
+            const group = el.getAttribute("data-group") || "all";
+            if (group === state.debugSourceGroup) return;
+            state.debugSourceGroup = group;
+            state.debugSinceId = 0;
+            syncDebugTabButtons();
+            await loadDebugLogs({ reset: true });
+          });
+        });
+      }
+
+      $("debugKeywordInput").addEventListener("input", (evt) => {
+        state.debugKeyword = evt.target.value || "";
+        if (state.debugKeywordTimer) {
+          clearTimeout(state.debugKeywordTimer);
+        }
+        state.debugKeywordTimer = setTimeout(async () => {
+          state.debugSinceId = 0;
+          await loadDebugLogs({ reset: true });
+        }, 300);
+      });
+
+      $("debugToggleScrollBtn").addEventListener("click", () => {
+        state.debugAutoScroll = !state.debugAutoScroll;
+        syncDebugAutoScrollBtn();
+      });
+
+      $("debugClearBtn").addEventListener("click", async () => {
+        const confirmed = window.confirm(t("confirm_clear_logs"));
+        if (!confirmed) return;
+        await api("/api/debug/clear", {
+          method: "POST",
+          body: JSON.stringify({})
+        });
+        state.debugLogs = [];
+        state.debugSinceId = 0;
+        await loadDebugLogs({ reset: true });
+      });
+    }
+
+    async function boot() {
+      applyPreferences();
+      applyI18nTexts();
+      syncDebugTabButtons();
+      bindEvents();
+      try {
+        await ensureAuth();
+        await loadOverview();
+        await loadLatestJob();
+        await loadDebugLogs({ reset: true });
+        startDebugPolling();
+      } catch (err) {
+        alert(t("err_init", { msg: err.message }));
+      }
+    }
+
+    boot();
+  </script>
+</body>
+</html>

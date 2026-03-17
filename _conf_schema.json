@@ -7,7 +7,7 @@
   "software_overview": {
     "description": "软件与版本总览（自动生成）",
     "type": "template_list",
-    "hint": "此字段由插件自动刷新，每条为一个软件目标的版本摘要。建议勿手动修改。",
+    "hint": "此字段由插件自动刷新，每条为一个软件目标的版本摘要。只读展示（不支持手动编辑），支持表格/卡片/紧凑视图、状态筛选和主题切换。",
     "default": [],
     "templates": {
       "software_item": {
@@ -47,6 +47,47 @@
         }
       }
     }
+  },
+  "web_admin": {
+    "description": "WebUI 管理端配置",
+    "type": "object",
+    "hint": "启用后可通过浏览器打开 OneSync 管理页面，在不修改 AstrBot Dashboard 源码的前提下获得完整前端交互。",
+    "items": {
+      "enabled": {
+        "description": "启用 WebUI 管理端",
+        "type": "bool",
+        "default": false
+      },
+      "host": {
+        "description": "监听地址",
+        "type": "string",
+        "default": "127.0.0.1",
+        "hint": "建议默认 127.0.0.1（仅本机访问）。如需局域网访问可设为 0.0.0.0。"
+      },
+      "port": {
+        "description": "监听端口",
+        "type": "int",
+        "default": 8099,
+        "hint": "WebUI 服务端口。",
+        "slider": {
+          "min": 1024,
+          "max": 65535,
+          "step": 1
+        }
+      },
+      "password": {
+        "description": "WebUI 访问密码（可选）",
+        "type": "string",
+        "default": "",
+        "hint": "留空表示无需登录；设置后访问 /api 需要先登录。"
+      }
+    }
+  },
+  "web_admin_url": {
+    "description": "WebUI 访问地址（自动生成）",
+    "type": "string",
+    "default": "",
+    "hint": "由插件自动写入，通常不需要手动修改。"
   },
   "poll_interval_minutes": {
     "description": "定时轮询间隔（分钟）",

@@ -4,6 +4,8 @@ import asyncio
 import os
 import re
 import shlex
+import shutil
+import tempfile
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -203,6 +205,42 @@ _REMOTE_PROBE_CACHE: dict[str, RemoteProbeCacheEntry] = {}
 
 
 class CommandRunner:
+    @staticmethod
+    def _ensure_runtime_path(env: dict[str, str]) -> None:
+        raw_path = _safe_str(env.get("PATH", ""))
+        path_entries = [item for item in raw_path.split(":") if item]
+        seen = set(path_entries)
+
+        home_dir = _safe_str(env.get("HOME", "")).strip()
+        if not home_dir:
+            try:
+                home_dir = os.path.expanduser("~")
+            except Exception:
+                home_dir = ""
+
+        candidates: list[str] = []
+        if home_dir:
+            candidates.extend(
+                [
+                    os.path.join(home_dir, ".cargo", "bin"),
+                    os.path.join(home_dir, ".local", "bin"),
+                ],
+            )
+        candidates.extend(["/usr/local/bin", "/usr/bin", "/bin"])
+
+        prepend: list[str] = []
+        for candidate in candidates:
+            path = _safe_str(candidate).strip()
+            if not path or path in seen:
+                continue
+            if not os.path.isdir(path):
+                continue
+            prepend.append(path)
+            seen.add(path)
+
+        if prepend:
+            env["PATH"] = ":".join(prepend + path_entries) if path_entries else ":".join(prepend)
+
     async def run(
         self,
         command: str,
@@ -214,6 +252,7 @@ class CommandRunner:
         env = os.environ.copy()
         if env_update:
             env.update({str(k): str(v) for k, v in env_update.items()})
+        self._ensure_runtime_path(env)
 
         started = time.monotonic()
         proc = await asyncio.create_subprocess_exec(
@@ -655,13 +694,73 @@ class CargoPathGitStrategy(CommandStrategy):
         )
         return await self.runner.run(command, timeout_s=timeout_s)
 
+    @staticmethod
+    def _is_dubious_ownership(stderr: str) -> bool:
+        return "dubious ownership" in _safe_str(stderr).lower()
+
+    @staticmethod
+    def _is_missing_remote_ref(stderr: str) -> bool:
+        lower = _safe_str(stderr).lower()
+        return "couldn't find remote ref" in lower or "cannot find remote ref" in lower
+
+    @staticmethod
+    def _is_ff_only_rejected(stderr: str) -> bool:
+        lower = _safe_str(stderr).lower()
+        return (
+            "not possible to fast-forward" in lower
+            or "diverging branches can't be fast-forwarded" in lower
+        )
+
+    @staticmethod
+    def _should_retry_cargo_install_with_force(command: str, stderr: str) -> bool:
+        cmd_low = _safe_str(command).strip().lower()
+        if not cmd_low.startswith("cargo install"):
+            return False
+        if " --force" in f" {cmd_low} ":
+            return False
+        return "already exists in destination" in _safe_str(stderr).lower()
+
+    @staticmethod
+    def _git_repo_command(
+        repo_path: str,
+        git_args: str,
+        *,
+        safe_directory: bool,
+    ) -> str:
+        if safe_directory:
+            return (
+                "git "
+                f"-c safe.directory={shlex.quote(repo_path)} "
+                f"-C {shlex.quote(repo_path)} {git_args}"
+            )
+        return f"git -C {shlex.quote(repo_path)} {git_args}"
+
     async def _detect_branch(
         self,
         repo_path: str,
         timeout_s: int,
+        *,
+        safe_directory: bool = False,
     ) -> str:
-        command = f"git -C {shlex.quote(repo_path)} rev-parse --abbrev-ref HEAD"
+        command = self._git_repo_command(
+            repo_path,
+            "rev-parse --abbrev-ref HEAD",
+            safe_directory=safe_directory,
+        )
         result = await self.runner.run(command, timeout_s=timeout_s)
+        if (
+            not result.ok
+            and not safe_directory
+            and self._is_dubious_ownership(result.stderr)
+        ):
+            retry_cmd = self._git_repo_command(
+                repo_path,
+                "rev-parse --abbrev-ref HEAD",
+                safe_directory=True,
+            )
+            retry = await self.runner.run(retry_cmd, timeout_s=timeout_s)
+            if retry.ok:
+                result = retry
         if not result.ok:
             raise StrategyError(
                 f"failed to detect git branch: {result.stderr.strip()}",
@@ -670,6 +769,89 @@ class CargoPathGitStrategy(CommandStrategy):
         if not branch or branch == "HEAD":
             raise StrategyError("detected detached HEAD; please set branch in target config")
         return branch
+
+    async def _detect_remote_default_branch(
+        self,
+        remote: str,
+        timeout_s: int,
+    ) -> str:
+        cmd = f"git ls-remote --symref {shlex.quote(remote)} HEAD"
+        res = await self.runner.run(cmd, timeout_s=timeout_s)
+        if not res.ok:
+            raise StrategyError(
+                f"failed to detect remote default branch: {res.stderr.strip()}",
+            )
+        for line in _safe_str(res.stdout).splitlines():
+            line = line.strip()
+            if not line.startswith("ref: ") or "HEAD" not in line:
+                continue
+            if "refs/heads/" not in line:
+                continue
+            after = line.split("refs/heads/", 1)[1]
+            branch = after.split()[0].split("\t")[0].strip()
+            if branch:
+                return branch
+        raise StrategyError("remote default branch not found in ls-remote output")
+
+    @staticmethod
+    def _cleanup_temp_repo(
+        temp_repo_path: str,
+        diagnostics: list[str],
+    ) -> None:
+        path = _safe_str(temp_repo_path).strip()
+        if not path:
+            return
+        try:
+            shutil.rmtree(path, ignore_errors=True)
+            diagnostics.append(f"temp clone cleanup done: {path}")
+        except Exception as exc:
+            diagnostics.append(f"temp clone cleanup failed: {exc}")
+
+    async def _clone_repo_for_build(
+        self,
+        target_name: str,
+        remotes: list[str],
+        branch_candidates: list[str],
+        *,
+        timeout_s: int,
+        diagnostics: list[str],
+    ) -> tuple[str, str, str]:
+        if not remotes:
+            raise StrategyError("no remotes for clone fallback")
+        if not branch_candidates:
+            raise StrategyError("no branch candidates for clone fallback")
+
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", target_name).strip("-") or "target"
+        clone_errors: list[str] = []
+
+        for remote in remotes:
+            for branch in branch_candidates:
+                tmp_dir = tempfile.mkdtemp(prefix=f"onesync-{safe_name}-")
+                clone_cmd = (
+                    "git clone --depth 1 "
+                    f"--branch {shlex.quote(branch)} "
+                    f"{shlex.quote(remote)} {shlex.quote(tmp_dir)}"
+                )
+                res = await self.runner.run(clone_cmd, timeout_s=timeout_s)
+                diagnostics.append(
+                    (
+                        f"clone fallback remote={remote} branch={branch} "
+                        f"exit={res.exit_code} duration={res.duration_s:.2f}s"
+                    ),
+                )
+                if res.ok:
+                    return tmp_dir, remote, branch
+
+                stderr_text = _safe_str(res.stderr).strip()
+                clone_errors.append(f"{remote}@{branch}: {stderr_text}")
+                self._cleanup_temp_repo(tmp_dir, diagnostics)
+                if self._is_missing_remote_ref(stderr_text):
+                    continue
+                break
+
+        raise StrategyError(
+            "clone fallback failed: " + " | ".join(clone_errors),
+        )
 
     def _build_remote_candidates(self, target_cfg: dict[str, Any]) -> list[str]:
         remotes = ensure_str_list(target_cfg.get("remote_candidates"))
@@ -920,17 +1102,27 @@ class CargoPathGitStrategy(CommandStrategy):
 
         old_version = check_result.current_version
         update_timeout = int(target_cfg.get("update_timeout_s", 1200))
-        auto_safe_dir = bool(target_cfg.get("auto_add_safe_directory", True))
+        auto_safe_dir = _to_bool(target_cfg.get("auto_add_safe_directory", True), True)
+        repo_safe_override = auto_safe_dir
         if auto_safe_dir:
             safe_res = await self._ensure_safe_directory(repo_path, timeout_s=update_timeout)
             diagnostics.append(
                 f"safe.directory add exit={safe_res.exit_code} duration={safe_res.duration_s:.2f}s",
             )
-        branch = _safe_str(target_cfg.get("branch")).strip()
-        if not branch:
+            if not safe_res.ok:
+                diagnostics.append(
+                    "safe.directory global add failed; fallback to per-command safe.directory",
+                )
+        configured_branch = _safe_str(target_cfg.get("branch")).strip()
+        detected_branch = ""
+        if not configured_branch:
             try:
-                branch = await self._detect_branch(repo_path, timeout_s=update_timeout)
-                diagnostics.append(f"detected git branch: {branch}")
+                detected_branch = await self._detect_branch(
+                    repo_path,
+                    timeout_s=update_timeout,
+                    safe_directory=repo_safe_override,
+                )
+                diagnostics.append(f"detected git branch: {detected_branch}")
             except Exception as exc:
                 return UpdateResult(
                     target=target_name,
@@ -940,6 +1132,15 @@ class CargoPathGitStrategy(CommandStrategy):
                     message=f"cannot detect branch: {exc}",
                     diagnostics=diagnostics,
                 )
+        branch_candidates = dedupe_keep_order(
+            [
+                configured_branch,
+                detected_branch,
+                _safe_str(target_cfg.get("default_branch", "")).strip(),
+                "main",
+                "master",
+            ],
+        )
 
         remotes = ensure_str_list(check_result.extra.get("ordered_remotes"))
         if not remotes:
@@ -954,35 +1155,158 @@ class CargoPathGitStrategy(CommandStrategy):
                 diagnostics=diagnostics,
             )
 
-        pull_errors: list[str] = []
-        pulled = False
-        for remote in remotes:
-            pull_cmd = (
-                f"git -C {shlex.quote(repo_path)} "
-                f"pull --ff-only {shlex.quote(remote)} {shlex.quote(branch)}"
-            )
-            diagnostics.append(f"attempt pull: {pull_cmd}")
-            if dry_run:
-                pulled = True
-                diagnostics.append("dry-run: pull skipped")
-                break
-            pull_res = await self.runner.run(pull_cmd, timeout_s=update_timeout)
-            diagnostics.append(
-                f"pull remote={remote} exit={pull_res.exit_code} duration={pull_res.duration_s:.2f}s",
-            )
-            if pull_res.ok:
-                pulled = True
-                break
-            pull_errors.append(f"{remote}: {pull_res.stderr.strip()}")
+        if not configured_branch:
+            try:
+                remote_default_branch = await self._detect_remote_default_branch(
+                    remotes[0],
+                    timeout_s=update_timeout,
+                )
+                diagnostics.append(
+                    f"remote default branch from {remotes[0]}: {remote_default_branch}",
+                )
+                branch_candidates = dedupe_keep_order(
+                    [remote_default_branch] + branch_candidates,
+                )
+            except Exception as exc:
+                diagnostics.append(f"remote default branch detect skipped: {exc}")
 
-        if not pulled:
+        if not branch_candidates:
             return UpdateResult(
                 target=target_name,
                 ok=False,
                 changed=False,
                 old_version=old_version,
-                message=f"all git pull attempts failed: {' | '.join(pull_errors)}",
+                message="cannot resolve any git branch candidates",
                 diagnostics=diagnostics,
+            )
+        diagnostics.append(
+            "branch candidates: "
+            + ", ".join(candidate for candidate in branch_candidates if candidate),
+        )
+        pull_rebase_fallback = _to_bool(
+            target_cfg.get("pull_rebase_fallback", False),
+            False,
+        )
+        clone_build_fallback = _to_bool(
+            target_cfg.get("clone_build_fallback", True),
+            True,
+        )
+
+        pull_errors: list[str] = []
+        pulled = False
+        pulled_branch = ""
+        pulled_remote = ""
+        build_repo_path = repo_path
+        temp_repo_path = ""
+        for remote in remotes:
+            for branch_candidate in branch_candidates:
+                pull_cmd = self._git_repo_command(
+                    repo_path,
+                    (
+                        "pull --ff-only "
+                        f"{shlex.quote(remote)} {shlex.quote(branch_candidate)}"
+                    ),
+                    safe_directory=repo_safe_override,
+                )
+                diagnostics.append(f"attempt pull: {pull_cmd}")
+                if dry_run:
+                    pulled = True
+                    pulled_branch = branch_candidate
+                    pulled_remote = remote
+                    diagnostics.append("dry-run: pull skipped")
+                    break
+                pull_res = await self.runner.run(pull_cmd, timeout_s=update_timeout)
+                diagnostics.append(
+                    (
+                        f"pull remote={remote} branch={branch_candidate} "
+                        f"exit={pull_res.exit_code} duration={pull_res.duration_s:.2f}s"
+                    ),
+                )
+                if pull_res.ok:
+                    pulled = True
+                    pulled_branch = branch_candidate
+                    pulled_remote = remote
+                    break
+                stderr_text = pull_res.stderr.strip()
+                pull_errors.append(f"{remote}@{branch_candidate}: {stderr_text}")
+                if self._is_missing_remote_ref(stderr_text):
+                    diagnostics.append(
+                        (
+                            "pull fallback triggered by missing remote ref: "
+                            f"remote={remote} branch={branch_candidate}"
+                        ),
+                    )
+                    continue
+                if pull_rebase_fallback and self._is_ff_only_rejected(stderr_text):
+                    rebase_cmd = self._git_repo_command(
+                        repo_path,
+                        (
+                            "pull --rebase "
+                            f"{shlex.quote(remote)} {shlex.quote(branch_candidate)}"
+                        ),
+                        safe_directory=repo_safe_override,
+                    )
+                    diagnostics.append(
+                        (
+                            "pull rebase fallback: "
+                            f"remote={remote} branch={branch_candidate}"
+                        ),
+                    )
+                    rebase_res = await self.runner.run(rebase_cmd, timeout_s=update_timeout)
+                    diagnostics.append(
+                        (
+                            f"pull --rebase remote={remote} branch={branch_candidate} "
+                            f"exit={rebase_res.exit_code} duration={rebase_res.duration_s:.2f}s"
+                        ),
+                    )
+                    if rebase_res.ok:
+                        pulled = True
+                        pulled_branch = branch_candidate
+                        pulled_remote = remote
+                        break
+                    pull_errors.append(
+                        f"{remote}@{branch_candidate} rebase: {rebase_res.stderr.strip()}",
+                    )
+                break
+            if pulled:
+                break
+
+        if not pulled:
+            if clone_build_fallback:
+                try:
+                    temp_repo_path, cloned_remote, cloned_branch = await self._clone_repo_for_build(
+                        target_name,
+                        remotes,
+                        branch_candidates,
+                        timeout_s=update_timeout,
+                        diagnostics=diagnostics,
+                    )
+                    build_repo_path = temp_repo_path
+                    pulled = True
+                    pulled_remote = cloned_remote
+                    pulled_branch = cloned_branch
+                    diagnostics.append(
+                        (
+                            "clone-build fallback selected: "
+                            f"remote={cloned_remote} branch={cloned_branch} path={temp_repo_path}"
+                        ),
+                    )
+                except Exception as exc:
+                    pull_errors.append(str(exc))
+            if not pulled:
+                self._cleanup_temp_repo(temp_repo_path, diagnostics)
+                return UpdateResult(
+                    target=target_name,
+                    ok=False,
+                    changed=False,
+                    old_version=old_version,
+                    message=f"all git pull attempts failed: {' | '.join(pull_errors)}",
+                    diagnostics=diagnostics,
+                )
+
+        if pulled_remote and pulled_branch:
+            diagnostics.append(
+                f"pull success remote={pulled_remote} branch={pulled_branch}",
             )
 
         build_commands = ensure_str_list(target_cfg.get("build_commands"))
@@ -990,8 +1314,8 @@ class CargoPathGitStrategy(CommandStrategy):
             build_commands = ["cargo install --path {repo_path}"]
 
         cmd_ctx = dict(runtime_ctx)
-        cmd_ctx["repo_path"] = repo_path
-        cmd_ctx["branch"] = branch
+        cmd_ctx["repo_path"] = build_repo_path
+        cmd_ctx["branch"] = pulled_branch or branch_candidates[0]
 
         for command in build_commands:
             rendered = render_template(command, cmd_ctx)
@@ -1004,12 +1328,30 @@ class CargoPathGitStrategy(CommandStrategy):
                 f"build exit={build_res.exit_code} duration={build_res.duration_s:.2f}s cmd={rendered}",
             )
             if not build_res.ok:
+                if self._should_retry_cargo_install_with_force(rendered, build_res.stderr):
+                    retry_cmd = f"{rendered} --force"
+                    diagnostics.append(f"build retry with --force: {retry_cmd}")
+                    retry_res = await self.runner.run(retry_cmd, timeout_s=update_timeout)
+                    diagnostics.append(
+                        (
+                            f"build retry exit={retry_res.exit_code} "
+                            f"duration={retry_res.duration_s:.2f}s cmd={retry_cmd}"
+                        ),
+                    )
+                    if retry_res.ok:
+                        continue
+                    build_res = retry_res
+                self._cleanup_temp_repo(temp_repo_path, diagnostics)
+                stderr_text = build_res.stderr.strip()
+                message = f"build command failed: {rendered}"
+                if stderr_text:
+                    message += f" | stderr: {stderr_text}"
                 return UpdateResult(
                     target=target_name,
                     ok=False,
                     changed=False,
                     old_version=old_version,
-                    message=f"build command failed: {rendered}",
+                    message=message,
                     diagnostics=diagnostics,
                 )
 
@@ -1028,6 +1370,7 @@ class CargoPathGitStrategy(CommandStrategy):
                     f"verify exit={verify_res.exit_code} duration={verify_res.duration_s:.2f}s",
                 )
                 if not verify_res.ok:
+                    self._cleanup_temp_repo(temp_repo_path, diagnostics)
                     return UpdateResult(
                         target=target_name,
                         ok=False,
@@ -1040,6 +1383,7 @@ class CargoPathGitStrategy(CommandStrategy):
         new_check = await self.check(target_name, target_cfg, runtime_ctx)
         diagnostics.extend(new_check.diagnostics)
         if not new_check.ok:
+            self._cleanup_temp_repo(temp_repo_path, diagnostics)
             return UpdateResult(
                 target=target_name,
                 ok=False,
@@ -1060,6 +1404,7 @@ class CargoPathGitStrategy(CommandStrategy):
                 f"{new_check.current_version} < {new_check.latest_version}"
             )
 
+        self._cleanup_temp_repo(temp_repo_path, diagnostics)
         return UpdateResult(
             target=target_name,
             ok=True,

@@ -1,5 +1,7 @@
 # OneSync 操作与同步手册（维护者）
 
+> 语言 / Language: [中文](./OPERATIONS_AND_SYNC_zh.md) | [English](./OPERATIONS_AND_SYNC_en.md)
+
 本文档面向仓库维护者，包含：
 
 - 插件上传信息
@@ -10,7 +12,9 @@
 ## 1. 文档导航
 
 - 用户安装与配置： [INSTALL_AND_CONFIG_zh.md](INSTALL_AND_CONFIG_zh.md)
-- About 详细模板： [GITHUB_ABOUT.md](GITHUB_ABOUT.md)
+- 用户安装与配置（英文）： [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md)
+- About 详细模板（中文）： [GITHUB_ABOUT_zh.md](./GITHUB_ABOUT_zh.md)
+- About 详细模板（英文）： [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
 
 ## 2. 插件上传信息
 
@@ -39,7 +43,8 @@
 
 可直接复用：
 
-- [GITHUB_ABOUT.md](GITHUB_ABOUT.md)
+- [GITHUB_ABOUT_zh.md](./GITHUB_ABOUT_zh.md)
+- [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
 
 建议：
 

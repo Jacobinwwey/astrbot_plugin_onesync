@@ -1,5 +1,7 @@
 # OneSync 安装与配置指南（中文）
 
+> 语言 / Language: [中文](./INSTALL_AND_CONFIG_zh.md) | [English](./INSTALL_AND_CONFIG_en.md)
+
 本文档面向 OneSync 最终使用者和运维者，重点覆盖：
 
 - 如何安装并验证插件可用。
@@ -19,7 +21,7 @@
 - 支持镜像回退、多远端候选，提高更新可用性。
 - 支持更新前自动探测远端质量（连通性与延迟）并按质量排序。
 - 支持状态持久化与事件日志，便于排障与审计。
-- 设置页包含“软件与版本总览（自动生成）”，可快速查看当前/最新版本。
+- 设置页包含“软件与版本总览（自动生成）”，支持多视图/多主题切换，适配大规模目标管理。
 
 ## 2. 环境要求
 
@@ -29,6 +31,7 @@
 - 若使用 `cargo_path_git` 策略，需要：
   - 本地已有 git 仓库目录（如 `/path/to/zeroclaw`）。
   - 可访问上游仓库或镜像。
+- 若启用 OneSync 内置 WebUI（`web_admin.enabled=true`），需要可导入 `fastapi` 与 `uvicorn`。
 
 建议安装后执行一次 `/updater env`，让插件自动检测命令可用性和版本，避免运行时才发现环境缺失。
 
@@ -78,8 +81,63 @@ systemctl restart astrbot.service
 设置页中还可直接查看：
 
 - `software_overview`：自动生成的软件与版本滚动列表（每个软件一条，无需手动维护）。
+- 支持 `表格 / 卡片 / 紧凑列表` 视图切换。
+- 支持 `跟随系统 / 浅色 / 深色柔和 / 深色蓝灰 / 海军蓝 / 暖灰夜 / 高对比` 主题切换。
+- 支持 `舒适 / 紧凑 / 极限紧凑` 密度切换。
 
-## 4. 快速设置同步时间（重点）
+## 4. 软件总览视图（适配大规模运维）
+
+`software_overview` 是只读展示字段，OneSync 会在每次检查/更新后刷新内容，不支持手动编辑。
+
+你可以在配置页直接完成以下操作：
+
+1. 切换视图模式：
+   - `表格`：多列对比当前/最新版本、策略、状态，且支持粘性表头与滚动。
+   - `卡片`：每个目标一张卡片，适合快速扫读。
+   - `紧凑列表`：压缩行高，适合大量目标并行查看。
+2. 切换主题模式：
+   - `跟随系统`
+   - `浅色`
+   - `深色柔和`
+   - `深色蓝灰`
+   - `海军蓝`
+   - `暖灰夜`
+   - `高对比`
+3. 切换密度模式：
+   - `舒适`
+   - `紧凑`
+   - `极限紧凑`
+4. 进行运维筛选：
+   - 关键字搜索（软件名/版本/策略）。
+   - 状态筛选（已最新、可更新、待检查、已停用）。
+
+界面偏好会保存在浏览器本地，下次进入配置页自动恢复。
+
+## 4.1 内置 WebUI（不改 AstrBot Dashboard 源码）
+
+OneSync 提供内置 WebUI，适合在不修改 AstrBot Dashboard 源码的前提下获得完整前端交互。
+
+启用步骤：
+
+1. 在插件配置中设置：
+   - `web_admin.enabled = true`
+   - `web_admin.host = 127.0.0.1`（建议）
+   - `web_admin.port = 8099`（可调整）
+   - `web_admin.password = ...`（可选）
+2. 保存配置并重载插件。
+3. 打开 `web_admin_url`（插件自动生成）。
+
+WebUI 支持：
+
+- 按关键字与状态筛选软件。
+- `立即更新（当前筛选）`：只更新当前筛选出的启用目标。
+- `立即全部更新（全部纳管）`：更新全部启用目标。
+- 两个按钮都带确认弹窗，防止误触。
+- 最近任务状态面板（运行中/成功/部分成功/失败）。
+- Debug 日志面板（多标签：运行/目标/调度/系统，支持实时滚动、级别筛选、关键字过滤、清空日志）。
+- i18n 双语支持（中文/English）：界面标题、按钮、筛选项、日志面板标签可一键切换。
+
+## 5. 快速设置同步时间（重点）
 
 OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 
@@ -91,7 +149,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 - 目标在“到期”后，会在下一次轮询时执行。
 - 因此时间精度受 `poll_interval_minutes` 影响。
 
-### 4.1 3 分钟配置法（zeroclaw）
+### 5.1 3 分钟配置法（zeroclaw）
 
 1. 插件配置页设置：`target_config_mode = human`，并把 `poll_interval_minutes = 5`。
 2. 在 `human_targets` 中找到/新增 `zeroclaw` 条目，把 `check_interval_hours` 改为目标值。
@@ -103,7 +161,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 `human_targets` 是动态列表（`template_list`），可无限新增条目；每条是一个软件目标卡片。
 首次使用 human 模式时，插件会自动将已有 `targets_json` 条目迁移到 `human_targets`。
 
-### 4.2 常见频率换算
+### 5.2 常见频率换算
 
 - 每 1 小时：`check_interval_hours = 1`
 - 每 30 分钟：`check_interval_hours = 0.5`
@@ -111,7 +169,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 
 建议同时把 `poll_interval_minutes` 调到 `5` 或更小于期望精度的值。
 
-## 5. 命令使用
+## 6. 命令使用
 
 仅管理员可用。
 
@@ -141,14 +199,16 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 - 策略推断命令（如 `git`、`cargo`、`build_commands`、`update_commands`、`verify_cmd`）。
 - `cargo_path_git` 的 `repo_path` 与 `binary_path` 路径有效性。
 
-## 6. 配置总览
+## 7. 配置总览
 
-### 6.1 顶层配置项
+### 7.1 顶层配置项
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `enabled` | bool | `true` | 是否启用插件。 |
-| `software_overview` | template_list | `[]` | 软件与版本总览（自动生成滚动列表，只用于展示）。 |
+| `software_overview` | template_list | `[]` | 软件与版本总览（自动生成；支持表格/卡片/紧凑视图、搜索与状态筛选、主题切换）。 |
+| `web_admin` | object | 见 schema 默认值 | OneSync 内置 WebUI 配置（enabled/host/port/password）。 |
+| `web_admin_url` | string | `""` | WebUI 自动生成访问地址。 |
 | `poll_interval_minutes` | int | `30` | 后台轮询间隔（分钟）。 |
 | `default_check_interval_hours` | float | `24` | 目标未设置 `check_interval_hours` 时的默认值。 |
 | `auto_update_on_schedule` | bool | `true` | 定时发现新版本后是否自动更新。 |
@@ -161,7 +221,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `human_targets` | template_list | 内置 zeroclaw 条目 | 简洁模式目标列表（基础字段，无槽位上限）。 |
 | `targets_json` | text(json) | 内置 zeroclaw 示例 | 开发者模式配置（完整高级字段，仅 developer 模式显示）。 |
 
-### 6.2 目标通用字段（human_targets / targets_json 通用）
+### 7.2 目标通用字段（human_targets / targets_json 通用）
 
 说明：`human_targets` 只显示常用基础字段；下表包含 `targets_json` 可用的完整字段。
 
@@ -177,7 +237,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `required_commands` | list | 环境检测附加命令列表（例如 `["git","cargo","zeroclaw"]`）。 |
 | `current_version_pattern` | string | 当前版本提取正则，可选。 |
 
-### 6.3 `cargo_path_git` 策略字段
+### 7.3 `cargo_path_git` 策略字段
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
@@ -196,7 +256,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `build_commands` | 否 | 更新后构建命令，默认 `cargo install --path {repo_path}`。 |
 | `current_version_cmd` | 否 | 默认 `{binary_path} --version`。 |
 
-### 6.4 `command` 策略字段
+### 7.4 `command` 策略字段
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
@@ -206,9 +266,9 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `latest_version_pattern` | 否 | 提取最新版本的正则。 |
 | `current_version_pattern` | 否 | 提取当前版本的正则。 |
 
-## 7. 可扩展配置示例
+## 8. 可扩展配置示例
 
-### 7.1 增加第二个软件（command 策略）
+### 8.1 增加第二个软件（command 策略）
 
 人类模式（推荐）：在 `human_targets` 中点击“添加条目”选择 `命令型软件` 模板，按表单填写。  
 开发者模式：在 `targets_json` 中追加对象。
@@ -250,14 +310,14 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 }
 ```
 
-### 7.2 命令模板变量
+### 8.2 命令模板变量
 
 更新命令支持 `{变量}` 模板，来源包括：
 
 - 目标配置中的所有字段（例如 `{repo_path}`、`{binary_path}`）。
 - 运行时字段：`{target_name}`、`{plugin_name}`、`{plugin_data_dir}`、`{state_path}`、`{events_path}`。
 
-## 8. 稳定性与鲁棒性建议
+## 9. 稳定性与鲁棒性建议
 
 - 对 GitHub 类源使用 `mirror_prefixes` + `remote_candidates` 双保险。
 - 保持 `probe_remotes=true`，让 OneSync 在更新前自动选择更快且可用的远端。
@@ -266,7 +326,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 - 使用 `admin_sid_list` 接收失败告警，建议开启 `notify_admin_on_schedule`。
 - 首次上线可先开 `dry_run=true` 做流程演练，确认无误后再关闭。
 
-## 9. 数据与日志
+## 10. 数据与日志
 
 运行数据目录：
 
@@ -275,9 +335,9 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 
 建议定期备份这两个文件用于审计与问题复盘。
 
-## 10. 常见问题排查
+## 11. 常见问题排查
 
-### 10.1 `git` 提示 dubious ownership / safe.directory
+### 11.1 `git` 提示 dubious ownership / safe.directory
 
 - 保持 `auto_add_safe_directory: true`（默认已开启）。
 - 或手动执行：
@@ -286,26 +346,28 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 git config --global --add safe.directory <repo_path>
 ```
 
-### 10.2 无法获取最新版本
+### 11.2 无法获取最新版本
 
 - 检查目标仓库是否存在语义化版本标签（如 `v1.2.3`）。
 - 检查网络连通性并配置可用镜像前缀。
 - 必要时在 `remote_candidates` 填入多个候选地址。
 
-### 10.3 版本提取失败
+### 11.3 版本提取失败
 
 - 调整 `current_version_pattern` / `latest_version_pattern` 正则。
 - 先手工执行命令查看原始输出，再写正则。
 
-### 10.4 更新命令执行失败
+### 11.4 更新命令执行失败
 
 - 检查运行用户权限。
 - 检查 `update_timeout_s` 是否过短。
 - 在 shell 里单独执行 `update_commands` 验证。
 
-## 11. 维护者文档
+## 12. 维护者文档
 
 发布、仓库同步、插件上传信息、GitHub About 等维护操作，请查看：
 
-- [操作与同步手册](OPERATIONS_AND_SYNC_zh.md)
-- [GitHub About 模板](GITHUB_ABOUT.md)
+- [操作与同步手册（中文）](./OPERATIONS_AND_SYNC_zh.md)
+- [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md)
+- [GitHub About 模板（中文）](./GITHUB_ABOUT_zh.md)
+- [GitHub About Template (English)](./GITHUB_ABOUT_en.md)
