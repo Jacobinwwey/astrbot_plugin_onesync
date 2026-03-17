@@ -5,7 +5,7 @@
 - 如何安装并验证插件可用。
 - 如何快速设置同步时间（核心诉求）。
 - 如何扩展到多个软件目标并提升更新稳定性。
-- 如何进行插件上传和版本维护。
+- 维护者相关操作文档入口。
 
 ## 1. 插件定位
 
@@ -26,7 +26,7 @@
 - 运行用户需具备目标软件更新所需权限。
   - 例如 `cargo install --path` 需要可执行 `cargo` 且有写入安装路径权限。
 - 若使用 `cargo_path_git` 策略，需要：
-  - 本地已有 git 仓库目录（如 `/home/jacob/zeroclaw`）。
+  - 本地已有 git 仓库目录（如 `/path/to/zeroclaw`）。
   - 可访问上游仓库或镜像。
 
 ## 3. 安装
@@ -198,8 +198,8 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
     "enabled": true,
     "strategy": "cargo_path_git",
     "check_interval_hours": 6,
-    "repo_path": "/home/jacob/zeroclaw",
-    "binary_path": "/root/.cargo/bin/zeroclaw",
+    "repo_path": "/path/to/zeroclaw",
+    "binary_path": "/path/to/.cargo/bin/zeroclaw",
     "upstream_repo": "https://github.com/zeroclaw-labs/zeroclaw.git",
     "mirror_prefixes": ["", "https://edgeone.gh-proxy.com/", "https://gh-proxy.com/"],
     "probe_remotes": true,
@@ -280,49 +280,9 @@ git config --global --add safe.directory <repo_path>
 - 检查 `update_timeout_s` 是否过短。
 - 在 shell 里单独执行 `update_commands` 验证。
 
-## 11. 插件上传信息
+## 11. 维护者文档
 
-平台上传时可直接使用以下信息：
+发布、仓库同步、插件上传信息、GitHub About 等维护操作，请查看：
 
-- `[Plugin]`：`astrbot_plugin_onesync`
-
-```json
-{
-  "name": "astrbot_plugin_onesync",
-  "display_name": "OneSync",
-  "desc": "通用可扩展的软件更新器插件，支持定时检查、自动更新、镜像回退与状态追踪。",
-  "author": "Jacobinwwey",
-  "repo": "https://github.com/Jacobinwwey/astrbot_plugin_onesync",
-  "tags": ["updater", "automation", "devops", "zeroclaw", "astrbot"],
-  "social_link": "https://github.com/Jacobinwwey"
-}
-```
-
-对应文件：`plugin_upload_info.json`。
-
-## 12. 版本维护
-
-### 12.1 推荐流程
-
-```bash
-cd /root/astrbot/data/plugins/astrbot_plugin_onesync
-./scripts/release.sh v0.1.1
-```
-
-该脚本会自动：
-
-- 更新 `metadata.yaml` 版本号。
-- 若缺失则补充 `CHANGELOG.md` 对应版本段。
-- 执行 git commit、tag、push。
-
-### 12.2 仅本地演练
-
-```bash
-NO_PUSH=1 ./scripts/release.sh v0.1.1
-```
-
-### 12.3 建议的版本策略
-
-- 功能新增：`MINOR` 递增（如 `v0.2.0`）。
-- 兼容性修复：`PATCH` 递增（如 `v0.1.1`）。
-- 每次发布同步更新 `CHANGELOG.md`，保持可追溯。
+- [操作与同步手册](OPERATIONS_AND_SYNC_zh.md)
+- [GitHub About 模板](GITHUB_ABOUT.md)

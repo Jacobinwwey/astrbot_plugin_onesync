@@ -2,6 +2,10 @@
 
 用于 GitHub 仓库右侧 `About` 区域，建议按下面内容填写。
 
+相关维护文档：
+
+- [操作与同步手册](OPERATIONS_AND_SYNC_zh.md)
+
 ## 1) Description（英文，推荐）
 
 Extensible AstrBot plugin for scheduled software updates with multi-target support, mirror fallback, and robust state tracking.
