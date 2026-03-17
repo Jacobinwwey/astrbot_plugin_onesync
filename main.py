@@ -549,24 +549,26 @@ class OneSyncPlugin(Star):
         except Exception as exc:
             logger.error("[onesync] append events log failed: %s", exc)
 
-    def _render_software_overview(self) -> list[str]:
+    def _render_software_overview(self) -> list[dict[str, Any]]:
         targets = self._load_targets()
-        lines: list[str] = []
+        entries: list[dict[str, Any]] = []
         if not targets:
-            lines.append("暂无已配置软件目标")
-            return lines
+            return entries
 
-        for name, cfg in targets.items():
+        for name, cfg in sorted(targets.items(), key=lambda item: str(item[0])):
             st = self._target_state(name)
-            lines.append(
-                (
-                    f"{name} | 当前: {st.get('current_version', '-')} | "
-                    f"最新: {st.get('latest_version', '-')} | "
-                    f"启用: {_to_bool(cfg.get('enabled', True), True)} | "
-                    f"策略: {cfg.get('strategy', 'command')}"
-                ),
+            entries.append(
+                {
+                    "__template_key": "software_item",
+                    "software_name": name,
+                    "current_version": str(st.get("current_version", "-") or "-"),
+                    "latest_version": str(st.get("latest_version", "-") or "-"),
+                    "enabled": "是" if _to_bool(cfg.get("enabled", True), True) else "否",
+                    "strategy": str(cfg.get("strategy", "command") or "command"),
+                    "last_checked_at": str(st.get("last_checked_at", "-") or "-"),
+                },
             )
-        return lines
+        return entries
 
     def _refresh_software_overview(self) -> None:
         overview = self._render_software_overview()

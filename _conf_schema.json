@@ -6,9 +6,47 @@
   },
   "software_overview": {
     "description": "软件与版本总览（自动生成）",
-    "type": "list",
+    "type": "template_list",
     "hint": "此字段由插件自动刷新，每条为一个软件目标的版本摘要。建议勿手动修改。",
-    "default": []
+    "default": [],
+    "templates": {
+      "software_item": {
+        "name": "软件版本项",
+        "hint": "自动生成项，请勿手动编辑。",
+        "items": {
+          "software_name": {
+            "type": "string",
+            "description": "软件名称",
+            "default": ""
+          },
+          "current_version": {
+            "type": "string",
+            "description": "当前版本",
+            "default": "-"
+          },
+          "latest_version": {
+            "type": "string",
+            "description": "最新版本",
+            "default": "-"
+          },
+          "enabled": {
+            "type": "string",
+            "description": "是否启用",
+            "default": "是"
+          },
+          "strategy": {
+            "type": "string",
+            "description": "更新策略",
+            "default": "command"
+          },
+          "last_checked_at": {
+            "type": "string",
+            "description": "最近检查时间",
+            "default": "-"
+          }
+        }
+      }
+    }
   },
   "poll_interval_minutes": {
     "description": "定时轮询间隔（分钟）",

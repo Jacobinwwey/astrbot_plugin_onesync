@@ -77,7 +77,7 @@ systemctl restart astrbot.service
 
 设置页中还可直接查看：
 
-- `software_overview`：自动生成的软件与版本列表（每个软件一条，无需手动维护）。
+- `software_overview`：自动生成的软件与版本滚动列表（每个软件一条，无需手动维护）。
 
 ## 4. 快速设置同步时间（重点）
 
@@ -148,7 +148,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `enabled` | bool | `true` | 是否启用插件。 |
-| `software_overview` | list | `[]` | 软件与版本总览（自动生成列表，只用于展示）。 |
+| `software_overview` | template_list | `[]` | 软件与版本总览（自动生成滚动列表，只用于展示）。 |
 | `poll_interval_minutes` | int | `30` | 后台轮询间隔（分钟）。 |
 | `default_check_interval_hours` | float | `24` | 目标未设置 `check_interval_hours` 时的默认值。 |
 | `auto_update_on_schedule` | bool | `true` | 定时发现新版本后是否自动更新。 |
