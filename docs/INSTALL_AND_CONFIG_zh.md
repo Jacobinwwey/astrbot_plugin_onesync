@@ -29,6 +29,8 @@
   - 本地已有 git 仓库目录（如 `/path/to/zeroclaw`）。
   - 可访问上游仓库或镜像。
 
+建议安装后执行一次 `/updater env`，让插件自动检测命令可用性和版本，避免运行时才发现环境缺失。
+
 ## 3. 安装
 
 ### 3.1 手动安装（推荐）
@@ -116,6 +118,8 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
   - 立即检查并在需要时更新。
 - `/updater force [target]`
   - 强制执行更新命令，忽略版本比较。
+- `/updater env [target]`
+  - 执行环境检测，输出目标依赖命令是否可用、实际路径和版本信息。
 
 示例：
 
@@ -123,7 +127,14 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 /updater check zeroclaw
 /updater run zeroclaw
 /updater force zeroclaw
+/updater env zeroclaw
 ```
+
+`/updater env` 会优先检测：
+
+- `required_commands` 显式声明的命令（推荐配置）。
+- 策略推断命令（如 `git`、`cargo`、`build_commands`、`update_commands`、`verify_cmd`）。
+- `cargo_path_git` 的 `repo_path` 与 `binary_path` 路径有效性。
 
 ## 6. 配置总览
 
@@ -138,6 +149,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `notify_admin_on_schedule` | bool | `true` | 定时任务后是否通知管理员。 |
 | `notify_on_schedule_noop` | bool | `false` | 无更新/无异常时是否也通知。 |
 | `dry_run` | bool | `false` | 演练模式，不真正执行更新命令。 |
+| `env_check_timeout_s` | int | `8` | `/updater env` 中单条环境检测命令超时秒数。 |
 | `admin_sid_list` | list | `[]` | 接收定时通知的管理员 SID 列表。 |
 | `target_config_mode` | string | `human` | `human` 使用可视化目标列表，`developer` 使用 JSON。 |
 | `human_targets` | template_list | 内置 zeroclaw 条目 | 可视化目标列表，无槽位上限。 |
@@ -154,6 +166,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `update_timeout_s` | int | 更新相关命令超时时间。 |
 | `verify_timeout_s` | int | 验证命令超时时间。 |
 | `verify_cmd` | string | 更新后验证命令，可选。 |
+| `required_commands` | list | 环境检测附加命令列表（例如 `["git","cargo","zeroclaw"]`）。 |
 | `current_version_pattern` | string | 当前版本提取正则，可选。 |
 
 ### 6.3 `cargo_path_git` 策略字段
@@ -206,7 +219,8 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
     "probe_timeout_s": 15,
     "probe_parallelism": 4,
     "probe_cache_ttl_minutes": 30,
-    "build_commands": ["cargo install --path {repo_path}"]
+    "build_commands": ["cargo install --path {repo_path}"],
+    "required_commands": ["git", "cargo", "zeroclaw"]
   },
   "mytool": {
     "enabled": true,
@@ -220,6 +234,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
       "curl -fsSL https://example.com/mytool/install.sh | bash"
     ],
     "verify_cmd": "/usr/local/bin/mytool --version",
+    "required_commands": ["curl", "bash", "mytool"],
     "check_timeout_s": 120,
     "update_timeout_s": 900,
     "verify_timeout_s": 120

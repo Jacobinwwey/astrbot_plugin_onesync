@@ -30,6 +30,7 @@ OneSync 支持两种配置模式：
 2. 在目标配置里把 `check_interval_hours` 设为期望频率（例如 `6` 表示每 6 小时）。
 3. 保存后重启 AstrBot（修改 `poll_interval_minutes` 后建议重启）。
 4. 发送 `/updater status` 验证。
+5. 发送 `/updater env <name>` 做依赖环境检测（命令可用性与版本）。
 
 ## 新增软件配置指南（人类方案）
 
@@ -86,6 +87,7 @@ systemctl restart astrbot.service
 - `/updater check [target]`：立即检查版本，不执行更新。
 - `/updater run [target]`：立即检查并在有新版本时更新。
 - `/updater force [target]`：强制执行更新命令（忽略版本比较）。
+- `/updater env [target]`：检测目标依赖环境，显示命令路径与版本信息。
 
 `target` 可省略；省略时对所有已配置目标执行。
 

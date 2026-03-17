@@ -37,6 +37,12 @@
     "type": "bool",
     "default": false
   },
+  "env_check_timeout_s": {
+    "description": "环境检测命令超时（秒）",
+    "type": "int",
+    "hint": "用于 /updater env 命令，检查 command -v 与 --version。",
+    "default": 8
+  },
   "admin_sid_list": {
     "description": "管理员 SID 列表",
     "type": "list",
@@ -172,6 +178,11 @@
             "description": "更新后验证命令",
             "default": ""
           },
+          "required_commands": {
+            "type": "list",
+            "description": "环境检测附加命令（可选）",
+            "default": []
+          },
           "check_timeout_s": {
             "type": "int",
             "description": "检查超时（秒）",
@@ -242,6 +253,11 @@
             "type": "string",
             "description": "更新后验证命令",
             "default": ""
+          },
+          "required_commands": {
+            "type": "list",
+            "description": "环境检测附加命令（可选）",
+            "default": []
           },
           "check_timeout_s": {
             "type": "int",

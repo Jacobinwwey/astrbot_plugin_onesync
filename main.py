@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,7 @@ DEFAULT_TARGETS: dict[str, dict[str, Any]] = {
         "update_timeout_s": 1800,
         "verify_timeout_s": 120,
         "current_version_pattern": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.\\-]+)?)",
+        "required_commands": ["git", "cargo", "zeroclaw"],
     },
 }
 
@@ -135,6 +137,71 @@ def _to_str_list(value: Any) -> list[str]:
     return []
 
 
+def _dedupe_keep_order(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def _first_non_empty_line(text: str) -> str:
+    for line in str(text or "").splitlines():
+        line = line.strip()
+        if line:
+            return line
+    return ""
+
+
+def _short_text(text: str, max_len: int = 180) -> str:
+    content = str(text or "").strip()
+    if len(content) <= max_len:
+        return content
+    return content[: max_len - 3] + "..."
+
+
+def _is_env_assignment_token(token: str) -> bool:
+    return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*=.*$", str(token or "")))
+
+
+def _extract_primary_executable(command: str) -> str:
+    text = str(command or "").strip()
+    if not text:
+        return ""
+    try:
+        tokens = shlex.split(text, posix=True)
+    except Exception:
+        return ""
+    if not tokens:
+        return ""
+
+    wrappers = {"sudo", "command", "builtin", "nohup", "time"}
+    idx = 0
+    while idx < len(tokens):
+        token = tokens[idx]
+        if _is_env_assignment_token(token):
+            idx += 1
+            continue
+        if token == "env":
+            idx += 1
+            while idx < len(tokens):
+                probe = tokens[idx]
+                if probe.startswith("-") or _is_env_assignment_token(probe):
+                    idx += 1
+                    continue
+                break
+            continue
+        if token in wrappers:
+            idx += 1
+            continue
+        return token
+    return ""
+
+
 class OneSyncPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -146,7 +213,7 @@ class OneSyncPlugin(Star):
         self.state_path = self.plugin_data_dir / "state.json"
         self.events_path = self.plugin_data_dir / "events.jsonl"
 
-        self.state: dict[str, Any] = {"targets": {}}
+        self.state: dict[str, Any] = {"targets": {}, "env": {}}
         self._run_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
 
@@ -247,6 +314,7 @@ class OneSyncPlugin(Star):
             "verify_timeout_s": _to_int(raw_cfg.get("verify_timeout_s", 120), 120, 1),
             "verify_cmd": str(raw_cfg.get("verify_cmd", "")).strip(),
             "current_version_pattern": str(raw_cfg.get("current_version_pattern", "")).strip(),
+            "required_commands": _to_str_list(raw_cfg.get("required_commands", [])),
         }
 
         if strategy in {"cargo_path_git", "git_cargo"}:
@@ -297,6 +365,7 @@ class OneSyncPlugin(Star):
             "verify_timeout_s": _to_int(target_cfg.get("verify_timeout_s", 120), 120, 1),
             "verify_cmd": str(target_cfg.get("verify_cmd", "")).strip(),
             "current_version_pattern": str(target_cfg.get("current_version_pattern", "")).strip(),
+            "required_commands": _to_str_list(target_cfg.get("required_commands", [])),
         }
 
         if strategy in {"cargo_path_git", "git_cargo"}:
@@ -430,7 +499,7 @@ class OneSyncPlugin(Star):
 
     def _load_state(self) -> None:
         if not self.state_path.exists():
-            self.state = {"targets": {}}
+            self.state = {"targets": {}, "env": {}}
             return
         try:
             raw = self.state_path.read_text(encoding="utf-8")
@@ -440,10 +509,13 @@ class OneSyncPlugin(Star):
             targets = parsed.get("targets", {})
             if not isinstance(targets, dict):
                 targets = {}
-            self.state = {"targets": targets}
+            env_state = parsed.get("env", {})
+            if not isinstance(env_state, dict):
+                env_state = {}
+            self.state = {"targets": targets, "env": env_state}
         except Exception as exc:
             logger.error("[onesync] failed to load state, reset: %s", exc)
-            self.state = {"targets": {}}
+            self.state = {"targets": {}, "env": {}}
 
     async def _save_state(self) -> None:
         async with self._state_lock:
@@ -461,6 +533,13 @@ class OneSyncPlugin(Star):
             targets[target_name] = {}
         return targets[target_name]
 
+    def _env_state(self) -> dict[str, Any]:
+        env_state = self.state.setdefault("env", {})
+        if not isinstance(env_state, dict):
+            env_state = {}
+            self.state["env"] = env_state
+        return env_state
+
     async def _record_event(self, payload: dict[str, Any]) -> None:
         line = json.dumps(payload, ensure_ascii=False)
         try:
@@ -468,6 +547,273 @@ class OneSyncPlugin(Star):
                 f.write(line + "\n")
         except Exception as exc:
             logger.error("[onesync] append events log failed: %s", exc)
+
+    def _collect_required_commands_for_target(self, target_cfg: dict[str, Any]) -> list[str]:
+        commands: list[str] = []
+        strategy = str(target_cfg.get("strategy", "command")).strip().lower()
+
+        for raw in _to_str_list(target_cfg.get("required_commands", [])):
+            executable = _extract_primary_executable(raw) or str(raw).strip()
+            if executable:
+                commands.append(executable)
+        if strategy in {"cargo_path_git", "git_cargo"}:
+            commands.extend(["git", "cargo"])
+            binary_path = str(target_cfg.get("binary_path", "")).strip()
+            if binary_path:
+                commands.append(binary_path)
+
+        for key in ("current_version_cmd", "latest_version_cmd", "verify_cmd"):
+            executable = _extract_primary_executable(target_cfg.get(key, ""))
+            if executable and not ("{" in executable and "}" in executable):
+                commands.append(executable)
+
+        for key in ("build_commands", "update_commands"):
+            for cmd in _to_str_list(target_cfg.get(key, [])):
+                executable = _extract_primary_executable(cmd)
+                if executable and not ("{" in executable and "}" in executable):
+                    commands.append(executable)
+
+        return _dedupe_keep_order(commands)
+
+    async def _probe_command_env(self, command_name: str, timeout_s: int) -> dict[str, Any]:
+        name = str(command_name or "").strip()
+        if not name:
+            return {
+                "name": "",
+                "ok": False,
+                "path": "",
+                "version": "",
+                "message": "empty command name",
+            }
+
+        quoted_name = shlex.quote(name)
+        if "/" in name:
+            lookup_cmd = f"if [ -x {quoted_name} ]; then printf '%s\\n' {quoted_name}; else exit 127; fi"
+        else:
+            lookup_cmd = f"command -v {quoted_name}"
+        lookup_res = await self.runner.run(lookup_cmd, timeout_s=timeout_s)
+
+        found_path = _first_non_empty_line(lookup_res.stdout)
+        if not lookup_res.ok or not found_path:
+            message = (
+                "command not found"
+                if not lookup_res.timed_out
+                else f"lookup timed out ({timeout_s}s)"
+            )
+            return {
+                "name": name,
+                "ok": False,
+                "path": "",
+                "version": "",
+                "message": message,
+            }
+
+        quoted_path = shlex.quote(found_path)
+        version_cmd = (
+            f"{quoted_path} --version 2>&1 || "
+            f"{quoted_path} -V 2>&1 || "
+            f"{quoted_path} version 2>&1"
+        )
+        version_res = await self.runner.run(version_cmd, timeout_s=timeout_s)
+        version_line = _first_non_empty_line(version_res.stdout)
+        if not version_line:
+            version_line = _first_non_empty_line(version_res.stderr)
+
+        return {
+            "name": name,
+            "ok": True,
+            "path": found_path,
+            "version": _short_text(version_line, 220),
+            "message": "" if version_line else "version output unavailable",
+        }
+
+    def _probe_path(
+        self,
+        path_text: str,
+        *,
+        expect_dir: bool = False,
+        expect_executable: bool = False,
+        require_git_metadata: bool = False,
+    ) -> dict[str, Any]:
+        text = str(path_text or "").strip()
+        if not text:
+            return {
+                "ok": False,
+                "path": "",
+                "detail": "path is empty",
+            }
+        path_obj = Path(text)
+        try:
+            if not path_obj.exists():
+                return {
+                    "ok": False,
+                    "path": text,
+                    "detail": "path not found",
+                }
+            if expect_dir and not path_obj.is_dir():
+                return {
+                    "ok": False,
+                    "path": text,
+                    "detail": "path is not a directory",
+                }
+            if expect_executable and not path_obj.is_file():
+                return {
+                    "ok": False,
+                    "path": text,
+                    "detail": "path is not a file",
+                }
+            if expect_executable and not (path_obj.stat().st_mode & 0o111):
+                return {
+                    "ok": False,
+                    "path": text,
+                    "detail": "file is not executable",
+                }
+            if require_git_metadata and not (path_obj / ".git").exists():
+                return {
+                    "ok": False,
+                    "path": text,
+                    "detail": "not a git worktree (missing .git)",
+                }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "path": text,
+                "detail": f"path probe failed: {_short_text(str(exc), 120)}",
+            }
+        return {
+            "ok": True,
+            "path": text,
+            "detail": "ok",
+        }
+
+    async def _run_env_check_for_target(
+        self,
+        target_name: str,
+        target_cfg: dict[str, Any],
+        timeout_s: int,
+    ) -> dict[str, Any]:
+        strategy = str(target_cfg.get("strategy", "command")).strip().lower()
+        report: dict[str, Any] = {
+            "target": target_name,
+            "strategy": strategy,
+            "enabled": _to_bool(target_cfg.get("enabled", True), True),
+            "ok": True,
+            "paths": [],
+            "commands": [],
+        }
+
+        if strategy in {"cargo_path_git", "git_cargo"}:
+            repo_probe = self._probe_path(
+                target_cfg.get("repo_path", ""),
+                expect_dir=True,
+                require_git_metadata=True,
+            )
+            report["paths"].append({"name": "repo_path", **repo_probe})
+            if not repo_probe.get("ok"):
+                report["ok"] = False
+
+            binary_probe = self._probe_path(
+                target_cfg.get("binary_path", ""),
+                expect_executable=True,
+            )
+            report["paths"].append({"name": "binary_path", **binary_probe})
+            if not binary_probe.get("ok"):
+                report["ok"] = False
+        elif strategy in {"command", "cmd"}:
+            current_cmd = str(target_cfg.get("current_version_cmd", "")).strip()
+            if not current_cmd:
+                report["paths"].append(
+                    {
+                        "name": "current_version_cmd",
+                        "ok": False,
+                        "path": "",
+                        "detail": "current_version_cmd is empty",
+                    },
+                )
+                report["ok"] = False
+
+        required_commands = self._collect_required_commands_for_target(target_cfg)
+        for command_name in required_commands:
+            probe = await self._probe_command_env(command_name, timeout_s)
+            report["commands"].append(probe)
+            if not probe.get("ok"):
+                report["ok"] = False
+
+        return report
+
+    def _render_env_check_report(self, reports: list[dict[str, Any]], timeout_s: int) -> str:
+        ok_count = sum(1 for item in reports if item.get("ok"))
+        fail_count = len(reports) - ok_count
+        lines = [
+            "Environment Check",
+            f"timeout_s={timeout_s} targets={len(reports)} ok={ok_count} fail={fail_count}",
+        ]
+        for report in reports:
+            lines.append(
+                (
+                    f"- {report.get('target')} strategy={report.get('strategy')} "
+                    f"enabled={report.get('enabled')} ok={report.get('ok')}"
+                ),
+            )
+            for path_item in report.get("paths", []):
+                lines.append(
+                    (
+                        f"  path[{path_item.get('name')}] ok={path_item.get('ok')} "
+                        f"value={path_item.get('path') or '-'} detail={path_item.get('detail') or '-'}"
+                    ),
+                )
+            for cmd_item in report.get("commands", []):
+                if cmd_item.get("ok"):
+                    lines.append(
+                        (
+                            f"  cmd[{cmd_item.get('name')}] ok=true "
+                            f"path={cmd_item.get('path') or '-'} "
+                            f"version={cmd_item.get('version') or '-'}"
+                        ),
+                    )
+                else:
+                    lines.append(
+                        (
+                            f"  cmd[{cmd_item.get('name')}] ok=false "
+                            f"detail={cmd_item.get('message') or '-'}"
+                        ),
+                    )
+        return "\n".join(lines)
+
+    async def _run_env_checks(self, selected_targets: list[str]) -> tuple[str, list[dict[str, Any]]]:
+        targets = self._load_targets()
+        names = [name for name in selected_targets if name in targets]
+        if not names:
+            return "no matched targets", []
+
+        timeout_s = _to_int(self.config.get("env_check_timeout_s", 8), 8, 1)
+        reports: list[dict[str, Any]] = []
+
+        async with self._run_lock:
+            for name in names:
+                report = await self._run_env_check_for_target(name, targets[name], timeout_s)
+                reports.append(report)
+
+            env_state = self._env_state()
+            env_state["last_checked_at"] = _now_iso()
+            env_state["total_targets"] = len(reports)
+            env_state["ok_targets"] = sum(1 for item in reports if item.get("ok"))
+            env_state["results"] = [
+                {
+                    "target": item.get("target", ""),
+                    "ok": bool(item.get("ok")),
+                    "missing_commands": sum(
+                        1 for cmd in item.get("commands", []) if not cmd.get("ok")
+                    ),
+                    "path_issues": sum(
+                        1 for path_item in item.get("paths", []) if not path_item.get("ok")
+                    ),
+                }
+                for item in reports
+            ]
+            await self._save_state()
+
+        return self._render_env_check_report(reports, timeout_s), reports
 
     def _render_status(self) -> str:
         targets = self._load_targets()
@@ -492,6 +838,27 @@ class OneSyncPlugin(Star):
                     f"current={st.get('current_version', '-')} "
                     f"latest={st.get('latest_version', '-')} "
                     f"best_remote={st.get('last_best_remote', '-')}"
+                ),
+            )
+        env_state = self._env_state()
+        env_total = _to_int(env_state.get("total_targets", 0), 0, 0)
+        env_ok = _to_int(env_state.get("ok_targets", 0), 0, 0)
+        lines.append("")
+        lines.append(
+            (
+                f"env_last_checked={env_state.get('last_checked_at', '-')} "
+                f"env_ok_targets={env_ok}/{env_total}"
+            ),
+        )
+        lines.append("env_hint=run /updater env [target] for detailed diagnostics")
+        for item in env_state.get("results", []):
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                (
+                    f"- env {item.get('target', '-')} ok={item.get('ok')} "
+                    f"missing_cmds={item.get('missing_commands', '-')} "
+                    f"path_issues={item.get('path_issues', '-')}"
                 ),
             )
         return "\n".join(lines)
@@ -771,6 +1138,16 @@ class OneSyncPlugin(Star):
     async def updater_status(self, event: AstrMessageEvent):
         """查看更新器状态。"""
         yield event.plain_result(self._render_status())
+
+    @updater.command("env")
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def updater_env(self, event: AstrMessageEvent, target: str = ""):
+        """检测更新依赖环境，输出命令可用性和版本信息。"""
+        targets = self._load_targets()
+        target_name = str(target or "").strip()
+        selected = [target_name] if target_name else list(targets.keys())
+        summary, _ = await self._run_env_checks(selected)
+        yield event.plain_result(summary)
 
     @updater.command("check")
     @filter.permission_type(filter.PermissionType.ADMIN)
