@@ -102,3 +102,23 @@ Dry run for local check (no push):
 ```bash
 NO_PUSH=1 ./scripts/release.sh v0.1.1
 ```
+
+## Upload Metadata
+
+For plugin platform submission, use:
+- `Plugin` name: `astrbot_plugin_onesync`
+- Upload info file: `plugin_upload_info.json`
+
+You can directly reuse:
+
+```json
+{
+  "name": "astrbot_plugin_onesync",
+  "display_name": "OneSync",
+  "desc": "通用可扩展的软件更新器插件，支持定时检查、自动更新、镜像回退与状态追踪。",
+  "author": "Jacobinwwey",
+  "repo": "https://github.com/Jacobinwwey/astrbot_plugin_onesync",
+  "tags": ["updater", "automation", "devops", "zeroclaw", "astrbot"],
+  "social_link": "https://github.com/Jacobinwwey"
+}
+```

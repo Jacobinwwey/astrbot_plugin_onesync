@@ -1,0 +1,16 @@
+{
+  "name": "astrbot_plugin_onesync",
+  "display_name": "OneSync",
+  "desc": "通用可扩展的软件更新器插件，支持定时检查、自动更新、镜像回退与状态追踪。",
+  "author": "Jacobinwwey",
+  "repo": "https://github.com/Jacobinwwey/astrbot_plugin_onesync",
+  "tags": [
+    "updater",
+    "automation",
+    "devops",
+    "zeroclaw",
+    "astrbot"
+  ],
+  "social_link": "https://github.com/Jacobinwwey"
+}
+
