@@ -12,6 +12,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Documentation
 - Added troubleshooting steps for `Failed to load config: 404 Not Found` in both Chinese and English docs.
 - Clarified WebUI access path and hard-refresh guidance for stale frontend cache.
+- Added copy-ready AI prompt templates in README and install/config docs for one-click config bootstrap, incremental target merge, and diagnostics.
 
 ## [v0.2.0] - 2026-03-17
 

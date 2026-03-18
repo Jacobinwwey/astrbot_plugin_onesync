@@ -84,6 +84,66 @@ WebUI 关键能力：
    - `curl -i http://127.0.0.1:8099/api/config`
    - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
 
+## AI 一键配置 Prompt（复制即用）
+
+下面这段 Prompt 可以直接发给 AI（ChatGPT/Codex/Claude 等），用于“一次生成 + 一次下发 + 一次验证” OneSync 配置。
+
+```text
+你是 OneSync（astrbot_plugin_onesync）配置执行助手。目标：为我生成可直接提交到 OneSync WebUI API 的配置，并给出一键执行命令。
+
+请严格执行：
+1) 先根据我的输入，生成一个合法 JSON 文件内容，格式必须是：
+   {
+     "config": {
+       ...OneSync 配置...
+     }
+   }
+2) 再输出一段 bash 命令，完成：
+   - 写入 onesync_config.json
+   - （可选）如果 WEBUI_PASSWORD 非空，先 POST /api/login 获取 token
+   - POST /api/config 下发配置
+   - GET /api/config 与 /api/overview 做结果验证
+3) 若有缺失字段，请使用稳妥默认值并在“假设说明”里列出。
+4) 输出必须包含且仅包含以下 3 个部分：
+   - `JSON_PAYLOAD`
+   - `BASH_ONE_CLICK`
+   - `ASSUMPTIONS`
+5) 任何 JSON 不允许注释、尾逗号、伪代码。
+
+我的输入如下（请按此生成）：
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+TARGET_CONFIG_MODE=human
+POLL_INTERVAL_MINUTES=10
+DEFAULT_CHECK_INTERVAL_HOURS=12
+AUTO_UPDATE_ON_SCHEDULE=true
+NOTIFY_ADMIN_ON_SCHEDULE=true
+NOTIFY_ON_SCHEDULE_NOOP=false
+ADMIN_SID_LIST=
+TARGETS_YAML:
+- name: zeroclaw
+  strategy: cargo_path_git
+  enabled: true
+  check_interval_hours: 12
+  repo_path: /home/jacob/zeroclaw
+  binary_path: /root/.cargo/bin/zeroclaw
+  upstream_repo: https://github.com/zeroclaw-labs/zeroclaw.git
+  build_commands:
+    - cargo install --path {repo_path}
+  verify_cmd: "{binary_path} --version"
+- name: curl
+  strategy: system_package
+  enabled: true
+  check_interval_hours: 24
+  manager: apt_get
+  package_name: curl
+  require_sudo: true
+```
+
+完整 Prompt 套件（初始化、增量新增、诊断修复）见安装配置手册：
+- [安装与配置手册（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
+- [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
+
 ## 快速设置同步时间（最短路径）
 
 同步节奏由两个参数共同决定：

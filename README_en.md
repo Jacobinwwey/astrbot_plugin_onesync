@@ -54,6 +54,67 @@ Use this sequence:
    - `curl -i http://127.0.0.1:8099/api/config`
    - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
 
+## AI One-Click Prompt (Copy Ready)
+
+The prompt below is designed for ChatGPT/Codex/Claude to produce a full OneSync setup in one pass: generate config, apply it through API, and validate result.
+
+```text
+You are my OneSync (astrbot_plugin_onesync) configuration execution assistant.
+Goal: generate a valid OneSync config payload, then provide one-click shell commands to apply and verify it.
+
+Follow these rules strictly:
+1) First output a valid JSON payload in this exact shape:
+   {
+     "config": {
+       ...OneSync config...
+     }
+   }
+2) Then output a bash script that performs:
+   - write onesync_config.json
+   - optional login via POST /api/login when WEBUI_PASSWORD is not empty
+   - POST /api/config to apply
+   - GET /api/config and /api/overview to verify
+3) If required fields are missing, use safe defaults and list them under assumptions.
+4) Output must contain exactly these three sections:
+   - `JSON_PAYLOAD`
+   - `BASH_ONE_CLICK`
+   - `ASSUMPTIONS`
+5) No comments or trailing commas in JSON.
+
+Input values:
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+TARGET_CONFIG_MODE=human
+POLL_INTERVAL_MINUTES=10
+DEFAULT_CHECK_INTERVAL_HOURS=12
+AUTO_UPDATE_ON_SCHEDULE=true
+NOTIFY_ADMIN_ON_SCHEDULE=true
+NOTIFY_ON_SCHEDULE_NOOP=false
+ADMIN_SID_LIST=
+TARGETS_YAML:
+- name: zeroclaw
+  strategy: cargo_path_git
+  enabled: true
+  check_interval_hours: 12
+  repo_path: /home/jacob/zeroclaw
+  binary_path: /root/.cargo/bin/zeroclaw
+  upstream_repo: https://github.com/zeroclaw-labs/zeroclaw.git
+  build_commands:
+    - cargo install --path {repo_path}
+  verify_cmd: "{binary_path} --version"
+- name: curl
+  strategy: system_package
+  enabled: true
+  check_interval_hours: 24
+  manager: apt_get
+  package_name: curl
+  require_sudo: true
+```
+
+For a full prompt suite (bootstrap, incremental target add, diagnose/repair), see:
+- [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
+- [安装与配置手册（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
+
 ## Quick Interval Setup
 
 Sync cadence is controlled by:

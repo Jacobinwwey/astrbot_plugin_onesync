@@ -154,6 +154,114 @@ Recommended quick setup:
 - Every 2 hours: `check_interval_hours = 2`
 - Every 1 day: `check_interval_hours = 24`
 
+### 5.3 AI One-Click Prompt Suite (Recommended)
+
+Use the following prompts directly with AI tools (ChatGPT/Codex/Claude).  
+Goal: reduce manual steps and complete setup in one interaction whenever possible.
+
+#### Prompt A: Bootstrap and apply in one shot
+
+```text
+You are my OneSync configuration execution assistant.
+Please bootstrap and apply OneSync configuration end-to-end.
+
+Goal:
+1) Generate valid JSON payload for POST /api/config (outer shape must be {"config": {...}}).
+2) Generate a bash one-click script that:
+   - writes onesync_config.json
+   - logs in via /api/login if WEBUI_PASSWORD is not empty
+   - POSTs /api/config
+   - verifies with GET /api/config and GET /api/overview
+3) Output exactly 3 sections:
+   - JSON_PAYLOAD
+   - BASH_ONE_CLICK
+   - ASSUMPTIONS
+4) No extra commentary; JSON must have no comments/trailing commas.
+
+Input:
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+TARGET_CONFIG_MODE=human
+POLL_INTERVAL_MINUTES=10
+DEFAULT_CHECK_INTERVAL_HOURS=12
+AUTO_UPDATE_ON_SCHEDULE=true
+NOTIFY_ADMIN_ON_SCHEDULE=true
+NOTIFY_ON_SCHEDULE_NOOP=false
+ADMIN_SID_LIST=
+TARGETS_YAML:
+- name: zeroclaw
+  strategy: cargo_path_git
+  enabled: true
+  check_interval_hours: 12
+  repo_path: /home/jacob/zeroclaw
+  binary_path: /root/.cargo/bin/zeroclaw
+  upstream_repo: https://github.com/zeroclaw-labs/zeroclaw.git
+  build_commands:
+    - cargo install --path {repo_path}
+  verify_cmd: "{binary_path} --version"
+- name: curl
+  strategy: system_package
+  enabled: true
+  check_interval_hours: 24
+  manager: apt_get
+  package_name: curl
+  require_sudo: true
+```
+
+#### Prompt B: Incrementally add one target without overwriting existing config
+
+```text
+You are my OneSync config merge assistant.
+Add one new software target while preserving all existing settings and targets.
+
+Execution rules:
+1) Read current config from GET {WEBUI_URL}/api/config.
+2) Merge my new target incrementally (do not wipe unrelated targets).
+3) Output:
+   - UPDATED_JSON_PAYLOAD (for POST /api/config)
+   - BASH_APPLY_PATCH (one-click script)
+   - CHANGE_SUMMARY (what changed)
+4) If target name already exists, update that target in place instead of duplicating.
+
+Input:
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+NEW_TARGET:
+  name: mytool
+  strategy: command
+  enabled: true
+  check_interval_hours: 12
+  current_version_cmd: /usr/local/bin/mytool --version
+  latest_version_cmd: curl -fsSL https://example.com/mytool/latest.txt
+  latest_version_pattern: (\d+\.\d+\.\d+)
+  update_commands:
+    - bash /opt/scripts/update-mytool.sh
+  verify_cmd: /usr/local/bin/mytool --version
+```
+
+#### Prompt C: Diagnose and repair config failures (including 404)
+
+```text
+You are my OneSync troubleshooting assistant.
+Output a runnable plan in order: diagnose -> fix -> verify.
+
+Required diagnostics:
+1) GET {WEBUI_URL}/api/health
+2) GET {WEBUI_URL}/openapi.json and confirm `/api/config` exists
+3) GET {WEBUI_URL}/api/config
+4) If /api/config is 404, provide minimum fix sequence (restart service, confirm web_admin_url, Ctrl+F5)
+
+Output format:
+- DIAGNOSIS
+- FIX_COMMANDS
+- VERIFY_COMMANDS
+- ROLLBACK_PLAN
+
+Environment:
+WEBUI_URL=http://127.0.0.1:8099
+SERVICE_NAME=astrbot.service
+```
+
 ## 6. Commands
 
 - `/updater status`

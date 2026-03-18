@@ -179,6 +179,111 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 
 建议同时把 `poll_interval_minutes` 调到 `5` 或更小于期望精度的值。
 
+### 5.3 AI 一键配置 Prompt 套件（推荐）
+
+下面提供 3 套可直接复制给 AI 的 Prompt。  
+目标：降低配置复杂度，尽量做到“一次交互即可完成配置与验证”。
+
+#### Prompt A：初始化并一键下发（最常用）
+
+```text
+你是 OneSync 配置执行助手。请帮我完成 OneSync 的初始化配置与下发。
+
+目标：
+1) 生成可直接 POST 到 /api/config 的 JSON（外层必须是 {"config": {...}}）。
+2) 生成一段 bash 一键脚本，自动：
+   - 写入 onesync_config.json
+   - 如果 WEBUI_PASSWORD 非空则调用 /api/login 获取 token
+   - 调用 /api/config 提交配置
+   - 调用 /api/config 与 /api/overview 验证生效
+3) 输出分为 3 个区块：
+   - JSON_PAYLOAD
+   - BASH_ONE_CLICK
+   - ASSUMPTIONS
+4) 不要输出多余解释；JSON 不允许注释和尾逗号。
+
+输入参数：
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+TARGET_CONFIG_MODE=human
+POLL_INTERVAL_MINUTES=10
+DEFAULT_CHECK_INTERVAL_HOURS=12
+AUTO_UPDATE_ON_SCHEDULE=true
+NOTIFY_ADMIN_ON_SCHEDULE=true
+NOTIFY_ON_SCHEDULE_NOOP=false
+ADMIN_SID_LIST=
+TARGETS_YAML:
+- name: zeroclaw
+  strategy: cargo_path_git
+  enabled: true
+  check_interval_hours: 12
+  repo_path: /home/jacob/zeroclaw
+  binary_path: /root/.cargo/bin/zeroclaw
+  upstream_repo: https://github.com/zeroclaw-labs/zeroclaw.git
+  build_commands:
+    - cargo install --path {repo_path}
+  verify_cmd: "{binary_path} --version"
+- name: curl
+  strategy: system_package
+  enabled: true
+  check_interval_hours: 24
+  manager: apt_get
+  package_name: curl
+  require_sudo: true
+```
+
+#### Prompt B：在现有配置上增量新增一个软件目标
+
+```text
+你是 OneSync 配置助手。请在“保留现有配置不丢失”的前提下，为 OneSync 新增一个软件目标。
+
+执行规则：
+1) 先通过 GET {WEBUI_URL}/api/config 读取现有配置。
+2) 按我的目标参数进行“增量合并”，不要覆盖无关目标。
+3) 输出：
+   - UPDATED_JSON_PAYLOAD（用于 POST /api/config）
+   - BASH_APPLY_PATCH（一键执行脚本）
+   - CHANGE_SUMMARY（说明新增了哪些字段）
+4) 如检测到同名目标，按“更新该目标”处理，不新增重复条目。
+
+输入参数：
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+NEW_TARGET:
+  name: mytool
+  strategy: command
+  enabled: true
+  check_interval_hours: 12
+  current_version_cmd: /usr/local/bin/mytool --version
+  latest_version_cmd: curl -fsSL https://example.com/mytool/latest.txt
+  latest_version_pattern: (\d+\.\d+\.\d+)
+  update_commands:
+    - bash /opt/scripts/update-mytool.sh
+  verify_cmd: /usr/local/bin/mytool --version
+```
+
+#### Prompt C：自动诊断并修复配置异常（含 404 场景）
+
+```text
+你是 OneSync 故障诊断助手。请按“先诊断、后修复、再验证”的顺序输出可执行方案。
+
+必须执行的诊断检查：
+1) GET {WEBUI_URL}/api/health
+2) GET {WEBUI_URL}/openapi.json 并确认是否有 /api/config
+3) GET {WEBUI_URL}/api/config
+4) 如果 /api/config 返回 404，给出最小修复步骤（重启服务、确认 web_admin_url、Ctrl+F5）
+
+输出格式：
+- DIAGNOSIS（问题定位）
+- FIX_COMMANDS（可直接复制执行）
+- VERIFY_COMMANDS（验证命令）
+- ROLLBACK_PLAN（若修复失败如何回退）
+
+环境参数：
+WEBUI_URL=http://127.0.0.1:8099
+SERVICE_NAME=astrbot.service
+```
+
 ## 6. 命令使用
 
 仅管理员可用。
