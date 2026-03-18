@@ -1231,12 +1231,30 @@
       if (state.token) {
         headers["Authorization"] = `Bearer ${state.token}`;
       }
-      const resp = await fetch(path, Object.assign({}, options, { headers }));
-      const payload = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(payload.message || payload.error || `${resp.status} ${resp.statusText}`);
+      const fetchOptions = Object.assign({}, options, { headers });
+      const tryPaths = [String(path || "")];
+      if (typeof path === "string" && path.startsWith("/api/")) {
+        tryPaths.push("." + path);
       }
-      return payload;
+
+      let lastError = null;
+      for (const targetPath of tryPaths) {
+        const resp = await fetch(targetPath, fetchOptions);
+        const payload = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+          return payload;
+        }
+        const err = new Error(
+          payload.message || payload.error || `${resp.status} ${resp.statusText}`,
+        );
+        err.statusCode = resp.status;
+        lastError = err;
+        // 404 在某些部署拓扑下可通过相对路径重试修复；其他错误不重试。
+        if (resp.status !== 404) {
+          break;
+        }
+      }
+      throw lastError || new Error("Request failed");
     }
 
     async function ensureAuth() {
