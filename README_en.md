@@ -37,8 +37,36 @@ WebUI capabilities:
 - `Run Update (Filtered)` with confirmation dialog.
 - `Run Update (All Managed)` with confirmation dialog.
 - `Config Center`: edit plugin settings and target definitions directly in WebUI.
+- `AI Assistant`: generate copy-ready prompts for bootstrap/add/diagnose/full-suite workflows.
+- `Guide`: built-in user and developer operation flows, plus direct doc links.
 - Recent job panel and real-time debug logs.
 - UI i18n toggle (Chinese/English).
+
+### Embedded AI Assistant and Guide
+
+Entry points:
+
+- Top buttons: `AI Assistant` and `Guide`
+- Shortcuts:
+  - `Alt+A` open AI assistant
+  - `Alt+H` open guide
+  - `Esc` close top-most modal (AI / Guide / Config Center)
+
+Recommended user flow:
+
+1. Open `AI Assistant` and click `User Preset`.
+2. Pick a scenario (bootstrap/add/diagnose/suite) and fill minimal target fields.
+3. Click `Generate Prompt`, then `Copy Output`, and send it to your AI tool.
+4. Apply returned JSON/script via Config Center or API.
+5. Verify from `Latest Job` and `Debug Logs`.
+
+Recommended developer flow:
+
+1. Open `AI Assistant` and click `Developer Preset`.
+2. Use `Full Suite` to generate a multi-scenario prompt package.
+3. Ask AI to output `targets_json` or one-click API scripts.
+4. Switch Config Center to `developer` mode and apply the config.
+5. Validate with `/updater env` and `/updater check`.
 
 ### WebUI Troubleshooting: `Failed to load config (404)`
 

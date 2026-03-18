@@ -119,6 +119,52 @@ WebUI features:
   - Keyword filter + auto-scroll + clear logs
 - Built-in UI language switch: Chinese / English (labels, filters, buttons, tab names).
 
+### 4.2 Embedded AI Assistant and Guide (User + Developer)
+
+OneSync now embeds AI configuration assistance directly inside the WebUI, so you no longer need to craft prompts outside the page.
+
+Entry points:
+
+- Top button: `AI Assistant`
+- Top button: `Guide`
+- Shortcuts:
+  - `Alt+A`: open AI assistant
+  - `Alt+H`: open guide modal
+  - `Esc`: close top-most modal (AI / Guide / Config Center)
+
+How to use AI Assistant:
+
+1. Open `AI Assistant` and choose prompt language (Chinese/English).
+2. Select scenario:
+   - `Bootstrap and Apply`
+   - `Incremental Target Add`
+   - `Diagnose and Repair`
+   - `Full Suite`
+3. Fill minimal required fields (`WEBUI_URL`, config mode, polling interval, one target definition).
+4. Click `Generate Prompt`, then `Copy Output`, and send the prompt to your AI tool.
+5. Apply returned JSON/scripts via Config Center or API.
+
+Recommended user path:
+
+1. In AI assistant, click `User Preset` (human-focused defaults).
+2. Start with `Bootstrap and Apply`.
+3. After config is applied, validate with `Run Update (Filtered)` before full-scope updates.
+
+Recommended developer path:
+
+1. Click `Developer Preset` (developer mode + suite defaults).
+2. Generate `Full Suite` prompt package.
+3. Ask AI to output `targets_json` or one-click API scripts.
+4. Switch Config Center to `developer` mode and apply advanced config.
+5. Validate with `/updater env` and `/updater check`.
+
+Guide modal content:
+
+- `User` tab: standard operator flow (filter -> confirm update -> verify logs).
+- `Developer` tab: batch workflow (prompt -> apply config -> env validation).
+- `Shortcuts` tab: hotkeys and equivalent button entry points.
+- Direct doc links: README, install/config guide, operations manual (auto-switch by UI language).
+
 If you see `Failed to load config: 404 Not Found`, do this first:
 
 1. `systemctl restart astrbot.service`

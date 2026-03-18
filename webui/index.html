@@ -127,6 +127,25 @@
       flex-wrap: wrap;
     }
 
+    .top-actions .hint {
+      color: var(--muted);
+      font-size: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 5px 8px;
+      background: color-mix(in srgb, var(--panel) 74%, transparent);
+    }
+
+    .kbd {
+      font-family: var(--mono);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 5px;
+      background: color-mix(in srgb, var(--panel-soft) 80%, var(--input) 20%);
+      color: var(--text);
+      font-size: 11px;
+    }
+
     .chip-row {
       display: flex;
       flex-wrap: wrap;
@@ -589,9 +608,114 @@
       color: var(--danger);
     }
 
+    .ai-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 8px 10px;
+    }
+
+    .ai-grid-1 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .ai-strategy-fields {
+      display: grid;
+      gap: 8px;
+    }
+
+    .ai-output {
+      min-height: 220px;
+    }
+
+    .ai-status {
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      white-space: pre-wrap;
+    }
+
+    .ai-status.ok {
+      color: var(--accent-2);
+    }
+
+    .ai-status.err {
+      color: var(--danger);
+    }
+
+    .guide-tab-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .guide-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      margin-bottom: 10px;
+    }
+
+    .guide-panel h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .guide-panel p {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .guide-panel ol {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .guide-doc-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .guide-doc-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--text);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 8px;
+      background: color-mix(in srgb, var(--panel-soft) 62%, var(--input) 38%);
+    }
+
+    .guide-doc-link:hover {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+      color: var(--text);
+    }
+
     @media (max-width: 980px) {
       .controls {
         grid-template-columns: 1fr 1fr;
+      }
+      .ai-grid {
+        grid-template-columns: 1fr;
       }
       .cfg-grid,
       .cfg-row {
@@ -610,6 +734,8 @@
       <div class="top-actions">
         <button id="refreshBtn">刷新</button>
         <button id="themeBtn">切换主题</button>
+        <button id="openAiAssistantBtn" class="primary">AI 配置助手</button>
+        <button id="openGuideBtn">使用指引</button>
         <select id="langSelect">
           <option value="zh" selected>中文</option>
           <option value="en">English</option>
@@ -619,6 +745,7 @@
           <option value="compact" selected>紧凑</option>
           <option value="ultra-compact">极限紧凑</option>
         </select>
+        <span class="hint" id="globalShortcutsHint">快捷键: Alt+A AI助手 / Alt+H 使用指引 / Esc 关闭弹窗</span>
       </div>
     </div>
 
@@ -823,6 +950,243 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="aiModal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 class="modal-title" id="aiModalTitle">OneSync AI 配置助手</h2>
+        <div class="modal-actions">
+          <button id="aiGenerateBtn" class="primary">生成 Prompt</button>
+          <button id="aiCopyBtn" class="success">复制输出</button>
+          <button id="aiClearBtn" class="warn">清空</button>
+          <button id="aiCloseBtn">关闭</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="cfg-block">
+          <p class="cfg-title" id="aiPresetTitle">快速预设</p>
+          <div class="modal-actions">
+            <button id="aiPresetUserBtn">用户预设</button>
+            <button id="aiPresetDevBtn">开发者预设</button>
+          </div>
+          <p class="cfg-mini" id="aiPresetHint">先套用预设，再补充目标参数，可显著降低配置复杂度。</p>
+        </div>
+
+        <div class="cfg-block">
+          <p class="cfg-title" id="aiBasicTitle">基础输入</p>
+          <div class="ai-grid">
+            <label class="cfg-label">
+              <span id="aiLabelLang">Prompt 语言</span>
+              <select id="aiPromptLang">
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="aiLabelScenario">场景</span>
+              <select id="aiScenario">
+                <option value="bootstrap">初始化并下发</option>
+                <option value="add">增量新增目标</option>
+                <option value="diagnose">诊断与修复</option>
+                <option value="suite" selected>完整套件</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="aiLabelWebuiUrl">WebUI 地址</span>
+              <input id="aiWebuiUrl" type="text" placeholder="http://127.0.0.1:8099">
+            </label>
+            <label class="cfg-label">
+              <span id="aiLabelWebuiPassword">WebUI 密码（可选）</span>
+              <input id="aiWebuiPassword" type="text" placeholder="">
+            </label>
+            <label class="cfg-label">
+              <span id="aiLabelTargetMode">目标配置模式</span>
+              <select id="aiTargetMode">
+                <option value="human">human</option>
+                <option value="developer">developer</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="aiLabelPoll">轮询间隔（分钟）</span>
+              <input id="aiPollInterval" type="number" min="1" step="1" value="10">
+            </label>
+            <label class="cfg-label">
+              <span id="aiLabelDefaultCheck">默认检查间隔（小时）</span>
+              <input id="aiDefaultCheckInterval" type="number" min="0" step="0.5" value="12">
+            </label>
+          </div>
+        </div>
+
+        <div class="cfg-block">
+          <p class="cfg-title" id="aiTargetTitle">目标参数</p>
+          <div class="ai-grid">
+            <label class="cfg-label">
+              <span id="aiLabelSoftwareName">软件名称</span>
+              <input id="aiSoftwareName" type="text" placeholder="zeroclaw">
+            </label>
+            <label class="cfg-label">
+              <span id="aiLabelStrategy">策略</span>
+              <select id="aiStrategy">
+                <option value="cargo_path_git">cargo_path_git</option>
+                <option value="command">command</option>
+                <option value="system_package">system_package</option>
+              </select>
+            </label>
+          </div>
+          <p class="cfg-mini" id="aiStrategyHint">当前策略: cargo_path_git（本地仓库 + 构建命令）。</p>
+
+          <div class="ai-strategy-fields" id="aiStrategyCargoFields">
+            <div class="ai-grid">
+              <label class="cfg-label">
+                <span id="aiLabelRepoPath">仓库路径</span>
+                <input id="aiRepoPath" type="text" placeholder="/path/to/repo">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelBinaryPath">二进制路径</span>
+                <input id="aiBinaryPath" type="text" placeholder="/root/.cargo/bin/zeroclaw">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelUpstreamRepo">上游仓库</span>
+                <input id="aiUpstreamRepo" type="text" placeholder="https://github.com/org/repo.git">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelBuildCommand">构建命令</span>
+                <input id="aiBuildCommand" type="text" placeholder="cargo install --path {repo_path}">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelVerifyCommandCargo">验证命令</span>
+                <input id="aiVerifyCommandCargo" type="text" placeholder="{binary_path} --version">
+              </label>
+            </div>
+          </div>
+
+          <div class="ai-strategy-fields hidden" id="aiStrategyCommandFields">
+            <div class="ai-grid">
+              <label class="cfg-label">
+                <span id="aiLabelCurrentCmd">当前版本命令</span>
+                <input id="aiCurrentVersionCmd" type="text" placeholder="/usr/local/bin/mytool --version">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelLatestCmd">最新版本命令</span>
+                <input id="aiLatestVersionCmd" type="text" placeholder="curl -fsSL https://example.com/latest.txt">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelUpdateCmd">更新命令</span>
+                <input id="aiUpdateCommand" type="text" placeholder="bash /opt/scripts/update-mytool.sh">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelVerifyCommandCommand">验证命令</span>
+                <input id="aiVerifyCommandCommand" type="text" placeholder="/usr/local/bin/mytool --version">
+              </label>
+            </div>
+          </div>
+
+          <div class="ai-strategy-fields hidden" id="aiStrategySystemFields">
+            <div class="ai-grid">
+              <label class="cfg-label">
+                <span id="aiLabelManager">包管理器</span>
+                <select id="aiManager">
+                  <option value="apt_get">apt_get</option>
+                  <option value="yum">yum</option>
+                  <option value="dnf">dnf</option>
+                  <option value="pacman">pacman</option>
+                  <option value="zypper">zypper</option>
+                  <option value="choco">choco</option>
+                  <option value="winget">winget</option>
+                  <option value="brew">brew</option>
+                </select>
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelPackageName">包名</span>
+                <input id="aiPackageName" type="text" placeholder="curl">
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelRequireSudo">需要 sudo</span>
+                <select id="aiRequireSudo">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="cfg-label">
+                <span id="aiLabelVerifyCommandSystem">验证命令</span>
+                <input id="aiVerifyCommandSystem" type="text" placeholder="curl --version">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="cfg-block">
+          <p class="cfg-title" id="aiOutputTitle">Prompt 输出</p>
+          <textarea id="aiPromptOutput" class="ai-output" spellcheck="false" readonly placeholder="点击“生成 Prompt”后显示输出。"></textarea>
+          <div class="ai-status" id="aiStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="guideModal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 class="modal-title" id="guideModalTitle">OneSync WebUI 使用指引</h2>
+        <div class="modal-actions">
+          <button id="guideOpenAiBtn" class="primary">打开 AI 助手</button>
+          <button id="guideCloseBtn">关闭</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="guide-tab-row">
+          <button class="debug-tab active" id="guideTabUser" data-guide-tab="user">用户</button>
+          <button class="debug-tab" id="guideTabDeveloper" data-guide-tab="developer">开发者</button>
+          <button class="debug-tab" id="guideTabShortcut" data-guide-tab="shortcut">快捷键</button>
+        </div>
+
+        <div class="guide-panel" id="guidePanelUser">
+          <h3 id="guideUserTitle">用户流程</h3>
+          <p id="guideUserIntro">适合运维和普通用户：先筛选目标，再执行确认式更新。</p>
+          <ol>
+            <li id="guideUserStep1"></li>
+            <li id="guideUserStep2"></li>
+            <li id="guideUserStep3"></li>
+            <li id="guideUserStep4"></li>
+            <li id="guideUserStep5"></li>
+          </ol>
+        </div>
+
+        <div class="guide-panel hidden" id="guidePanelDeveloper">
+          <h3 id="guideDeveloperTitle">开发者流程</h3>
+          <p id="guideDeveloperIntro">适合批量运维、复杂软件更新策略和镜像调优。</p>
+          <ol>
+            <li id="guideDevStep1"></li>
+            <li id="guideDevStep2"></li>
+            <li id="guideDevStep3"></li>
+            <li id="guideDevStep4"></li>
+            <li id="guideDevStep5"></li>
+          </ol>
+        </div>
+
+        <div class="guide-panel hidden" id="guidePanelShortcut">
+          <h3 id="guideShortcutTitle">快捷键与按钮</h3>
+          <p id="guideShortcutIntro">这些快捷方式可在 WebUI 任意区域使用：</p>
+          <ol>
+            <li id="guideShortcutStep1"></li>
+            <li id="guideShortcutStep2"></li>
+            <li id="guideShortcutStep3"></li>
+            <li id="guideShortcutStep4"></li>
+          </ol>
+        </div>
+
+        <div class="guide-panel">
+          <h3 id="guideDocsTitle">文档入口</h3>
+          <p id="guideDocsIntro">如果需要完整参数和排障细节，请直接打开以下文档：</p>
+          <div class="guide-doc-links">
+            <a class="guide-doc-link" id="guideReadmeLink" href="https://github.com/Jacobinwwey/astrbot_plugin_onesync/blob/main/README.md" target="_blank" rel="noopener">README</a>
+            <a class="guide-doc-link" id="guideInstallDocLink" href="https://github.com/Jacobinwwey/astrbot_plugin_onesync/blob/main/docs/INSTALL_AND_CONFIG_zh.md" target="_blank" rel="noopener">安装与配置手册</a>
+            <a class="guide-doc-link" id="guideOpsDocLink" href="https://github.com/Jacobinwwey/astrbot_plugin_onesync/blob/main/docs/OPERATIONS_AND_SYNC_zh.md" target="_blank" rel="noopener">操作与同步手册</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const state = {
       rows: [],
@@ -846,7 +1210,8 @@
       debugKeywordTimer: null,
       configDraft: null,
       configMeta: null,
-      configSaving: false
+      configSaving: false,
+      guideTab: "user"
     };
 
     const $ = (id) => document.getElementById(id);
@@ -968,6 +1333,85 @@
         cfg_status_save_failed: "保存配置失败: {msg}",
         cfg_status_invalid_json: "targets_json 不是合法 JSON：{msg}",
         cfg_no_targets: "当前没有目标，点击“添加目标”开始配置。",
+        open_ai_assistant: "AI 配置助手",
+        open_guide: "使用指引",
+        global_shortcuts_hint: "快捷键: Alt+A 打开 AI 助手 / Alt+H 打开使用指引 / Esc 关闭弹窗",
+        ai_modal_title: "OneSync AI 配置助手",
+        ai_generate: "生成 Prompt",
+        ai_copy: "复制输出",
+        ai_clear: "清空",
+        ai_preset_title: "快速预设",
+        ai_preset_user: "用户预设",
+        ai_preset_dev: "开发者预设",
+        ai_preset_hint: "先套用预设，再补充目标参数，可显著降低配置复杂度。",
+        ai_basic_title: "基础输入",
+        ai_label_lang: "Prompt 语言",
+        ai_lang_zh: "中文",
+        ai_lang_en: "English",
+        ai_label_scenario: "场景",
+        ai_scenario_bootstrap: "初始化并下发",
+        ai_scenario_add: "增量新增目标",
+        ai_scenario_diagnose: "诊断与修复",
+        ai_scenario_suite: "完整套件",
+        ai_label_webui_url: "WebUI 地址",
+        ai_label_webui_password: "WebUI 密码（可选）",
+        ai_label_target_mode: "目标配置模式",
+        ai_label_poll: "轮询间隔（分钟）",
+        ai_label_default_check: "默认检查间隔（小时）",
+        ai_target_title: "目标参数",
+        ai_label_software_name: "软件名称",
+        ai_label_strategy: "策略",
+        ai_strategy_hint_cargo_path_git: "当前策略: cargo_path_git（本地仓库 + 构建命令）。",
+        ai_strategy_hint_command: "当前策略: command（通过命令获取版本并执行更新）。",
+        ai_strategy_hint_system_package: "当前策略: system_package（使用系统包管理器更新）。",
+        ai_label_repo_path: "仓库路径",
+        ai_label_binary_path: "二进制路径",
+        ai_label_upstream_repo: "上游仓库",
+        ai_label_build_command: "构建命令",
+        ai_label_current_cmd: "当前版本命令",
+        ai_label_latest_cmd: "最新版本命令",
+        ai_label_update_cmd: "更新命令",
+        ai_label_verify_cmd: "验证命令",
+        ai_label_manager: "包管理器",
+        ai_label_package_name: "包名",
+        ai_label_require_sudo: "需要 sudo",
+        ai_output_title: "Prompt 输出",
+        ai_output_placeholder: "点击“生成 Prompt”后显示输出。",
+        ai_status_generated: "Prompt 已生成，可直接复制给 AI。",
+        ai_status_copied: "已复制到剪贴板。",
+        ai_status_cleared: "输入与输出已清空。",
+        ai_status_copy_failed: "复制失败，请手动复制输出区域内容。",
+        ai_status_empty_output: "当前没有可复制的输出内容。",
+        guide_modal_title: "OneSync WebUI 使用指引",
+        guide_open_ai: "打开 AI 助手",
+        guide_tab_user: "用户",
+        guide_tab_developer: "开发者",
+        guide_tab_shortcut: "快捷键",
+        guide_user_title: "用户流程",
+        guide_user_intro: "适合运维和普通用户：先筛选目标，再执行确认式更新。",
+        guide_user_step1: "使用顶部“AI 配置助手”或“打开配置中心”维护软件目标。",
+        guide_user_step2: "在表格中按关键字和状态筛选目标，并观察版本状态。",
+        guide_user_step3: "点击“立即更新（当前筛选）”仅处理当前筛选结果，或点“立即全部更新”处理全部纳管目标。",
+        guide_user_step4: "在确认弹窗中核对目标列表，避免误触批量更新。",
+        guide_user_step5: "更新后在“最近执行任务”和“Debug 日志”中查看结果并定位异常。",
+        guide_dev_title: "开发者流程",
+        guide_dev_intro: "适合批量运维、复杂软件更新策略和镜像调优。",
+        guide_dev_step1: "打开 AI 助手，切换到“开发者预设”，选择 suite 场景生成完整 Prompt。",
+        guide_dev_step2: "将生成的 Prompt 交给 AI，要求输出可执行 JSON 与 API 下发脚本。",
+        guide_dev_step3: "在配置中心切到 developer 模式，粘贴 targets_json 或调用 /api/config 下发。",
+        guide_dev_step4: "执行 /updater env 与 /updater check，确认目标命令、版本解析和镜像可用。",
+        guide_dev_step5: "通过 Debug 日志按级别/关键字筛选问题，必要时回滚到上一个稳定配置。",
+        guide_shortcut_title: "快捷键与按钮",
+        guide_shortcut_intro: "这些快捷方式可在 WebUI 任意区域使用：",
+        guide_shortcut_step1: "Alt+A：打开 AI 配置助手。",
+        guide_shortcut_step2: "Alt+H：打开使用指引。",
+        guide_shortcut_step3: "Esc：关闭当前最上层弹窗（AI 助手 / 指引 / 配置中心）。",
+        guide_shortcut_step4: "顶部按钮“AI 配置助手 / 使用指引”提供同等入口，适合不使用快捷键的用户。",
+        guide_docs_title: "文档入口",
+        guide_docs_intro: "需要完整参数与排障细节时，可直接打开以下文档：",
+        guide_doc_readme: "README",
+        guide_doc_install: "安装与配置手册",
+        guide_doc_ops: "操作与同步手册",
       },
       en: {
         app_title: "OneSync Operations Console",
@@ -1085,6 +1529,85 @@
         cfg_status_save_failed: "Failed to save config: {msg}",
         cfg_status_invalid_json: "targets_json is invalid JSON: {msg}",
         cfg_no_targets: "No target configured yet. Click \"Add Target\" to start.",
+        open_ai_assistant: "AI Assistant",
+        open_guide: "Guide",
+        global_shortcuts_hint: "Shortcuts: Alt+A open AI Assistant / Alt+H open Guide / Esc close modal",
+        ai_modal_title: "OneSync AI Config Assistant",
+        ai_generate: "Generate Prompt",
+        ai_copy: "Copy Output",
+        ai_clear: "Clear",
+        ai_preset_title: "Quick Presets",
+        ai_preset_user: "User Preset",
+        ai_preset_dev: "Developer Preset",
+        ai_preset_hint: "Apply a preset first, then fill target details to reduce config complexity.",
+        ai_basic_title: "Base Inputs",
+        ai_label_lang: "Prompt Language",
+        ai_lang_zh: "Chinese",
+        ai_lang_en: "English",
+        ai_label_scenario: "Scenario",
+        ai_scenario_bootstrap: "Bootstrap and Apply",
+        ai_scenario_add: "Incremental Target Add",
+        ai_scenario_diagnose: "Diagnose and Repair",
+        ai_scenario_suite: "Full Suite",
+        ai_label_webui_url: "WebUI URL",
+        ai_label_webui_password: "WebUI Password (optional)",
+        ai_label_target_mode: "Target Config Mode",
+        ai_label_poll: "Polling Interval (minutes)",
+        ai_label_default_check: "Default Check Interval (hours)",
+        ai_target_title: "Target Fields",
+        ai_label_software_name: "Software Name",
+        ai_label_strategy: "Strategy",
+        ai_strategy_hint_cargo_path_git: "Current strategy: cargo_path_git (local repo + build command).",
+        ai_strategy_hint_command: "Current strategy: command (command-based version probe + update).",
+        ai_strategy_hint_system_package: "Current strategy: system_package (native package manager update).",
+        ai_label_repo_path: "Repo Path",
+        ai_label_binary_path: "Binary Path",
+        ai_label_upstream_repo: "Upstream Repo",
+        ai_label_build_command: "Build Command",
+        ai_label_current_cmd: "Current Version Command",
+        ai_label_latest_cmd: "Latest Version Command",
+        ai_label_update_cmd: "Update Command",
+        ai_label_verify_cmd: "Verify Command",
+        ai_label_manager: "Package Manager",
+        ai_label_package_name: "Package Name",
+        ai_label_require_sudo: "Require sudo",
+        ai_output_title: "Prompt Output",
+        ai_output_placeholder: "Click \"Generate Prompt\" to produce output.",
+        ai_status_generated: "Prompt generated. You can copy it directly to your AI tool.",
+        ai_status_copied: "Copied to clipboard.",
+        ai_status_cleared: "Inputs and output cleared.",
+        ai_status_copy_failed: "Copy failed, please copy from output area manually.",
+        ai_status_empty_output: "No output content to copy.",
+        guide_modal_title: "OneSync WebUI Guide",
+        guide_open_ai: "Open AI Assistant",
+        guide_tab_user: "User",
+        guide_tab_developer: "Developer",
+        guide_tab_shortcut: "Shortcuts",
+        guide_user_title: "User Flow",
+        guide_user_intro: "For operators and normal users: filter targets first, then run confirmation-based updates.",
+        guide_user_step1: "Use the top bar \"AI Assistant\" or \"Open Config Center\" to maintain targets.",
+        guide_user_step2: "Filter by keyword/status in the table and monitor version states.",
+        guide_user_step3: "Use \"Run Update (Filtered)\" for current result or \"Run Update (All Managed)\" for all enabled targets.",
+        guide_user_step4: "Review target list in confirmation dialog before execution to avoid accidental bulk updates.",
+        guide_user_step5: "After execution, check \"Latest Job\" and \"Debug Logs\" for results and troubleshooting.",
+        guide_dev_title: "Developer Flow",
+        guide_dev_intro: "For large-scale operations, advanced strategies, and mirror tuning.",
+        guide_dev_step1: "Open AI Assistant, switch to \"Developer Preset\", and generate a suite prompt.",
+        guide_dev_step2: "Send the generated prompt to your AI model and get executable JSON + API scripts.",
+        guide_dev_step3: "In Config Center, switch to developer mode and apply targets_json or POST /api/config.",
+        guide_dev_step4: "Run /updater env and /updater check to validate command availability and version parsing.",
+        guide_dev_step5: "Use Debug Logs with level/keyword filters to diagnose and roll back to a stable config when needed.",
+        guide_shortcut_title: "Shortcuts and Buttons",
+        guide_shortcut_intro: "The following shortcuts are available across the WebUI:",
+        guide_shortcut_step1: "Alt+A: open AI Config Assistant.",
+        guide_shortcut_step2: "Alt+H: open Guide modal.",
+        guide_shortcut_step3: "Esc: close the top-most modal (AI / Guide / Config Center).",
+        guide_shortcut_step4: "Top bar buttons provide the same entry points if you prefer mouse-only operation.",
+        guide_docs_title: "Docs Entry",
+        guide_docs_intro: "For full parameter details and troubleshooting, open these docs directly:",
+        guide_doc_readme: "README",
+        guide_doc_install: "Installation & Config Guide",
+        guide_doc_ops: "Operations and Sync Manual",
       },
     };
 
@@ -1150,6 +1673,9 @@
       $("mainTitle").textContent = t("app_title");
       $("refreshBtn").textContent = t("refresh");
       $("themeBtn").textContent = t("switch_theme");
+      $("openAiAssistantBtn").textContent = t("open_ai_assistant");
+      $("openGuideBtn").textContent = t("open_guide");
+      $("globalShortcutsHint").textContent = t("global_shortcuts_hint");
       $("runFilteredBtn").textContent = t("run_filtered");
       $("runAllBtn").textContent = t("run_all");
       $("quickHint").textContent = t("quick_hint");
@@ -1206,6 +1732,84 @@
       $("cfgHumanHint").textContent = t("cfg_human_hint");
       $("cfgDeveloperTitle").textContent = t("cfg_dev_title");
       $("cfgDeveloperHint").textContent = t("cfg_dev_hint");
+
+      $("aiModalTitle").textContent = t("ai_modal_title");
+      $("aiGenerateBtn").textContent = t("ai_generate");
+      $("aiCopyBtn").textContent = t("ai_copy");
+      $("aiClearBtn").textContent = t("ai_clear");
+      $("aiCloseBtn").textContent = t("cfg_close");
+      $("aiPresetTitle").textContent = t("ai_preset_title");
+      $("aiPresetUserBtn").textContent = t("ai_preset_user");
+      $("aiPresetDevBtn").textContent = t("ai_preset_dev");
+      $("aiPresetHint").textContent = t("ai_preset_hint");
+      $("aiBasicTitle").textContent = t("ai_basic_title");
+      $("aiLabelLang").textContent = t("ai_label_lang");
+      $("aiPromptLang").options[0].textContent = t("ai_lang_zh");
+      $("aiPromptLang").options[1].textContent = t("ai_lang_en");
+      $("aiLabelScenario").textContent = t("ai_label_scenario");
+      $("aiScenario").options[0].textContent = t("ai_scenario_bootstrap");
+      $("aiScenario").options[1].textContent = t("ai_scenario_add");
+      $("aiScenario").options[2].textContent = t("ai_scenario_diagnose");
+      $("aiScenario").options[3].textContent = t("ai_scenario_suite");
+      $("aiLabelWebuiUrl").textContent = t("ai_label_webui_url");
+      $("aiLabelWebuiPassword").textContent = t("ai_label_webui_password");
+      $("aiLabelTargetMode").textContent = t("ai_label_target_mode");
+      $("aiLabelPoll").textContent = t("ai_label_poll");
+      $("aiLabelDefaultCheck").textContent = t("ai_label_default_check");
+      $("aiTargetTitle").textContent = t("ai_target_title");
+      $("aiLabelSoftwareName").textContent = t("ai_label_software_name");
+      $("aiLabelStrategy").textContent = t("ai_label_strategy");
+      $("aiLabelRepoPath").textContent = t("ai_label_repo_path");
+      $("aiLabelBinaryPath").textContent = t("ai_label_binary_path");
+      $("aiLabelUpstreamRepo").textContent = t("ai_label_upstream_repo");
+      $("aiLabelBuildCommand").textContent = t("ai_label_build_command");
+      $("aiLabelCurrentCmd").textContent = t("ai_label_current_cmd");
+      $("aiLabelLatestCmd").textContent = t("ai_label_latest_cmd");
+      $("aiLabelUpdateCmd").textContent = t("ai_label_update_cmd");
+      $("aiLabelVerifyCommandCargo").textContent = t("ai_label_verify_cmd");
+      $("aiLabelVerifyCommandCommand").textContent = t("ai_label_verify_cmd");
+      $("aiLabelVerifyCommandSystem").textContent = t("ai_label_verify_cmd");
+      $("aiLabelManager").textContent = t("ai_label_manager");
+      $("aiLabelPackageName").textContent = t("ai_label_package_name");
+      $("aiLabelRequireSudo").textContent = t("ai_label_require_sudo");
+      $("aiOutputTitle").textContent = t("ai_output_title");
+      $("aiPromptOutput").placeholder = t("ai_output_placeholder");
+      syncAiStrategyHint();
+
+      $("guideModalTitle").textContent = t("guide_modal_title");
+      $("guideOpenAiBtn").textContent = t("guide_open_ai");
+      $("guideCloseBtn").textContent = t("cfg_close");
+      $("guideTabUser").textContent = t("guide_tab_user");
+      $("guideTabDeveloper").textContent = t("guide_tab_developer");
+      $("guideTabShortcut").textContent = t("guide_tab_shortcut");
+      $("guideUserTitle").textContent = t("guide_user_title");
+      $("guideUserIntro").textContent = t("guide_user_intro");
+      $("guideUserStep1").textContent = t("guide_user_step1");
+      $("guideUserStep2").textContent = t("guide_user_step2");
+      $("guideUserStep3").textContent = t("guide_user_step3");
+      $("guideUserStep4").textContent = t("guide_user_step4");
+      $("guideUserStep5").textContent = t("guide_user_step5");
+      $("guideDeveloperTitle").textContent = t("guide_dev_title");
+      $("guideDeveloperIntro").textContent = t("guide_dev_intro");
+      $("guideDevStep1").textContent = t("guide_dev_step1");
+      $("guideDevStep2").textContent = t("guide_dev_step2");
+      $("guideDevStep3").textContent = t("guide_dev_step3");
+      $("guideDevStep4").textContent = t("guide_dev_step4");
+      $("guideDevStep5").textContent = t("guide_dev_step5");
+      $("guideShortcutTitle").textContent = t("guide_shortcut_title");
+      $("guideShortcutIntro").textContent = t("guide_shortcut_intro");
+      $("guideShortcutStep1").textContent = t("guide_shortcut_step1");
+      $("guideShortcutStep2").textContent = t("guide_shortcut_step2");
+      $("guideShortcutStep3").textContent = t("guide_shortcut_step3");
+      $("guideShortcutStep4").textContent = t("guide_shortcut_step4");
+      $("guideDocsTitle").textContent = t("guide_docs_title");
+      $("guideDocsIntro").textContent = t("guide_docs_intro");
+      $("guideReadmeLink").textContent = t("guide_doc_readme");
+      $("guideInstallDocLink").textContent = t("guide_doc_install");
+      $("guideOpsDocLink").textContent = t("guide_doc_ops");
+      syncGuideDocLinks();
+      syncGuideTabs();
+
       syncDebugAutoScrollBtn();
       $("lastRefresh").textContent = t("last_refresh", { time: new Date().toLocaleString() });
       buildChips(
@@ -1512,6 +2116,404 @@
       };
       const key = String(strategy || "").trim().toLowerCase();
       return mapping[key] || "command";
+    }
+
+    function yamlScalar(value) {
+      const text = String(value || "");
+      if (!text) return "\"\"";
+      if (/[\s:#{}\[\],'"`]/.test(text)) {
+        return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+      }
+      return text;
+    }
+
+    function setAiStatus(message, type = "") {
+      const el = $("aiStatus");
+      if (!el) return;
+      el.textContent = message || "";
+      el.classList.remove("ok", "err");
+      if (type === "ok") el.classList.add("ok");
+      if (type === "err") el.classList.add("err");
+    }
+
+    function syncAiStrategyHint() {
+      const strategy = normalizeStrategy($("aiStrategy").value || "cargo_path_git");
+      $("aiStrategyHint").textContent = t(`ai_strategy_hint_${strategy}`);
+    }
+
+    function syncAiStrategyFields() {
+      const strategy = normalizeStrategy($("aiStrategy").value || "cargo_path_git");
+      $("aiStrategyCargoFields").classList.toggle("hidden", strategy !== "cargo_path_git");
+      $("aiStrategyCommandFields").classList.toggle("hidden", strategy !== "command");
+      $("aiStrategySystemFields").classList.toggle("hidden", strategy !== "system_package");
+      syncAiStrategyHint();
+    }
+
+    function setAiPreset(mode = "user") {
+      const useDeveloper = mode === "developer";
+      $("aiPromptLang").value = state.lang;
+      $("aiScenario").value = useDeveloper ? "suite" : "bootstrap";
+      $("aiTargetMode").value = useDeveloper ? "developer" : "human";
+      $("aiPollInterval").value = useDeveloper ? "5" : "10";
+      $("aiDefaultCheckInterval").value = "12";
+      if (!$("aiWebuiUrl").value.trim()) {
+        $("aiWebuiUrl").value = window.location.origin;
+      }
+      if (!$("aiSoftwareName").value.trim()) {
+        $("aiSoftwareName").value = "zeroclaw";
+      }
+      if (!$("aiBuildCommand").value.trim()) {
+        $("aiBuildCommand").value = "cargo install --path {repo_path}";
+      }
+      if (!$("aiVerifyCommandCargo").value.trim()) {
+        $("aiVerifyCommandCargo").value = "{binary_path} --version";
+      }
+      syncAiStrategyFields();
+    }
+
+    function clearAiForm() {
+      $("aiWebuiUrl").value = window.location.origin;
+      $("aiWebuiPassword").value = "";
+      $("aiTargetMode").value = "human";
+      $("aiPollInterval").value = "10";
+      $("aiDefaultCheckInterval").value = "12";
+      $("aiSoftwareName").value = "";
+      $("aiStrategy").value = "cargo_path_git";
+      $("aiRepoPath").value = "";
+      $("aiBinaryPath").value = "";
+      $("aiUpstreamRepo").value = "";
+      $("aiBuildCommand").value = "cargo install --path {repo_path}";
+      $("aiVerifyCommandCargo").value = "{binary_path} --version";
+      $("aiCurrentVersionCmd").value = "";
+      $("aiLatestVersionCmd").value = "";
+      $("aiUpdateCommand").value = "";
+      $("aiVerifyCommandCommand").value = "";
+      $("aiManager").value = "apt_get";
+      $("aiPackageName").value = "";
+      $("aiRequireSudo").value = "true";
+      $("aiVerifyCommandSystem").value = "";
+      $("aiPromptOutput").value = "";
+      syncAiStrategyFields();
+      setAiStatus(t("ai_status_cleared"), "ok");
+    }
+
+    function collectAiInput() {
+      return {
+        lang: ["zh", "en"].includes($("aiPromptLang").value) ? $("aiPromptLang").value : state.lang,
+        scenario: ["bootstrap", "add", "diagnose", "suite"].includes($("aiScenario").value)
+          ? $("aiScenario").value
+          : "suite",
+        webuiUrl: String($("aiWebuiUrl").value || "").trim() || window.location.origin,
+        webuiPassword: String($("aiWebuiPassword").value || ""),
+        targetMode: String($("aiTargetMode").value || "human"),
+        pollInterval: toNumber($("aiPollInterval").value, 10, 1),
+        defaultCheckInterval: toNumber($("aiDefaultCheckInterval").value, 12, 0),
+        softwareName: String($("aiSoftwareName").value || "").trim() || "mytool",
+        strategy: normalizeStrategy($("aiStrategy").value || "command"),
+        repoPath: String($("aiRepoPath").value || "").trim(),
+        binaryPath: String($("aiBinaryPath").value || "").trim(),
+        upstreamRepo: String($("aiUpstreamRepo").value || "").trim(),
+        buildCommand: String($("aiBuildCommand").value || "").trim() || "cargo install --path {repo_path}",
+        verifyCommandCargo: String($("aiVerifyCommandCargo").value || "").trim(),
+        currentVersionCmd: String($("aiCurrentVersionCmd").value || "").trim(),
+        latestVersionCmd: String($("aiLatestVersionCmd").value || "").trim(),
+        updateCommand: String($("aiUpdateCommand").value || "").trim(),
+        verifyCommandCommand: String($("aiVerifyCommandCommand").value || "").trim(),
+        manager: String($("aiManager").value || "apt_get"),
+        packageName: String($("aiPackageName").value || "").trim(),
+        requireSudo: parseBoolValue($("aiRequireSudo").value, true),
+        verifyCommandSystem: String($("aiVerifyCommandSystem").value || "").trim(),
+      };
+    }
+
+    function buildAiTargetYaml(input) {
+      const lines = [
+        `- name: ${yamlScalar(input.softwareName)}`,
+        `  strategy: ${input.strategy}`,
+        "  enabled: true",
+        "  check_interval_hours: 12",
+      ];
+      if (input.strategy === "cargo_path_git") {
+        if (input.repoPath) lines.push(`  repo_path: ${yamlScalar(input.repoPath)}`);
+        if (input.binaryPath) lines.push(`  binary_path: ${yamlScalar(input.binaryPath)}`);
+        if (input.upstreamRepo) lines.push(`  upstream_repo: ${yamlScalar(input.upstreamRepo)}`);
+        lines.push("  build_commands:");
+        lines.push(`    - ${yamlScalar(input.buildCommand || "cargo install --path {repo_path}")}`);
+        if (input.verifyCommandCargo) lines.push(`  verify_cmd: ${yamlScalar(input.verifyCommandCargo)}`);
+        return lines.join("\n");
+      }
+      if (input.strategy === "system_package") {
+        lines.push(`  manager: ${input.manager || "apt_get"}`);
+        lines.push(`  package_name: ${yamlScalar(input.packageName || input.softwareName)}`);
+        lines.push(`  require_sudo: ${input.requireSudo ? "true" : "false"}`);
+        if (input.verifyCommandSystem) lines.push(`  verify_cmd: ${yamlScalar(input.verifyCommandSystem)}`);
+        return lines.join("\n");
+      }
+      if (input.currentVersionCmd) lines.push(`  current_version_cmd: ${yamlScalar(input.currentVersionCmd)}`);
+      if (input.latestVersionCmd) lines.push(`  latest_version_cmd: ${yamlScalar(input.latestVersionCmd)}`);
+      lines.push("  update_commands:");
+      lines.push(`    - ${yamlScalar(input.updateCommand || "echo 'replace-with-update-command'")}`);
+      if (input.verifyCommandCommand) lines.push(`  verify_cmd: ${yamlScalar(input.verifyCommandCommand)}`);
+      return lines.join("\n");
+    }
+
+    function buildAiInputBlock(input) {
+      return [
+        `WEBUI_URL=${input.webuiUrl}`,
+        `WEBUI_PASSWORD=${input.webuiPassword}`,
+        `TARGET_CONFIG_MODE=${input.targetMode}`,
+        `POLL_INTERVAL_MINUTES=${input.pollInterval}`,
+        `DEFAULT_CHECK_INTERVAL_HOURS=${input.defaultCheckInterval}`,
+        "AUTO_UPDATE_ON_SCHEDULE=true",
+        "NOTIFY_ADMIN_ON_SCHEDULE=true",
+        "NOTIFY_ON_SCHEDULE_NOOP=false",
+        "ADMIN_SID_LIST=",
+        "TARGETS_YAML:",
+        buildAiTargetYaml(input),
+      ].join("\n");
+    }
+
+    function buildPromptZh(input, scenario) {
+      const inputBlock = buildAiInputBlock(input);
+      if (scenario === "bootstrap") {
+        return [
+          "你是 OneSync（astrbot_plugin_onesync）配置执行助手。",
+          "目标：基于输入生成可执行配置，并给出一键下发与验证脚本。",
+          "",
+          "输出规则：",
+          "1) 仅输出 3 个区块：JSON_PAYLOAD、BASH_ONE_CLICK、ASSUMPTIONS。",
+          "2) JSON 外层必须为 {\"config\": {...}}，且无注释、无尾逗号。",
+          "3) 脚本必须支持 WEBUI_PASSWORD 为空和非空两种情况（非空时先调用 /api/login）。",
+          "4) 脚本需调用 /api/config 下发，并用 /api/config 与 /api/overview 验证。",
+          "",
+          "输入参数：",
+          inputBlock,
+        ].join("\n");
+      }
+      if (scenario === "add") {
+        return [
+          "你是 OneSync 配置合并助手。",
+          "目标：保留现有配置不丢失，增量新增或更新一个软件目标。",
+          "",
+          "执行规则：",
+          "1) 先 GET {WEBUI_URL}/api/config 读取现有配置。",
+          "2) 按输入目标参数增量合并，不覆盖无关目标。",
+          "3) 若同名目标已存在则就地更新，不新增重复项。",
+          "4) 仅输出 3 个区块：UPDATED_JSON_PAYLOAD、BASH_APPLY_PATCH、CHANGE_SUMMARY。",
+          "",
+          "输入参数：",
+          inputBlock,
+        ].join("\n");
+      }
+      if (scenario === "diagnose") {
+        return [
+          "你是 OneSync 故障诊断助手。",
+          "目标：输出可执行的排障方案，顺序必须是 诊断 -> 修复 -> 验证。",
+          "",
+          "强制诊断项：",
+          "1) GET {WEBUI_URL}/api/health",
+          "2) GET {WEBUI_URL}/openapi.json 并确认 /api/config 路由存在",
+          "3) GET {WEBUI_URL}/api/config",
+          "4) 若出现 404，给出最小修复链路：重启服务 -> 确认 web_admin_url -> 浏览器强刷",
+          "",
+          "输出规则：",
+          "仅输出 3 个区块：DIAG_PLAN、FIX_COMMANDS、VERIFY_CHECKLIST。",
+          "",
+          "输入参数：",
+          inputBlock,
+        ].join("\n");
+      }
+      return [
+        "### Prompt A: 初始化并下发",
+        buildPromptZh(input, "bootstrap"),
+        "",
+        "### Prompt B: 增量新增目标",
+        buildPromptZh(input, "add"),
+        "",
+        "### Prompt C: 诊断与修复",
+        buildPromptZh(input, "diagnose"),
+      ].join("\n\n");
+    }
+
+    function buildPromptEn(input, scenario) {
+      const inputBlock = buildAiInputBlock(input);
+      if (scenario === "bootstrap") {
+        return [
+          "You are my OneSync (astrbot_plugin_onesync) configuration execution assistant.",
+          "Goal: generate executable config payload and a one-click apply script from the inputs.",
+          "",
+          "Output rules:",
+          "1) Output exactly 3 sections: JSON_PAYLOAD, BASH_ONE_CLICK, ASSUMPTIONS.",
+          "2) JSON must use the outer shape {\"config\": {...}} with no comments/trailing commas.",
+          "3) Script must support both empty and non-empty WEBUI_PASSWORD (login first when non-empty).",
+          "4) Script must apply via /api/config and verify via /api/config and /api/overview.",
+          "",
+          "Input values:",
+          inputBlock,
+        ].join("\n");
+      }
+      if (scenario === "add") {
+        return [
+          "You are my OneSync config merge assistant.",
+          "Goal: incrementally add or update one software target without losing existing config.",
+          "",
+          "Execution rules:",
+          "1) Read current config via GET {WEBUI_URL}/api/config.",
+          "2) Merge target fields incrementally and preserve unrelated targets/settings.",
+          "3) If same target name exists, update it in place instead of duplicating.",
+          "4) Output exactly 3 sections: UPDATED_JSON_PAYLOAD, BASH_APPLY_PATCH, CHANGE_SUMMARY.",
+          "",
+          "Input values:",
+          inputBlock,
+        ].join("\n");
+      }
+      if (scenario === "diagnose") {
+        return [
+          "You are my OneSync troubleshooting assistant.",
+          "Goal: provide an executable plan in strict order: diagnose -> fix -> verify.",
+          "",
+          "Required diagnostics:",
+          "1) GET {WEBUI_URL}/api/health",
+          "2) GET {WEBUI_URL}/openapi.json and ensure /api/config exists",
+          "3) GET {WEBUI_URL}/api/config",
+          "4) If /api/config is 404, provide minimum recovery sequence: restart service -> verify web_admin_url -> hard refresh browser",
+          "",
+          "Output rules:",
+          "Output exactly 3 sections: DIAG_PLAN, FIX_COMMANDS, VERIFY_CHECKLIST.",
+          "",
+          "Input values:",
+          inputBlock,
+        ].join("\n");
+      }
+      return [
+        "### Prompt A: Bootstrap and Apply",
+        buildPromptEn(input, "bootstrap"),
+        "",
+        "### Prompt B: Incremental Target Add",
+        buildPromptEn(input, "add"),
+        "",
+        "### Prompt C: Diagnose and Repair",
+        buildPromptEn(input, "diagnose"),
+      ].join("\n\n");
+    }
+
+    function generateAiPromptFromForm() {
+      const input = collectAiInput();
+      const scenario = input.scenario;
+      const text = input.lang === "en"
+        ? buildPromptEn(input, scenario)
+        : buildPromptZh(input, scenario);
+      $("aiPromptOutput").value = text;
+      setAiStatus(t("ai_status_generated"), "ok");
+    }
+
+    async function copyAiPromptOutput() {
+      const text = String($("aiPromptOutput").value || "").trim();
+      if (!text) {
+        setAiStatus(t("ai_status_empty_output"), "err");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        setAiStatus(t("ai_status_copied"), "ok");
+      } catch (_err) {
+        try {
+          const el = $("aiPromptOutput");
+          el.focus();
+          el.select();
+          document.execCommand("copy");
+          setAiStatus(t("ai_status_copied"), "ok");
+        } catch (_err2) {
+          setAiStatus(t("ai_status_copy_failed"), "err");
+        }
+      }
+    }
+
+    function syncGuideTabs() {
+      const valid = new Set(["user", "developer", "shortcut"]);
+      if (!valid.has(state.guideTab)) {
+        state.guideTab = "user";
+      }
+      const rows = [
+        ["guideTabUser", "guidePanelUser", "user"],
+        ["guideTabDeveloper", "guidePanelDeveloper", "developer"],
+        ["guideTabShortcut", "guidePanelShortcut", "shortcut"],
+      ];
+      rows.forEach(([tabId, panelId, tabName]) => {
+        const active = state.guideTab === tabName;
+        $(tabId).classList.toggle("active", active);
+        $(panelId).classList.toggle("hidden", !active);
+      });
+    }
+
+    function syncGuideDocLinks() {
+      const isEn = state.lang === "en";
+      const base = "https://github.com/Jacobinwwey/astrbot_plugin_onesync/blob/main";
+      $("guideReadmeLink").setAttribute("href", isEn ? `${base}/README_en.md` : `${base}/README.md`);
+      $("guideInstallDocLink").setAttribute(
+        "href",
+        isEn ? `${base}/docs/INSTALL_AND_CONFIG_en.md` : `${base}/docs/INSTALL_AND_CONFIG_zh.md`,
+      );
+      $("guideOpsDocLink").setAttribute(
+        "href",
+        isEn ? `${base}/docs/OPERATIONS_AND_SYNC_en.md` : `${base}/docs/OPERATIONS_AND_SYNC_zh.md`,
+      );
+    }
+
+    function openAiModal() {
+      if (!$("aiWebuiUrl").value.trim()) {
+        $("aiWebuiUrl").value = window.location.origin;
+      }
+      $("aiPromptLang").value = state.lang;
+      syncAiStrategyFields();
+      $("aiModal").classList.remove("hidden");
+      setAiStatus("");
+    }
+
+    function closeAiModal() {
+      $("aiModal").classList.add("hidden");
+      setAiStatus("");
+    }
+
+    function openGuideModal(tab = "user") {
+      state.guideTab = tab || state.guideTab;
+      syncGuideTabs();
+      syncGuideDocLinks();
+      $("guideModal").classList.remove("hidden");
+    }
+
+    function closeGuideModal() {
+      $("guideModal").classList.add("hidden");
+    }
+
+    function bindHotkeys() {
+      document.addEventListener("keydown", (evt) => {
+        const key = String(evt.key || "").toLowerCase();
+        if (evt.altKey && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey) {
+          if (key === "a") {
+            evt.preventDefault();
+            openAiModal();
+            return;
+          }
+          if (key === "h") {
+            evt.preventDefault();
+            openGuideModal("user");
+            return;
+          }
+        }
+        if (key !== "escape") return;
+        if (!$("aiModal").classList.contains("hidden")) {
+          closeAiModal();
+          return;
+        }
+        if (!$("guideModal").classList.contains("hidden")) {
+          closeGuideModal();
+          return;
+        }
+        if (!$("configModal").classList.contains("hidden")) {
+          closeConfigModal();
+        }
+      });
     }
 
     function defaultTargetByStrategy(strategy) {
@@ -2031,6 +3033,58 @@
         await openConfigModal();
       });
 
+      $("openAiAssistantBtn").addEventListener("click", () => {
+        openAiModal();
+      });
+
+      $("openGuideBtn").addEventListener("click", () => {
+        openGuideModal("user");
+      });
+
+      $("aiCloseBtn").addEventListener("click", () => {
+        closeAiModal();
+      });
+
+      $("aiGenerateBtn").addEventListener("click", () => {
+        generateAiPromptFromForm();
+      });
+
+      $("aiCopyBtn").addEventListener("click", async () => {
+        await copyAiPromptOutput();
+      });
+
+      $("aiClearBtn").addEventListener("click", () => {
+        clearAiForm();
+      });
+
+      $("aiPresetUserBtn").addEventListener("click", () => {
+        setAiPreset("user");
+      });
+
+      $("aiPresetDevBtn").addEventListener("click", () => {
+        setAiPreset("developer");
+      });
+
+      $("aiStrategy").addEventListener("change", () => {
+        syncAiStrategyFields();
+      });
+
+      $("guideOpenAiBtn").addEventListener("click", () => {
+        closeGuideModal();
+        openAiModal();
+      });
+
+      $("guideCloseBtn").addEventListener("click", () => {
+        closeGuideModal();
+      });
+
+      document.querySelectorAll("[data-guide-tab]").forEach((el) => {
+        el.addEventListener("click", () => {
+          state.guideTab = String(el.getAttribute("data-guide-tab") || "user");
+          syncGuideTabs();
+        });
+      });
+
       $("cfgCloseBtn").addEventListener("click", () => {
         closeConfigModal();
       });
@@ -2104,6 +3158,18 @@
         }
       });
 
+      $("aiModal").addEventListener("click", (evt) => {
+        if (evt.target?.id === "aiModal") {
+          closeAiModal();
+        }
+      });
+
+      $("guideModal").addEventListener("click", (evt) => {
+        if (evt.target?.id === "guideModal") {
+          closeGuideModal();
+        }
+      });
+
       $("debugLevelFilter").addEventListener("change", async (evt) => {
         state.debugLevel = evt.target.value || "all";
         state.debugSinceId = 0;
@@ -2151,10 +3217,13 @@
         state.debugSinceId = 0;
         await loadDebugLogs({ reset: true });
       });
+
+      bindHotkeys();
     }
 
     async function boot() {
       applyPreferences();
+      setAiPreset("user");
       applyI18nTexts();
       syncDebugTabButtons();
       bindEvents();
