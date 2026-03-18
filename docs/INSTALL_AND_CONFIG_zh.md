@@ -184,6 +184,74 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 下面提供 3 套可直接复制给 AI 的 Prompt。  
 目标：降低配置复杂度，尽量做到“一次交互即可完成配置与验证”。
 
+#### 5.3.1 零填写 Prompt 生成器（脚本）
+
+OneSync 提供本地脚本：`scripts/onesync_prompt_builder.py`  
+可用“少量问题 + 自动填默认值”的方式生成完整 Prompt 文本。
+
+交互式（推荐）：
+
+```bash
+python3 scripts/onesync_prompt_builder.py \
+  --interactive \
+  --lang zh \
+  --scenario suite \
+  --output /tmp/onesync_prompt_zh.txt
+```
+
+非交互（示例：Ubuntu + `system_package`）：
+
+```bash
+python3 scripts/onesync_prompt_builder.py \
+  --lang zh \
+  --scenario suite \
+  --os-profile ubuntu \
+  --software-name curl \
+  --strategy system_package \
+  --output /tmp/onesync_prompt_zh.txt
+```
+
+基于目标清单文件生成（便于多软件扩展）：
+
+```bash
+python3 scripts/onesync_prompt_builder.py \
+  --lang zh \
+  --scenario suite \
+  --targets-json /path/to/targets.json \
+  --output /tmp/onesync_prompt_zh.txt
+```
+
+其中 `targets.json` 支持两种格式：
+
+1. 对象格式（键是目标名）：
+
+```json
+{
+  "curl": {
+    "strategy": "system_package",
+    "manager": "apt_get",
+    "package_name": "curl"
+  }
+}
+```
+
+2. 数组格式（每项一个目标）：
+
+```json
+[
+  {
+    "name": "curl",
+    "strategy": "system_package",
+    "manager": "apt_get",
+    "package_name": "curl"
+  }
+]
+```
+
+生成完成后，把输出文件内容整体复制给 AI 即可。
+
+#### 5.3.2 Prompt 模板（手工复制）
+
 #### Prompt A：初始化并一键下发（最常用）
 
 ```text

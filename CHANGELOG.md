@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+- New helper script `scripts/onesync_prompt_builder.py` for zero-fill AI prompt generation (interactive and CLI modes).
+- Supports prompt scenarios: bootstrap apply, incremental target merge, and diagnose/repair.
+
 ### Fixed
 - WebUI API request fallback now retries relative path when absolute `/api/...` returns `404`, reducing route-mount mismatch issues.
 

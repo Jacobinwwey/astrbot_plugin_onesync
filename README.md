@@ -86,6 +86,24 @@ WebUI 关键能力：
 
 ## AI 一键配置 Prompt（复制即用）
 
+如果你不想手动填大段参数，先用内置生成器自动产出 Prompt：
+
+```bash
+# 交互式：按提示回答少量问题（推荐）
+python3 scripts/onesync_prompt_builder.py --interactive --lang zh --scenario suite --output /tmp/onesync_prompt_zh.txt
+
+# 非交互：直接按参数生成（示例：Ubuntu + system_package）
+python3 scripts/onesync_prompt_builder.py \
+  --lang zh \
+  --scenario suite \
+  --os-profile ubuntu \
+  --software-name curl \
+  --strategy system_package \
+  --output /tmp/onesync_prompt_zh.txt
+```
+
+然后把 `/tmp/onesync_prompt_zh.txt` 内容整体发给 AI，即可得到可执行配置结果。
+
 下面这段 Prompt 可以直接发给 AI（ChatGPT/Codex/Claude 等），用于“一次生成 + 一次下发 + 一次验证” OneSync 配置。
 
 ```text

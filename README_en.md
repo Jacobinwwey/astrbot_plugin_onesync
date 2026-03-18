@@ -56,6 +56,24 @@ Use this sequence:
 
 ## AI One-Click Prompt (Copy Ready)
 
+If you do not want to fill a large prompt manually, generate it first with the built-in helper:
+
+```bash
+# Interactive mode (recommended): answer a few questions
+python3 scripts/onesync_prompt_builder.py --interactive --lang en --scenario suite --output /tmp/onesync_prompt_en.txt
+
+# Non-interactive mode (example: Ubuntu + system_package)
+python3 scripts/onesync_prompt_builder.py \
+  --lang en \
+  --scenario suite \
+  --os-profile ubuntu \
+  --software-name curl \
+  --strategy system_package \
+  --output /tmp/onesync_prompt_en.txt
+```
+
+Then send the full generated file content (`/tmp/onesync_prompt_en.txt`) to your AI tool.
+
 The prompt below is designed for ChatGPT/Codex/Claude to produce a full OneSync setup in one pass: generate config, apply it through API, and validate result.
 
 ```text

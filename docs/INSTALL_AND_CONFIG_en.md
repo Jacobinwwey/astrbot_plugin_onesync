@@ -159,6 +159,74 @@ Recommended quick setup:
 Use the following prompts directly with AI tools (ChatGPT/Codex/Claude).  
 Goal: reduce manual steps and complete setup in one interaction whenever possible.
 
+#### 5.3.1 Zero-fill prompt generator (script)
+
+OneSync includes a local helper script: `scripts/onesync_prompt_builder.py`  
+It can generate complete prompts from minimal input.
+
+Interactive (recommended):
+
+```bash
+python3 scripts/onesync_prompt_builder.py \
+  --interactive \
+  --lang en \
+  --scenario suite \
+  --output /tmp/onesync_prompt_en.txt
+```
+
+Non-interactive (example: Ubuntu + `system_package`):
+
+```bash
+python3 scripts/onesync_prompt_builder.py \
+  --lang en \
+  --scenario suite \
+  --os-profile ubuntu \
+  --software-name curl \
+  --strategy system_package \
+  --output /tmp/onesync_prompt_en.txt
+```
+
+Generate from a target list file (best for multi-software operations):
+
+```bash
+python3 scripts/onesync_prompt_builder.py \
+  --lang en \
+  --scenario suite \
+  --targets-json /path/to/targets.json \
+  --output /tmp/onesync_prompt_en.txt
+```
+
+`targets.json` supports both formats:
+
+1. Object form (key as target name):
+
+```json
+{
+  "curl": {
+    "strategy": "system_package",
+    "manager": "apt_get",
+    "package_name": "curl"
+  }
+}
+```
+
+2. Array form (each item is a target):
+
+```json
+[
+  {
+    "name": "curl",
+    "strategy": "system_package",
+    "manager": "apt_get",
+    "package_name": "curl"
+  }
+]
+```
+
+After generation, send the entire file content to your AI assistant.
+
+#### 5.3.2 Prompt templates (manual copy)
+
 #### Prompt A: Bootstrap and apply in one shot
 
 ```text
