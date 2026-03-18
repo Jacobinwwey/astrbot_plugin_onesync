@@ -135,14 +135,17 @@ Entry points:
 How to use AI Assistant:
 
 1. Open `AI Assistant` and choose prompt language (Chinese/English).
-2. Select scenario:
+2. If OneSync already has config, click `Auto-fill from Current Config` first:
+   - It auto-fills `target_config_mode`, polling interval, and default check interval.
+   - It auto-selects one usable target and maps fields by strategy.
+3. Select scenario:
    - `Bootstrap and Apply`
    - `Incremental Target Add`
    - `Diagnose and Repair`
    - `Full Suite`
-3. Fill minimal required fields (`WEBUI_URL`, config mode, polling interval, one target definition).
-4. Click `Generate Prompt`, then `Copy Output`, and send the prompt to your AI tool.
-5. Apply returned JSON/scripts via Config Center or API.
+4. Fill minimal required fields (`WEBUI_URL`, config mode, polling interval, one target definition).
+5. Click `Generate Prompt`, then `Copy Output`, and send the prompt to your AI tool.
+6. Apply returned JSON/scripts via Config Center or API.
 
 Recommended user path:
 

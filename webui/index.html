@@ -962,14 +962,15 @@
         </div>
       </div>
       <div class="modal-body">
-        <div class="cfg-block">
-          <p class="cfg-title" id="aiPresetTitle">快速预设</p>
-          <div class="modal-actions">
-            <button id="aiPresetUserBtn">用户预设</button>
-            <button id="aiPresetDevBtn">开发者预设</button>
+          <div class="cfg-block">
+            <p class="cfg-title" id="aiPresetTitle">快速预设</p>
+            <div class="modal-actions">
+              <button id="aiPresetUserBtn">用户预设</button>
+              <button id="aiPresetDevBtn">开发者预设</button>
+              <button id="aiLoadConfigBtn" class="primary">从当前配置自动填充</button>
+            </div>
+            <p class="cfg-mini" id="aiPresetHint">先套用预设，再补充目标参数，可显著降低配置复杂度。</p>
           </div>
-          <p class="cfg-mini" id="aiPresetHint">先套用预设，再补充目标参数，可显著降低配置复杂度。</p>
-        </div>
 
         <div class="cfg-block">
           <p class="cfg-title" id="aiBasicTitle">基础输入</p>
@@ -1343,6 +1344,7 @@
         ai_preset_title: "快速预设",
         ai_preset_user: "用户预设",
         ai_preset_dev: "开发者预设",
+        ai_load_from_config: "从当前配置自动填充",
         ai_preset_hint: "先套用预设，再补充目标参数，可显著降低配置复杂度。",
         ai_basic_title: "基础输入",
         ai_label_lang: "Prompt 语言",
@@ -1380,6 +1382,10 @@
         ai_status_generated: "Prompt 已生成，可直接复制给 AI。",
         ai_status_copied: "已复制到剪贴板。",
         ai_status_cleared: "输入与输出已清空。",
+        ai_status_loading_config: "正在读取当前配置...",
+        ai_status_loaded_config: "已从当前配置自动填充 AI 助手。",
+        ai_status_loaded_config_no_target: "已加载基础配置，但未检测到可回填的软件目标，请手动补充目标参数。",
+        ai_status_load_config_failed: "读取当前配置失败: {msg}",
         ai_status_copy_failed: "复制失败，请手动复制输出区域内容。",
         ai_status_empty_output: "当前没有可复制的输出内容。",
         guide_modal_title: "OneSync WebUI 使用指引",
@@ -1539,6 +1545,7 @@
         ai_preset_title: "Quick Presets",
         ai_preset_user: "User Preset",
         ai_preset_dev: "Developer Preset",
+        ai_load_from_config: "Auto-fill from Current Config",
         ai_preset_hint: "Apply a preset first, then fill target details to reduce config complexity.",
         ai_basic_title: "Base Inputs",
         ai_label_lang: "Prompt Language",
@@ -1576,6 +1583,10 @@
         ai_status_generated: "Prompt generated. You can copy it directly to your AI tool.",
         ai_status_copied: "Copied to clipboard.",
         ai_status_cleared: "Inputs and output cleared.",
+        ai_status_loading_config: "Loading current config...",
+        ai_status_loaded_config: "AI assistant fields are auto-filled from current config.",
+        ai_status_loaded_config_no_target: "Base config loaded, but no software target was detected. Please fill target fields manually.",
+        ai_status_load_config_failed: "Failed to load current config: {msg}",
         ai_status_copy_failed: "Copy failed, please copy from output area manually.",
         ai_status_empty_output: "No output content to copy.",
         guide_modal_title: "OneSync WebUI Guide",
@@ -1741,6 +1752,7 @@
       $("aiPresetTitle").textContent = t("ai_preset_title");
       $("aiPresetUserBtn").textContent = t("ai_preset_user");
       $("aiPresetDevBtn").textContent = t("ai_preset_dev");
+      $("aiLoadConfigBtn").textContent = t("ai_load_from_config");
       $("aiPresetHint").textContent = t("ai_preset_hint");
       $("aiBasicTitle").textContent = t("ai_basic_title");
       $("aiLabelLang").textContent = t("ai_label_lang");
@@ -2195,6 +2207,141 @@
       $("aiPromptOutput").value = "";
       syncAiStrategyFields();
       setAiStatus(t("ai_status_cleared"), "ok");
+    }
+
+    function parseTargetsFromTargetsJson(rawJson) {
+      const text = String(rawJson || "").trim();
+      if (!text) return [];
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((x) => x && typeof x === "object");
+        }
+        if (!parsed || typeof parsed !== "object") return [];
+        const containerCandidates = ["targets", "software_targets", "items", "list"];
+        for (const key of containerCandidates) {
+          if (Array.isArray(parsed[key])) {
+            return parsed[key].filter((x) => x && typeof x === "object");
+          }
+        }
+        return Object.entries(parsed)
+          .filter(([_name, value]) => value && typeof value === "object" && !Array.isArray(value))
+          .map(([name, value]) => Object.assign({ name }, value));
+      } catch (_err) {
+        return [];
+      }
+    }
+
+    function extractTargetsFromConfig(config) {
+      const targets = [];
+      const fromHuman = Array.isArray(config?.human_targets) ? config.human_targets : [];
+      fromHuman.forEach((item) => {
+        if (item && typeof item === "object") {
+          targets.push(Object.assign({}, item));
+        }
+      });
+      const fromJson = parseTargetsFromTargetsJson(config?.targets_json || "");
+      fromJson.forEach((item) => {
+        if (item && typeof item === "object") {
+          targets.push(Object.assign({}, item));
+        }
+      });
+      return targets;
+    }
+
+    function pickAutofillTarget(targets) {
+      if (!Array.isArray(targets) || !targets.length) return null;
+      return targets.find((item) => item && item.enabled !== false) || targets[0];
+    }
+
+    function deriveWebuiUrlFromConfig(config) {
+      const explicit = String(config?.web_admin_url || "").trim();
+      if (explicit) return explicit;
+      const web = config?.web_admin || {};
+      const host = String(web.host || "").trim();
+      const port = Number(web.port) || 0;
+      if (!host || !port || host === "0.0.0.0" || host === "::") {
+        return window.location.origin;
+      }
+      const protocol = String(window.location.protocol || "http:")
+        .replace(/:$/, "") || "http";
+      return `${protocol}://${host}:${port}`;
+    }
+
+    function firstLineFromValue(value, fallback = "") {
+      if (Array.isArray(value)) {
+        const first = value.map((x) => String(x || "").trim()).find(Boolean);
+        return first || fallback;
+      }
+      const text = String(value || "").trim();
+      if (!text) return fallback;
+      return splitTextList(text)[0] || fallback;
+    }
+
+    function applyAiTargetFields(targetRaw) {
+      if (!targetRaw || typeof targetRaw !== "object") return false;
+      const target = Object.assign({}, targetRaw);
+      const strategy = normalizeStrategy(target.strategy);
+      const targetName = String(target.name || target.software_name || "").trim();
+      if (targetName) {
+        $("aiSoftwareName").value = targetName;
+      }
+      $("aiStrategy").value = strategy;
+
+      if (strategy === "cargo_path_git") {
+        $("aiRepoPath").value = String(target.repo_path || "");
+        $("aiBinaryPath").value = String(target.binary_path || "");
+        $("aiUpstreamRepo").value = String(target.upstream_repo || "");
+        $("aiBuildCommand").value = firstLineFromValue(
+          target.build_commands,
+          "cargo install --path {repo_path}",
+        );
+        $("aiVerifyCommandCargo").value = String(target.verify_cmd || "");
+      } else if (strategy === "system_package") {
+        $("aiManager").value = String(target.manager || "apt_get");
+        $("aiPackageName").value = String(target.package_name || target.name || "");
+        $("aiRequireSudo").value = boolToSelect(target.require_sudo !== false);
+        $("aiVerifyCommandSystem").value = String(target.verify_cmd || "");
+      } else {
+        $("aiCurrentVersionCmd").value = String(target.current_version_cmd || "");
+        $("aiLatestVersionCmd").value = String(target.latest_version_cmd || "");
+        $("aiUpdateCommand").value = firstLineFromValue(target.update_commands, "");
+        $("aiVerifyCommandCommand").value = String(target.verify_cmd || "");
+      }
+      syncAiStrategyFields();
+      return true;
+    }
+
+    async function autofillAiFromCurrentConfig() {
+      const btn = $("aiLoadConfigBtn");
+      btn.disabled = true;
+      setAiStatus(t("ai_status_loading_config"));
+      try {
+        const payload = await api("/api/config");
+        const config = (payload && payload.config && typeof payload.config === "object")
+          ? payload.config
+          : {};
+        const mode = String(config.target_config_mode || "human");
+        $("aiTargetMode").value = mode === "developer" ? "developer" : "human";
+        $("aiPollInterval").value = String(toNumber(config.poll_interval_minutes, 10, 1));
+        $("aiDefaultCheckInterval").value = String(toNumber(config.default_check_interval_hours, 12, 0));
+        $("aiPromptLang").value = state.lang;
+        $("aiWebuiUrl").value = deriveWebuiUrlFromConfig(config);
+
+        const targets = extractTargetsFromConfig(config);
+        const picked = pickAutofillTarget(targets);
+        if (picked) {
+          applyAiTargetFields(picked);
+          setAiStatus(t("ai_status_loaded_config"), "ok");
+          return;
+        }
+        syncAiStrategyFields();
+        setAiStatus(t("ai_status_loaded_config_no_target"), "ok");
+      } catch (err) {
+        setAiStatus(t("ai_status_load_config_failed", { msg: err.message }), "err");
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     function collectAiInput() {
@@ -3063,6 +3210,10 @@
 
       $("aiPresetDevBtn").addEventListener("click", () => {
         setAiPreset("developer");
+      });
+
+      $("aiLoadConfigBtn").addEventListener("click", async () => {
+        await autofillAiFromCurrentConfig();
       });
 
       $("aiStrategy").addEventListener("change", () => {
