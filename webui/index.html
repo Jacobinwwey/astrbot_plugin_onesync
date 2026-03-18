@@ -968,6 +968,7 @@
               <button id="aiPresetUserBtn">用户预设</button>
               <button id="aiPresetDevBtn">开发者预设</button>
               <button id="aiLoadConfigBtn" class="primary">从当前配置自动填充</button>
+              <button id="aiAutogenToggleBtn">自动生成: 关</button>
             </div>
             <p class="cfg-mini" id="aiPresetHint">先套用预设，再补充目标参数，可显著降低配置复杂度。</p>
           </div>
@@ -1212,7 +1213,8 @@
       configDraft: null,
       configMeta: null,
       configSaving: false,
-      guideTab: "user"
+      guideTab: "user",
+      aiAutogenAfterLoad: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1345,6 +1347,8 @@
         ai_preset_user: "用户预设",
         ai_preset_dev: "开发者预设",
         ai_load_from_config: "从当前配置自动填充",
+        ai_autogen_toggle_on: "自动生成: 开",
+        ai_autogen_toggle_off: "自动生成: 关",
         ai_preset_hint: "先套用预设，再补充目标参数，可显著降低配置复杂度。",
         ai_basic_title: "基础输入",
         ai_label_lang: "Prompt 语言",
@@ -1385,6 +1389,8 @@
         ai_status_loading_config: "正在读取当前配置...",
         ai_status_loaded_config: "已从当前配置自动填充 AI 助手。",
         ai_status_loaded_config_no_target: "已加载基础配置，但未检测到可回填的软件目标，请手动补充目标参数。",
+        ai_status_loaded_generated: "已自动填充并生成 Prompt，可直接复制给 AI。",
+        ai_status_loaded_generated_no_target: "已加载基础配置并生成 Prompt（未检测到目标，请补充目标参数后再发给 AI）。",
         ai_status_load_config_failed: "读取当前配置失败: {msg}",
         ai_status_copy_failed: "复制失败，请手动复制输出区域内容。",
         ai_status_empty_output: "当前没有可复制的输出内容。",
@@ -1546,6 +1552,8 @@
         ai_preset_user: "User Preset",
         ai_preset_dev: "Developer Preset",
         ai_load_from_config: "Auto-fill from Current Config",
+        ai_autogen_toggle_on: "Auto Generate: On",
+        ai_autogen_toggle_off: "Auto Generate: Off",
         ai_preset_hint: "Apply a preset first, then fill target details to reduce config complexity.",
         ai_basic_title: "Base Inputs",
         ai_label_lang: "Prompt Language",
@@ -1586,6 +1594,8 @@
         ai_status_loading_config: "Loading current config...",
         ai_status_loaded_config: "AI assistant fields are auto-filled from current config.",
         ai_status_loaded_config_no_target: "Base config loaded, but no software target was detected. Please fill target fields manually.",
+        ai_status_loaded_generated: "Config loaded and prompt generated automatically. You can copy it to your AI tool.",
+        ai_status_loaded_generated_no_target: "Base config loaded and prompt generated automatically (no target detected, please fill target fields before sending).",
         ai_status_load_config_failed: "Failed to load current config: {msg}",
         ai_status_copy_failed: "Copy failed, please copy from output area manually.",
         ai_status_empty_output: "No output content to copy.",
@@ -1662,6 +1672,9 @@
         if (parsed.lang && ["zh", "en"].includes(parsed.lang)) {
           state.lang = parsed.lang;
         }
+        if (typeof parsed.aiAutogenAfterLoad === "boolean") {
+          state.aiAutogenAfterLoad = parsed.aiAutogenAfterLoad;
+        }
       } catch (_err) {}
       document.body.dataset.theme = state.themes[state.themeIndex];
       document.body.dataset.density = state.density;
@@ -1673,7 +1686,8 @@
       const payload = {
         theme: state.themes[state.themeIndex],
         density: state.density,
-        lang: state.lang
+        lang: state.lang,
+        aiAutogenAfterLoad: Boolean(state.aiAutogenAfterLoad)
       };
       try {
         localStorage.setItem("onesync:webui:prefs", JSON.stringify(payload));
@@ -1753,6 +1767,7 @@
       $("aiPresetUserBtn").textContent = t("ai_preset_user");
       $("aiPresetDevBtn").textContent = t("ai_preset_dev");
       $("aiLoadConfigBtn").textContent = t("ai_load_from_config");
+      syncAiAutogenToggleBtn();
       $("aiPresetHint").textContent = t("ai_preset_hint");
       $("aiBasicTitle").textContent = t("ai_basic_title");
       $("aiLabelLang").textContent = t("ai_label_lang");
@@ -2148,6 +2163,12 @@
       if (type === "err") el.classList.add("err");
     }
 
+    function syncAiAutogenToggleBtn() {
+      const key = state.aiAutogenAfterLoad ? "ai_autogen_toggle_on" : "ai_autogen_toggle_off";
+      $("aiAutogenToggleBtn").textContent = t(key);
+      $("aiAutogenToggleBtn").classList.toggle("primary", state.aiAutogenAfterLoad);
+    }
+
     function syncAiStrategyHint() {
       const strategy = normalizeStrategy($("aiStrategy").value || "cargo_path_git");
       $("aiStrategyHint").textContent = t(`ai_strategy_hint_${strategy}`);
@@ -2330,13 +2351,25 @@
 
         const targets = extractTargetsFromConfig(config);
         const picked = pickAutofillTarget(targets);
+        let hasTarget = false;
         if (picked) {
           applyAiTargetFields(picked);
-          setAiStatus(t("ai_status_loaded_config"), "ok");
+          hasTarget = true;
+        } else {
+          syncAiStrategyFields();
+        }
+        if (state.aiAutogenAfterLoad) {
+          generateAiPromptFromForm();
+          setAiStatus(
+            hasTarget ? t("ai_status_loaded_generated") : t("ai_status_loaded_generated_no_target"),
+            "ok",
+          );
           return;
         }
-        syncAiStrategyFields();
-        setAiStatus(t("ai_status_loaded_config_no_target"), "ok");
+        setAiStatus(
+          hasTarget ? t("ai_status_loaded_config") : t("ai_status_loaded_config_no_target"),
+          "ok",
+        );
       } catch (err) {
         setAiStatus(t("ai_status_load_config_failed", { msg: err.message }), "err");
       } finally {
@@ -3214,6 +3247,12 @@
 
       $("aiLoadConfigBtn").addEventListener("click", async () => {
         await autofillAiFromCurrentConfig();
+      });
+
+      $("aiAutogenToggleBtn").addEventListener("click", () => {
+        state.aiAutogenAfterLoad = !state.aiAutogenAfterLoad;
+        syncAiAutogenToggleBtn();
+        persistPreferences();
       });
 
       $("aiStrategy").addEventListener("change", () => {

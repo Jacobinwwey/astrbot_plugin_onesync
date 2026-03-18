@@ -56,10 +56,11 @@ Recommended user flow:
 
 1. Open `AI Assistant` and click `User Preset`.
 2. If config already exists, click `Auto-fill from Current Config` first to load mode, intervals, and one target profile.
-3. Pick a scenario (bootstrap/add/diagnose/suite) and complete required fields.
-4. Click `Generate Prompt`, then `Copy Output`, and send it to your AI tool.
-5. Apply returned JSON/script via Config Center or API.
-6. Verify from `Latest Job` and `Debug Logs`.
+3. Optional: switch `Auto Generate: On` to generate prompt immediately after auto-fill.
+4. Pick a scenario (bootstrap/add/diagnose/suite) and complete required fields.
+5. Click `Generate Prompt`, then `Copy Output`, and send it to your AI tool.
+6. Apply returned JSON/script via Config Center or API.
+7. Verify from `Latest Job` and `Debug Logs`.
 
 Recommended developer flow:
 

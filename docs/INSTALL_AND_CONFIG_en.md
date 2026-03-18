@@ -138,6 +138,7 @@ How to use AI Assistant:
 2. If OneSync already has config, click `Auto-fill from Current Config` first:
    - It auto-fills `target_config_mode`, polling interval, and default check interval.
    - It auto-selects one usable target and maps fields by strategy.
+   - Optional: enable `Auto Generate: On` to produce prompt immediately after auto-fill.
 3. Select scenario:
    - `Bootstrap and Apply`
    - `Incremental Target Add`
