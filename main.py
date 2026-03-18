@@ -61,6 +61,53 @@ DEFAULT_TARGETS: dict[str, dict[str, Any]] = {
     },
 }
 
+SYSTEM_PACKAGE_MANAGER_ALIASES: dict[str, str] = {
+    "apt": "apt_get",
+    "apt-get": "apt_get",
+    "apt_get": "apt_get",
+    "yum": "yum",
+    "dnf": "dnf",
+    "pacman": "pacman",
+    "zypper": "zypper",
+    "choco": "choco",
+    "chocolatey": "choco",
+    "winget": "winget",
+    "brew": "brew",
+    "homebrew": "brew",
+}
+
+SYSTEM_PACKAGE_REQUIRED_COMMANDS: dict[str, list[str]] = {
+    "apt_get": ["apt-get", "apt-cache", "dpkg-query"],
+    "yum": ["yum", "rpm"],
+    "dnf": ["dnf", "rpm"],
+    "pacman": ["pacman"],
+    "zypper": ["zypper", "rpm"],
+    "choco": ["choco"],
+    "winget": ["winget"],
+    "brew": ["brew"],
+}
+
+STRATEGY_ALIASES: dict[str, str] = {
+    "command": "command",
+    "cmd": "command",
+    "cargo_path_git": "cargo_path_git",
+    "git_cargo": "cargo_path_git",
+    "system_package": "system_package",
+    "package": "system_package",
+    "pkg": "system_package",
+    "system_pkg": "system_package",
+}
+
+
+def _normalize_system_package_manager(value: Any) -> str:
+    manager = str(value or "").strip().lower().replace("-", "_")
+    return SYSTEM_PACKAGE_MANAGER_ALIASES.get(manager, manager)
+
+
+def _normalize_strategy_name(value: Any, default: str = "command") -> str:
+    strategy = str(value or "").strip().lower()
+    return STRATEGY_ALIASES.get(strategy, default)
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -337,9 +384,10 @@ class OneSyncPlugin(Star):
             return None
 
         template_key = str(raw_cfg.get("__template_key", "")).strip().lower()
-        strategy = str(raw_cfg.get("strategy", template_key or "command")).strip().lower()
-        if strategy not in {"command", "cmd", "cargo_path_git", "git_cargo"}:
-            strategy = "command"
+        strategy = _normalize_strategy_name(
+            raw_cfg.get("strategy", template_key or "command"),
+            default="command",
+        )
 
         check_interval_default = _to_float(
             self.config.get("default_check_interval_hours", 24),
@@ -362,7 +410,7 @@ class OneSyncPlugin(Star):
             "required_commands": _to_str_list(raw_cfg.get("required_commands", [])),
         }
 
-        if strategy in {"cargo_path_git", "git_cargo"}:
+        if strategy == "cargo_path_git":
             mirror_prefixes = _to_str_list(raw_cfg.get("mirror_prefixes", DEFAULT_GITHUB_MIRROR_PREFIXES))
             if not mirror_prefixes:
                 mirror_prefixes = [""]
@@ -384,6 +432,22 @@ class OneSyncPlugin(Star):
                     "current_version_cmd": str(raw_cfg.get("current_version_cmd", "")).strip(),
                 },
             )
+        elif strategy == "system_package":
+            manager = _normalize_system_package_manager(raw_cfg.get("manager", "apt_get"))
+            if not manager:
+                manager = "apt_get"
+            cfg.update(
+                {
+                    "manager": manager,
+                    "package_name": str(raw_cfg.get("package_name", target_name)).strip() or target_name,
+                    "require_sudo": _to_bool(raw_cfg.get("require_sudo", True), True),
+                    "sudo_prefix": str(raw_cfg.get("sudo_prefix", "sudo")).strip() or "sudo",
+                    "current_version_cmd": str(raw_cfg.get("current_version_cmd", "")).strip(),
+                    "latest_version_cmd": str(raw_cfg.get("latest_version_cmd", "")).strip(),
+                    "latest_version_pattern": str(raw_cfg.get("latest_version_pattern", "")).strip(),
+                    "update_commands": _to_str_list(raw_cfg.get("update_commands", [])),
+                },
+            )
         else:
             cfg.update(
                 {
@@ -400,7 +464,7 @@ class OneSyncPlugin(Star):
         target_name: str,
         target_cfg: dict[str, Any],
     ) -> dict[str, Any]:
-        strategy = str(target_cfg.get("strategy", "command")).strip().lower()
+        strategy = _normalize_strategy_name(target_cfg.get("strategy", "command"), default="command")
         entry: dict[str, Any] = {
             "name": target_name,
             "enabled": _to_bool(target_cfg.get("enabled", True), True),
@@ -413,7 +477,7 @@ class OneSyncPlugin(Star):
             "required_commands": _to_str_list(target_cfg.get("required_commands", [])),
         }
 
-        if strategy in {"cargo_path_git", "git_cargo"}:
+        if strategy == "cargo_path_git":
             entry["__template_key"] = "cargo_path_git"
             entry["strategy"] = "cargo_path_git"
             entry.update(
@@ -432,6 +496,24 @@ class OneSyncPlugin(Star):
                     "probe_cache_ttl_minutes": _to_float(target_cfg.get("probe_cache_ttl_minutes", 30), 30.0, 0.0),
                     "build_commands": _to_str_list(target_cfg.get("build_commands", ["cargo install --path {repo_path}"])),
                     "current_version_cmd": str(target_cfg.get("current_version_cmd", "")).strip(),
+                },
+            )
+        elif strategy == "system_package":
+            manager = _normalize_system_package_manager(target_cfg.get("manager", "apt_get"))
+            if not manager:
+                manager = "apt_get"
+            entry["__template_key"] = "system_package"
+            entry["strategy"] = "system_package"
+            entry.update(
+                {
+                    "manager": manager,
+                    "package_name": str(target_cfg.get("package_name", target_name)).strip() or target_name,
+                    "require_sudo": _to_bool(target_cfg.get("require_sudo", True), True),
+                    "sudo_prefix": str(target_cfg.get("sudo_prefix", "sudo")).strip() or "sudo",
+                    "current_version_cmd": str(target_cfg.get("current_version_cmd", "")).strip(),
+                    "latest_version_cmd": str(target_cfg.get("latest_version_cmd", "")).strip(),
+                    "latest_version_pattern": str(target_cfg.get("latest_version_pattern", "")).strip(),
+                    "update_commands": _to_str_list(target_cfg.get("update_commands", [])),
                 },
             )
         else:
@@ -715,6 +797,246 @@ class OneSyncPlugin(Star):
             "counts": counts,
             "latest_job": self.webui_get_latest_job(),
         }
+
+    @staticmethod
+    def _normalize_targets_payload(raw: Any) -> dict[str, dict[str, Any]]:
+        if isinstance(raw, dict):
+            parsed = raw
+        elif isinstance(raw, str):
+            text = raw.strip()
+            if not text:
+                return {}
+            try:
+                parsed = json.loads(text)
+            except Exception as exc:
+                raise ValueError(f"targets_json is not valid JSON: {exc}") from exc
+        elif raw is None:
+            return {}
+        else:
+            raise ValueError("targets_json must be a JSON object or JSON string")
+
+        if not isinstance(parsed, dict):
+            raise ValueError("targets_json root must be an object")
+
+        normalized: dict[str, dict[str, Any]] = {}
+        for name, cfg in parsed.items():
+            target_name = str(name or "").strip()
+            if not target_name:
+                continue
+            if not isinstance(cfg, dict):
+                raise ValueError(f"target[{target_name}] must be an object")
+            normalized[target_name] = dict(cfg)
+        return normalized
+
+    def webui_get_config_payload(self) -> dict[str, Any]:
+        mode = str(self.config.get("target_config_mode", "human")).strip().lower()
+        if mode not in {"human", "developer"}:
+            mode = "human"
+
+        raw_targets_json = self.config.get("targets_json", "")
+        if isinstance(raw_targets_json, dict):
+            targets_json_text = json.dumps(raw_targets_json, ensure_ascii=False, indent=2)
+        else:
+            targets_json_text = str(raw_targets_json or "")
+
+        human_entries: list[dict[str, Any]] = []
+        raw_human_entries = self.config.get("human_targets", [])
+        if isinstance(raw_human_entries, list):
+            for item in raw_human_entries:
+                parsed = self._normalize_human_target_config(item)
+                if not parsed:
+                    continue
+                name, cfg = parsed
+                human_entries.append(self._target_cfg_to_human_template_entry(name, cfg))
+
+        if not human_entries:
+            fallback_targets = self._load_targets_from_json()
+            if not fallback_targets:
+                fallback_targets = DEFAULT_TARGETS
+            for name, cfg in sorted(fallback_targets.items(), key=lambda item: str(item[0])):
+                if not isinstance(cfg, dict):
+                    continue
+                human_entries.append(self._target_cfg_to_human_template_entry(name, cfg))
+
+        web_cfg = self.config.get("web_admin", {})
+        if not isinstance(web_cfg, dict):
+            web_cfg = {}
+
+        config_payload = {
+            "enabled": _to_bool(self.config.get("enabled", True), True),
+            "poll_interval_minutes": _to_int(self.config.get("poll_interval_minutes", 30), 30, 1),
+            "default_check_interval_hours": _to_float(
+                self.config.get("default_check_interval_hours", 24),
+                24.0,
+                0.0,
+            ),
+            "auto_update_on_schedule": _to_bool(self.config.get("auto_update_on_schedule", True), True),
+            "notify_admin_on_schedule": _to_bool(self.config.get("notify_admin_on_schedule", True), True),
+            "notify_on_schedule_noop": _to_bool(self.config.get("notify_on_schedule_noop", False), False),
+            "dry_run": _to_bool(self.config.get("dry_run", False), False),
+            "env_check_timeout_s": _to_int(self.config.get("env_check_timeout_s", 8), 8, 1),
+            "admin_sid_list": _to_str_list(self.config.get("admin_sid_list", [])),
+            "target_config_mode": mode,
+            "human_targets": human_entries,
+            "targets_json": targets_json_text,
+            "web_admin": {
+                "enabled": _to_bool(web_cfg.get("enabled", False), False),
+                "host": str(web_cfg.get("host", "127.0.0.1") or "127.0.0.1").strip() or "127.0.0.1",
+                "port": _to_int(web_cfg.get("port", 8099), 8099, 1),
+                "password": str(web_cfg.get("password", "") or ""),
+            },
+            "web_admin_url": str(self.config.get("web_admin_url", "") or ""),
+        }
+
+        return {
+            "ok": True,
+            "config": config_payload,
+            "meta": {
+                "target_config_modes": ["human", "developer"],
+                "strategies": ["cargo_path_git", "command", "system_package"],
+                "system_package_managers": sorted(SYSTEM_PACKAGE_REQUIRED_COMMANDS.keys()),
+            },
+        }
+
+    def webui_update_config(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {"ok": False, "message": "invalid payload, expected object"}
+        incoming = payload.get("config", payload)
+        if not isinstance(incoming, dict):
+            return {"ok": False, "message": "config must be an object"}
+
+        try:
+            mode = str(incoming.get("target_config_mode", self.config.get("target_config_mode", "human"))).strip().lower()
+            if mode not in {"human", "developer"}:
+                mode = "human"
+
+            self.config["enabled"] = _to_bool(incoming.get("enabled", self.config.get("enabled", True)), True)
+            self.config["poll_interval_minutes"] = _to_int(
+                incoming.get("poll_interval_minutes", self.config.get("poll_interval_minutes", 30)),
+                30,
+                1,
+            )
+            self.config["default_check_interval_hours"] = _to_float(
+                incoming.get(
+                    "default_check_interval_hours",
+                    self.config.get("default_check_interval_hours", 24),
+                ),
+                24.0,
+                0.0,
+            )
+            self.config["auto_update_on_schedule"] = _to_bool(
+                incoming.get("auto_update_on_schedule", self.config.get("auto_update_on_schedule", True)),
+                True,
+            )
+            self.config["notify_admin_on_schedule"] = _to_bool(
+                incoming.get("notify_admin_on_schedule", self.config.get("notify_admin_on_schedule", True)),
+                True,
+            )
+            self.config["notify_on_schedule_noop"] = _to_bool(
+                incoming.get("notify_on_schedule_noop", self.config.get("notify_on_schedule_noop", False)),
+                False,
+            )
+            self.config["dry_run"] = _to_bool(
+                incoming.get("dry_run", self.config.get("dry_run", False)),
+                False,
+            )
+            self.config["env_check_timeout_s"] = _to_int(
+                incoming.get("env_check_timeout_s", self.config.get("env_check_timeout_s", 8)),
+                8,
+                1,
+            )
+            self.config["admin_sid_list"] = _to_str_list(
+                incoming.get("admin_sid_list", self.config.get("admin_sid_list", [])),
+            )
+            self.config["target_config_mode"] = mode
+
+            web_cfg_raw = incoming.get("web_admin", self.config.get("web_admin", {}))
+            if web_cfg_raw is None:
+                web_cfg_raw = {}
+            if not isinstance(web_cfg_raw, dict):
+                return {"ok": False, "message": "web_admin must be an object"}
+            web_host = str(web_cfg_raw.get("host", "127.0.0.1") or "127.0.0.1").strip() or "127.0.0.1"
+            web_port = _to_int(web_cfg_raw.get("port", 8099), 8099, 1)
+            if web_port > 65535:
+                web_port = 65535
+            self.config["web_admin"] = {
+                "enabled": _to_bool(web_cfg_raw.get("enabled", False), False),
+                "host": web_host,
+                "port": web_port,
+                "password": str(web_cfg_raw.get("password", "") or ""),
+            }
+
+            parsed_targets_from_json: dict[str, dict[str, Any]] | None = None
+
+            if "targets_json" in incoming:
+                parsed_targets_from_json = self._normalize_targets_payload(incoming.get("targets_json"))
+                self.config["targets_json"] = json.dumps(
+                    parsed_targets_from_json,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+
+            if "human_targets" in incoming:
+                raw_human_targets = incoming.get("human_targets")
+                if not isinstance(raw_human_targets, list):
+                    return {"ok": False, "message": "human_targets must be a list"}
+                human_entries: list[dict[str, Any]] = []
+                seen_names: set[str] = set()
+                for idx, item in enumerate(raw_human_targets):
+                    parsed = self._normalize_human_target_config(item)
+                    if not parsed:
+                        continue
+                    name, cfg = parsed
+                    if name in seen_names:
+                        return {
+                            "ok": False,
+                            "message": f"duplicated target name in human_targets: {name} (index={idx})",
+                        }
+                    seen_names.add(name)
+                    human_entries.append(self._target_cfg_to_human_template_entry(name, cfg))
+                self.config["human_targets"] = human_entries
+
+            if mode == "human":
+                self._bootstrap_human_targets_if_needed()
+                raw_entries = self.config.get("human_targets", [])
+                targets_from_human: dict[str, dict[str, Any]] = {}
+                if isinstance(raw_entries, list):
+                    for item in raw_entries:
+                        parsed = self._normalize_human_target_config(item)
+                        if not parsed:
+                            continue
+                        name, cfg = parsed
+                        targets_from_human[name] = cfg
+                self.config["targets_json"] = json.dumps(
+                    targets_from_human,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            else:
+                if parsed_targets_from_json is None:
+                    parsed_targets_from_json = self._load_targets_from_json()
+                human_entries: list[dict[str, Any]] = []
+                for name, cfg in sorted(parsed_targets_from_json.items(), key=lambda item: str(item[0])):
+                    if not isinstance(cfg, dict):
+                        continue
+                    human_entries.append(self._target_cfg_to_human_template_entry(name, cfg))
+                self.config["human_targets"] = human_entries
+
+            self._refresh_software_overview()
+            self._persist_plugin_config()
+            self._push_debug_log(
+                "info",
+                (
+                    "webui config updated: "
+                    f"mode={mode} targets={len(self._load_targets())} "
+                    f"web_enabled={_to_bool(self.config.get('web_admin', {}).get('enabled', False), False)}"
+                ),
+                source="webui",
+            )
+            return self.webui_get_config_payload()
+        except Exception as exc:
+            logger.error("[onesync] webui_update_config failed: %s", exc)
+            return {"ok": False, "message": str(exc)}
 
     async def webui_start_run(self, scope: str, targets: Any) -> dict[str, Any]:
         scope_key = str(scope or "all").strip().lower()
@@ -1012,17 +1334,20 @@ class OneSyncPlugin(Star):
 
     def _collect_required_commands_for_target(self, target_cfg: dict[str, Any]) -> list[str]:
         commands: list[str] = []
-        strategy = str(target_cfg.get("strategy", "command")).strip().lower()
+        strategy = _normalize_strategy_name(target_cfg.get("strategy", "command"), default="command")
 
         for raw in _to_str_list(target_cfg.get("required_commands", [])):
             executable = _extract_primary_executable(raw) or str(raw).strip()
             if executable:
                 commands.append(executable)
-        if strategy in {"cargo_path_git", "git_cargo"}:
+        if strategy == "cargo_path_git":
             commands.extend(["git", "cargo"])
             binary_path = str(target_cfg.get("binary_path", "")).strip()
             if binary_path:
                 commands.append(binary_path)
+        elif strategy == "system_package":
+            manager = _normalize_system_package_manager(target_cfg.get("manager", ""))
+            commands.extend(SYSTEM_PACKAGE_REQUIRED_COMMANDS.get(manager, []))
 
         for key in ("current_version_cmd", "latest_version_cmd", "verify_cmd"):
             executable = _extract_primary_executable(target_cfg.get(key, ""))
@@ -1154,7 +1479,7 @@ class OneSyncPlugin(Star):
         target_cfg: dict[str, Any],
         timeout_s: int,
     ) -> dict[str, Any]:
-        strategy = str(target_cfg.get("strategy", "command")).strip().lower()
+        strategy = _normalize_strategy_name(target_cfg.get("strategy", "command"), default="command")
         report: dict[str, Any] = {
             "target": target_name,
             "strategy": strategy,
@@ -1164,7 +1489,7 @@ class OneSyncPlugin(Star):
             "commands": [],
         }
 
-        if strategy in {"cargo_path_git", "git_cargo"}:
+        if strategy == "cargo_path_git":
             repo_probe = self._probe_path(
                 target_cfg.get("repo_path", ""),
                 expect_dir=True,
@@ -1190,6 +1515,32 @@ class OneSyncPlugin(Star):
                         "ok": False,
                         "path": "",
                         "detail": "current_version_cmd is empty",
+                    },
+                )
+                report["ok"] = False
+        elif strategy == "system_package":
+            package_name = str(target_cfg.get("package_name", "")).strip()
+            if not package_name:
+                report["paths"].append(
+                    {
+                        "name": "package_name",
+                        "ok": False,
+                        "path": "",
+                        "detail": "package_name is empty",
+                    },
+                )
+                report["ok"] = False
+            manager = _normalize_system_package_manager(target_cfg.get("manager", ""))
+            if manager not in SYSTEM_PACKAGE_REQUIRED_COMMANDS:
+                report["paths"].append(
+                    {
+                        "name": "manager",
+                        "ok": False,
+                        "path": str(target_cfg.get("manager", "")).strip(),
+                        "detail": (
+                            "unsupported manager, expected one of: "
+                            + ", ".join(sorted(SYSTEM_PACKAGE_REQUIRED_COMMANDS.keys()))
+                        ),
                     },
                 )
                 report["ok"] = False

@@ -24,6 +24,30 @@ DEFAULT_GITHUB_MIRROR_PREFIXES = [
 DEFAULT_REMOTE_PROBE_TIMEOUT_S = 15
 DEFAULT_REMOTE_PROBE_PARALLELISM = 4
 DEFAULT_REMOTE_PROBE_CACHE_TTL_MINUTES = 30.0
+DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN = r"([0-9][0-9A-Za-z.+:~_-]*)"
+
+SYSTEM_PACKAGE_MANAGER_ALIASES: dict[str, str] = {
+    "apt": "apt_get",
+    "apt-get": "apt_get",
+    "apt_get": "apt_get",
+    "yum": "yum",
+    "dnf": "dnf",
+    "pacman": "pacman",
+    "zypper": "zypper",
+    "choco": "choco",
+    "chocolatey": "choco",
+    "winget": "winget",
+    "brew": "brew",
+    "homebrew": "brew",
+}
+
+
+def normalize_system_package_manager(value: Any, default: str = "apt_get") -> str:
+    manager = _safe_str(value).strip().lower().replace("-", "_")
+    normalized = SYSTEM_PACKAGE_MANAGER_ALIASES.get(manager, manager)
+    if not normalized:
+        return default
+    return normalized
 
 
 def _to_bool(value: Any, default: bool) -> bool:
@@ -105,6 +129,35 @@ def ensure_str_list(value: Any) -> list[str]:
                 result.append(text)
         return result
     return []
+
+
+def ensure_int_list(value: Any) -> list[int]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        result: list[int] = []
+        for item in value:
+            try:
+                result.append(int(item))
+            except Exception:
+                continue
+        return result
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        pieces = [p.strip() for p in re.split(r"[,\s]+", text) if p.strip()]
+        result: list[int] = []
+        for piece in pieces:
+            try:
+                result.append(int(piece))
+            except Exception:
+                continue
+        return result
+    try:
+        return [int(value)]
+    except Exception:
+        return []
 
 
 def dedupe_keep_order(values: list[str]) -> list[str]:
@@ -207,8 +260,9 @@ _REMOTE_PROBE_CACHE: dict[str, RemoteProbeCacheEntry] = {}
 class CommandRunner:
     @staticmethod
     def _ensure_runtime_path(env: dict[str, str]) -> None:
+        sep = os.pathsep
         raw_path = _safe_str(env.get("PATH", ""))
-        path_entries = [item for item in raw_path.split(":") if item]
+        path_entries = [item for item in raw_path.split(sep) if item]
         seen = set(path_entries)
 
         home_dir = _safe_str(env.get("HOME", "")).strip()
@@ -219,14 +273,33 @@ class CommandRunner:
                 home_dir = ""
 
         candidates: list[str] = []
-        if home_dir:
+        if os.name == "nt":
+            user_profile = _safe_str(env.get("USERPROFILE", "")).strip() or home_dir
+            if user_profile:
+                candidates.extend(
+                    [
+                        os.path.join(user_profile, ".cargo", "bin"),
+                        os.path.join(user_profile, "scoop", "shims"),
+                        os.path.join(user_profile, "AppData", "Local", "Microsoft", "WinGet", "Links"),
+                        os.path.join(user_profile, "AppData", "Local", "Programs", "Python", "Scripts"),
+                    ],
+                )
             candidates.extend(
                 [
-                    os.path.join(home_dir, ".cargo", "bin"),
-                    os.path.join(home_dir, ".local", "bin"),
+                    r"C:\ProgramData\chocolatey\bin",
+                    r"C:\Windows\System32",
+                    r"C:\Windows",
                 ],
             )
-        candidates.extend(["/usr/local/bin", "/usr/bin", "/bin"])
+        else:
+            if home_dir:
+                candidates.extend(
+                    [
+                        os.path.join(home_dir, ".cargo", "bin"),
+                        os.path.join(home_dir, ".local", "bin"),
+                    ],
+                )
+            candidates.extend(["/usr/local/bin", "/usr/bin", "/bin"])
 
         prepend: list[str] = []
         for candidate in candidates:
@@ -239,7 +312,7 @@ class CommandRunner:
             seen.add(path)
 
         if prepend:
-            env["PATH"] = ":".join(prepend + path_entries) if path_entries else ":".join(prepend)
+            env["PATH"] = sep.join(prepend + path_entries) if path_entries else sep.join(prepend)
 
     async def run(
         self,
@@ -255,15 +328,26 @@ class CommandRunner:
         self._ensure_runtime_path(env)
 
         started = time.monotonic()
-        proc = await asyncio.create_subprocess_exec(
-            "/bin/bash",
-            "-c",
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-            env=env,
-        )
+        if os.name == "nt":
+            proc = await asyncio.create_subprocess_exec(
+                "cmd",
+                "/C",
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=env,
+            )
+        else:
+            proc = await asyncio.create_subprocess_exec(
+                "/bin/bash",
+                "-c",
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=env,
+            )
         timed_out = False
         try:
             stdout_b, stderr_b = await asyncio.wait_for(
@@ -546,6 +630,491 @@ class CommandStrategy(BaseStrategy):
             old_version=old_version,
             new_version=new_version,
             message="update completed",
+            diagnostics=diagnostics,
+        )
+
+
+class SystemPackageStrategy(CommandStrategy):
+    MANAGER_PROFILES: dict[str, dict[str, Any]] = {
+        "apt_get": {
+            "required_commands": ["apt-get", "apt-cache", "dpkg-query"],
+            "default_require_sudo": True,
+            "current_version_cmd": "dpkg-query -W -f='${Version}\\n' {package_name_q}",
+            "current_version_pattern": DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN,
+            "latest_version_cmd": "apt-cache policy {package_name_q}",
+            "latest_version_pattern": r"Candidate:\s*(?P<version>[0-9][0-9A-Za-z.+:~_-]*)",
+            "update_commands": [
+                "{sudo_prefix}apt-get update",
+                "{sudo_prefix}apt-get install -y {package_name_q}",
+            ],
+        },
+        "yum": {
+            "required_commands": ["yum", "rpm"],
+            "default_require_sudo": True,
+            "current_version_cmd": "rpm -q --qf '%{VERSION}-%{RELEASE}\\n' {package_name_q}",
+            "current_version_pattern": DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN,
+            "check_update_cmd": "yum check-update {package_name_q}",
+            "check_update_update_exit_codes": [100],
+            "check_update_pattern": r"(?P<version>[0-9][0-9A-Za-z.+:~_-]*)",
+            "update_commands": ["{sudo_prefix}yum -y update {package_name_q}"],
+        },
+        "dnf": {
+            "required_commands": ["dnf", "rpm"],
+            "default_require_sudo": True,
+            "current_version_cmd": "rpm -q --qf '%{VERSION}-%{RELEASE}\\n' {package_name_q}",
+            "current_version_pattern": DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN,
+            "check_update_cmd": "dnf check-update {package_name_q}",
+            "check_update_update_exit_codes": [100],
+            "check_update_pattern": r"(?P<version>[0-9][0-9A-Za-z.+:~_-]*)",
+            "update_commands": ["{sudo_prefix}dnf -y upgrade {package_name_q}"],
+        },
+        "pacman": {
+            "required_commands": ["pacman"],
+            "default_require_sudo": True,
+            "current_version_cmd": (
+                "pacman -Qi {package_name_q} | "
+                "sed -n 's/^Version[[:space:]]*:[[:space:]]*//p' | head -n 1"
+            ),
+            "current_version_pattern": DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN,
+            "check_update_cmd": "pacman -Qu {package_name_q}",
+            "check_update_pattern": r"->\s*(?P<version>[0-9][0-9A-Za-z.+:~_-]*)",
+            "update_commands": ["{sudo_prefix}pacman -S --noconfirm --needed {package_name_q}"],
+        },
+        "zypper": {
+            "required_commands": ["zypper", "rpm"],
+            "default_require_sudo": True,
+            "current_version_cmd": "rpm -q --qf '%{VERSION}-%{RELEASE}\\n' {package_name_q}",
+            "current_version_pattern": DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN,
+            "check_update_cmd": "zypper --non-interactive list-updates {package_name_q}",
+            "check_update_pattern": r"(?P<version>[0-9][0-9A-Za-z.+:~_-]*)",
+            "update_commands": ["{sudo_prefix}zypper --non-interactive update {package_name_q}"],
+        },
+        "choco": {
+            "required_commands": ["choco"],
+            "default_require_sudo": False,
+            "current_version_cmd": "choco list --local-only --exact {package_name_q} --limit-output",
+            "current_version_pattern": r"\|(?P<version>[0-9][^|\r\n]*)",
+            "check_update_cmd": "choco outdated --exact {package_name_q} --limit-output",
+            "check_update_pattern": r"^[^|\r\n]+\|[^|\r\n]+\|(?P<version>[0-9][^|\r\n]*)\|",
+            "update_commands": ["choco upgrade -y {package_name_q}"],
+        },
+        "winget": {
+            "required_commands": ["winget"],
+            "default_require_sudo": False,
+            "current_version_cmd": "winget list --id {package_name_q} --exact --accept-source-agreements --disable-interactivity",
+            "current_version_pattern": DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN,
+            "latest_version_cmd": "winget show --id {package_name_q} --exact --accept-source-agreements --disable-interactivity",
+            "latest_version_pattern": r"Version:\s*(?P<version>[0-9][0-9A-Za-z.+:~_-]*)",
+            "update_commands": [
+                (
+                    "winget upgrade --id {package_name_q} --exact "
+                    "--accept-source-agreements --accept-package-agreements "
+                    "--disable-interactivity"
+                ),
+            ],
+        },
+        "brew": {
+            "required_commands": ["brew"],
+            "default_require_sudo": False,
+            "current_version_cmd": "brew list --versions {package_name_q}",
+            "current_version_pattern": DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN,
+            "check_update_cmd": "brew outdated --formula {package_name_q}",
+            "update_commands": ["brew upgrade {package_name_q}"],
+        },
+    }
+
+    def _resolve_profile(self, target_cfg: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        manager = normalize_system_package_manager(target_cfg.get("manager", "apt_get"))
+        profile = self.MANAGER_PROFILES.get(manager)
+        if not profile:
+            raise StrategyError(
+                "unsupported system package manager: "
+                f"{manager}. supported={', '.join(sorted(self.MANAGER_PROFILES.keys()))}",
+            )
+        return manager, profile
+
+    def _build_context(
+        self,
+        target_name: str,
+        target_cfg: dict[str, Any],
+        runtime_ctx: dict[str, Any],
+        manager: str,
+        profile: dict[str, Any],
+    ) -> tuple[dict[str, Any], str]:
+        package_name = _safe_str(target_cfg.get("package_name")).strip()
+        if not package_name:
+            package_name = target_name
+        package_name = package_name.strip()
+        if not package_name:
+            raise StrategyError("missing package_name")
+
+        require_sudo_default = _to_bool(profile.get("default_require_sudo", False), False)
+        require_sudo = _to_bool(
+            target_cfg.get("require_sudo", require_sudo_default),
+            require_sudo_default,
+        )
+        sudo_bin = _safe_str(target_cfg.get("sudo_prefix")).strip() or "sudo"
+        sudo_prefix = f"{sudo_bin} " if require_sudo else ""
+
+        cmd_ctx = dict(runtime_ctx)
+        cmd_ctx.update(
+            {
+                "target_name": target_name,
+                "manager": manager,
+                "package_name": package_name,
+                "package_name_q": shlex.quote(package_name),
+                "sudo_prefix": sudo_prefix,
+            },
+        )
+        return cmd_ctx, package_name
+
+    async def _run_check_update(
+        self,
+        check_update_cmd: str,
+        check_update_pattern: str | None,
+        *,
+        timeout_s: int,
+        cmd_ctx: dict[str, Any],
+        update_exit_codes: list[int],
+        no_update_exit_codes: list[int],
+        diagnostics: list[str],
+    ) -> tuple[bool, str]:
+        rendered = render_template(check_update_cmd, cmd_ctx)
+        result = await self.runner.run(rendered, timeout_s=timeout_s)
+        diagnostics.append(
+            (
+                f"check_update_cmd exit={result.exit_code} "
+                f"duration={result.duration_s:.2f}s cmd={rendered}"
+            ),
+        )
+        if result.timed_out:
+            raise StrategyError(f"check_update_cmd timed out ({timeout_s}s)")
+
+        output_text = _safe_str(result.stdout)
+        combined = output_text
+        if _safe_str(result.stderr).strip():
+            combined = combined + "\n" + _safe_str(result.stderr)
+
+        latest_version = ""
+        if check_update_pattern:
+            try:
+                latest_version = extract_version(combined, check_update_pattern)
+            except Exception:
+                latest_version = ""
+
+        if result.exit_code in update_exit_codes:
+            return True, latest_version
+        if result.exit_code in no_update_exit_codes:
+            return False, latest_version
+        if result.ok:
+            if check_update_pattern:
+                return bool(latest_version), latest_version
+            return bool(output_text.strip()), latest_version
+
+        stderr_text = _safe_str(result.stderr).strip()
+        raise StrategyError(
+            f"check_update_cmd failed ({result.exit_code}): {stderr_text}",
+        )
+
+    async def check(
+        self,
+        target_name: str,
+        target_cfg: dict[str, Any],
+        runtime_ctx: dict[str, Any],
+    ) -> CheckResult:
+        diagnostics: list[str] = []
+        manager, profile = self._resolve_profile(target_cfg)
+        cmd_ctx, package_name = self._build_context(
+            target_name,
+            target_cfg,
+            runtime_ctx,
+            manager,
+            profile,
+        )
+        diagnostics.append(f"system package manager={manager} package={package_name}")
+
+        check_timeout = _to_int(target_cfg.get("check_timeout_s", 120), 120, 1)
+
+        current_cmd = _safe_str(target_cfg.get("current_version_cmd")).strip()
+        if not current_cmd:
+            current_cmd = _safe_str(profile.get("current_version_cmd")).strip()
+        if not current_cmd:
+            return CheckResult(
+                target=target_name,
+                ok=False,
+                message="missing current_version_cmd for system_package strategy",
+                diagnostics=diagnostics,
+            )
+
+        current_pattern = _safe_str(target_cfg.get("current_version_pattern")).strip()
+        if not current_pattern:
+            current_pattern = _safe_str(profile.get("current_version_pattern")).strip()
+        if not current_pattern:
+            current_pattern = DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN
+
+        try:
+            current_version, cur_res = await self._read_version(
+                current_cmd,
+                timeout_s=check_timeout,
+                pattern=current_pattern,
+                runtime_ctx=cmd_ctx,
+            )
+            diagnostics.append(
+                f"current version: {current_version} ({cur_res.duration_s:.2f}s)",
+            )
+        except Exception as exc:
+            return CheckResult(
+                target=target_name,
+                ok=False,
+                message=f"failed to read current package version: {exc}",
+                diagnostics=diagnostics,
+            )
+
+        latest_cmd = _safe_str(target_cfg.get("latest_version_cmd")).strip()
+        if not latest_cmd:
+            latest_cmd = _safe_str(profile.get("latest_version_cmd")).strip()
+
+        latest_pattern = _safe_str(target_cfg.get("latest_version_pattern")).strip()
+        if not latest_pattern:
+            latest_pattern = _safe_str(profile.get("latest_version_pattern")).strip()
+        if not latest_pattern:
+            latest_pattern = DEFAULT_SYSTEM_PACKAGE_VERSION_PATTERN
+
+        latest_version = ""
+        latest_error = ""
+        if latest_cmd:
+            try:
+                latest_version, lat_res = await self._read_version(
+                    latest_cmd,
+                    timeout_s=check_timeout,
+                    pattern=latest_pattern,
+                    runtime_ctx=cmd_ctx,
+                )
+                diagnostics.append(
+                    f"latest version: {latest_version} ({lat_res.duration_s:.2f}s)",
+                )
+            except Exception as exc:
+                latest_error = str(exc)
+                diagnostics.append(f"latest version command failed: {exc}")
+
+        check_update_cmd = _safe_str(target_cfg.get("check_update_cmd")).strip()
+        if not check_update_cmd:
+            check_update_cmd = _safe_str(profile.get("check_update_cmd")).strip()
+        check_update_pattern = _safe_str(target_cfg.get("check_update_pattern")).strip()
+        if not check_update_pattern:
+            check_update_pattern = _safe_str(profile.get("check_update_pattern")).strip()
+        if not check_update_pattern:
+            check_update_pattern = None
+
+        update_exit_codes = ensure_int_list(
+            target_cfg.get(
+                "check_update_update_exit_codes",
+                profile.get("check_update_update_exit_codes", []),
+            ),
+        )
+        no_update_exit_codes = ensure_int_list(
+            target_cfg.get(
+                "check_update_no_update_exit_codes",
+                profile.get("check_update_no_update_exit_codes", []),
+            ),
+        )
+
+        if latest_version:
+            needs_update = compare_versions(current_version, latest_version) == -1
+            return CheckResult(
+                target=target_name,
+                ok=True,
+                current_version=current_version,
+                latest_version=latest_version,
+                needs_update=needs_update,
+                message="check completed",
+                diagnostics=diagnostics,
+            )
+
+        if check_update_cmd:
+            try:
+                has_update, latest_from_check = await self._run_check_update(
+                    check_update_cmd,
+                    check_update_pattern,
+                    timeout_s=check_timeout,
+                    cmd_ctx=cmd_ctx,
+                    update_exit_codes=update_exit_codes,
+                    no_update_exit_codes=no_update_exit_codes,
+                    diagnostics=diagnostics,
+                )
+            except Exception as exc:
+                return CheckResult(
+                    target=target_name,
+                    ok=False,
+                    current_version=current_version,
+                    message=f"check_update_cmd failed: {exc}",
+                    diagnostics=diagnostics,
+                )
+            if latest_from_check:
+                latest_version = latest_from_check
+            return CheckResult(
+                target=target_name,
+                ok=True,
+                current_version=current_version,
+                latest_version=latest_version,
+                needs_update=has_update
+                if not latest_version
+                else compare_versions(current_version, latest_version) == -1,
+                message="check completed via check_update_cmd",
+                diagnostics=diagnostics,
+            )
+
+        if latest_error:
+            return CheckResult(
+                target=target_name,
+                ok=False,
+                current_version=current_version,
+                message=f"failed to read latest version: {latest_error}",
+                diagnostics=diagnostics,
+            )
+
+        return CheckResult(
+            target=target_name,
+            ok=True,
+            current_version=current_version,
+            latest_version="",
+            needs_update=False,
+            message="check completed (latest version unavailable for this manager)",
+            diagnostics=diagnostics,
+        )
+
+    async def update(
+        self,
+        target_name: str,
+        target_cfg: dict[str, Any],
+        runtime_ctx: dict[str, Any],
+        *,
+        dry_run: bool = False,
+        force: bool = False,
+    ) -> UpdateResult:
+        diagnostics: list[str] = []
+        manager, profile = self._resolve_profile(target_cfg)
+        cmd_ctx, _ = self._build_context(
+            target_name,
+            target_cfg,
+            runtime_ctx,
+            manager,
+            profile,
+        )
+
+        check_result = await self.check(target_name, target_cfg, runtime_ctx)
+        diagnostics.extend(check_result.diagnostics)
+        if not check_result.ok:
+            return UpdateResult(
+                target=target_name,
+                ok=False,
+                changed=False,
+                old_version=check_result.current_version,
+                message=check_result.message,
+                diagnostics=diagnostics,
+            )
+        if not force and not check_result.needs_update:
+            return UpdateResult(
+                target=target_name,
+                ok=True,
+                changed=False,
+                old_version=check_result.current_version,
+                new_version=check_result.current_version,
+                message="already up to date",
+                diagnostics=diagnostics,
+            )
+
+        update_timeout = _to_int(target_cfg.get("update_timeout_s", 900), 900, 1)
+        update_commands = ensure_str_list(target_cfg.get("update_commands"))
+        if not update_commands:
+            update_commands = ensure_str_list(profile.get("update_commands"))
+        if not update_commands:
+            return UpdateResult(
+                target=target_name,
+                ok=False,
+                changed=False,
+                old_version=check_result.current_version,
+                message="missing update_commands for system_package strategy",
+                diagnostics=diagnostics,
+            )
+
+        old_version = check_result.current_version
+        if dry_run:
+            for raw_cmd in update_commands:
+                diagnostics.append(f"dry-run skipped: {render_template(raw_cmd, cmd_ctx)}")
+        else:
+            for raw_cmd in update_commands:
+                rendered = render_template(raw_cmd, cmd_ctx)
+                res = await self.runner.run(rendered, timeout_s=update_timeout)
+                diagnostics.append(
+                    f"update command exit={res.exit_code} duration={res.duration_s:.2f}s cmd={rendered}",
+                )
+                if not res.ok:
+                    stderr_text = _safe_str(res.stderr).strip()
+                    message = f"update command failed: {rendered}"
+                    if stderr_text:
+                        message += f" | stderr: {stderr_text}"
+                    return UpdateResult(
+                        target=target_name,
+                        ok=False,
+                        changed=False,
+                        old_version=old_version,
+                        message=message,
+                        diagnostics=diagnostics,
+                    )
+
+            verify_cmd = _safe_str(target_cfg.get("verify_cmd")).strip()
+            if verify_cmd:
+                rendered = render_template(verify_cmd, cmd_ctx)
+                verify_res = await self.runner.run(
+                    rendered,
+                    timeout_s=_to_int(target_cfg.get("verify_timeout_s", 120), 120, 1),
+                )
+                diagnostics.append(
+                    (
+                        f"verify command exit={verify_res.exit_code} "
+                        f"duration={verify_res.duration_s:.2f}s cmd={rendered}"
+                    ),
+                )
+                if not verify_res.ok:
+                    return UpdateResult(
+                        target=target_name,
+                        ok=False,
+                        changed=False,
+                        old_version=old_version,
+                        message=f"verify command failed: {rendered}",
+                        diagnostics=diagnostics,
+                    )
+
+        post_check = await self.check(target_name, target_cfg, runtime_ctx)
+        diagnostics.extend(post_check.diagnostics)
+        if not post_check.ok:
+            return UpdateResult(
+                target=target_name,
+                ok=False,
+                changed=False,
+                old_version=old_version,
+                message=f"update finished but post-check failed: {post_check.message}",
+                diagnostics=diagnostics,
+            )
+
+        changed = old_version != post_check.current_version
+        message = "update completed"
+        if post_check.latest_version and compare_versions(
+            post_check.current_version,
+            post_check.latest_version,
+        ) == -1:
+            message = (
+                "update completed but still behind latest: "
+                f"{post_check.current_version} < {post_check.latest_version}"
+            )
+        return UpdateResult(
+            target=target_name,
+            ok=True,
+            changed=changed,
+            old_version=old_version,
+            new_version=post_check.current_version,
+            message=message,
             diagnostics=diagnostics,
         )
 
@@ -1424,6 +1993,8 @@ def build_strategy(
     normalized = _safe_str(strategy_name).strip().lower()
     if normalized in {"command", "cmd"}:
         return CommandStrategy(runner, logger=logger)
+    if normalized in {"system_package", "system_pkg", "package", "pkg"}:
+        return SystemPackageStrategy(runner, logger=logger)
     if normalized in {"cargo_path_git", "git_cargo"}:
         return CargoPathGitStrategy(runner, logger=logger)
     raise StrategyError(f"unsupported strategy: {strategy_name}")

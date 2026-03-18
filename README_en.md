@@ -12,6 +12,8 @@ OneSync is an extensible software update manager plugin for AstrBot.
 - Built-in WebUI (no AstrBot Dashboard source patch required).
 - Auto-generated software/version overview for operations.
 - Built-in debug log panel with tabs (`All/Run/Target/Scheduler/System`).
+- WebUI config center can now read/write plugin config and sync Human/Developer target models.
+- Native `system_package` strategy for `apt_get/yum/dnf/pacman/zypper/choco/winget/brew`.
 
 ## Configuration Modes
 
@@ -34,6 +36,7 @@ WebUI capabilities:
 - Filter targets by status and keyword.
 - `Run Update (Filtered)` with confirmation dialog.
 - `Run Update (All Managed)` with confirmation dialog.
+- `Config Center`: edit plugin settings and target definitions directly in WebUI.
 - Recent job panel and real-time debug logs.
 - UI i18n toggle (Chinese/English).
 

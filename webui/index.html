@@ -428,9 +428,174 @@
     .l-warn .debug-level { color: var(--warn); }
     .l-error .debug-level { color: var(--danger); }
 
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 15, 30, 0.72);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      z-index: 1200;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .modal-panel {
+      width: min(1120px, 100%);
+      max-height: 92vh;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(160deg, var(--panel), var(--panel-soft));
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-soft) 78%, var(--panel) 22%);
+    }
+
+    .modal-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .modal-body {
+      padding: 10px 12px;
+      overflow: auto;
+    }
+
+    .cfg-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 8px 10px;
+    }
+
+    .cfg-block {
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .cfg-title {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .cfg-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .cfg-row-1 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .cfg-label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .cfg-label input,
+    .cfg-label select,
+    .cfg-label textarea {
+      margin-top: 1px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 90px;
+      resize: vertical;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: var(--input);
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-family: var(--mono);
+      line-height: 1.45;
+    }
+
+    .cfg-target-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .cfg-target-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cfg-target-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--panel) 80%, var(--input) 20%);
+    }
+
+    .cfg-mini {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .cfg-status {
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      white-space: pre-wrap;
+    }
+
+    .cfg-status.ok {
+      color: var(--accent-2);
+    }
+
+    .cfg-status.err {
+      color: var(--danger);
+    }
+
     @media (max-width: 980px) {
       .controls {
         grid-template-columns: 1fr 1fr;
+      }
+      .cfg-grid,
+      .cfg-row {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -531,6 +696,133 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="configModal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 class="modal-title" id="cfgModalTitle">OneSync 插件配置</h2>
+        <div class="modal-actions">
+          <button id="cfgReloadBtn">重新加载</button>
+          <button id="cfgSaveBtn" class="success">保存配置</button>
+          <button id="cfgCloseBtn">关闭</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="cfg-block">
+          <p class="cfg-title" id="cfgGeneralTitle">基础设置</p>
+          <div class="cfg-grid">
+            <label class="cfg-label">
+              <span id="cfgLabelEnabled">启用插件</span>
+              <select id="cfgEnabled">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelTargetMode">目标配置模式</span>
+              <select id="cfgTargetMode">
+                <option value="human">human</option>
+                <option value="developer">developer</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelPoll">轮询间隔（分钟）</span>
+              <input id="cfgPollInterval" type="number" min="1" step="1">
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelDefaultCheck">默认检查间隔（小时）</span>
+              <input id="cfgDefaultCheckInterval" type="number" min="0" step="0.5">
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelAutoUpdate">定时自动更新</span>
+              <select id="cfgAutoUpdate">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelNotifyAdmin">定时通知管理员</span>
+              <select id="cfgNotifyAdmin">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelNotifyNoop">无更新也通知</span>
+              <select id="cfgNotifyNoop">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label class="cfg-label" id="cfgDryRunWrap">
+              <span id="cfgLabelDryRun">演练模式</span>
+              <select id="cfgDryRun">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label class="cfg-label" id="cfgEnvTimeoutWrap">
+              <span id="cfgLabelEnvTimeout">环境检测超时（秒）</span>
+              <input id="cfgEnvTimeout" type="number" min="1" step="1">
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelAdminSid">管理员 SID 列表（逗号或换行）</span>
+              <textarea id="cfgAdminSidList"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="cfg-block">
+          <p class="cfg-title" id="cfgWebTitle">WebUI 设置</p>
+          <div class="cfg-row">
+            <label class="cfg-label">
+              <span id="cfgLabelWebEnabled">启用 WebUI</span>
+              <select id="cfgWebEnabled">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelWebPort">WebUI 端口</span>
+              <input id="cfgWebPort" type="number" min="1" max="65535" step="1">
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelWebHost">WebUI Host</span>
+              <input id="cfgWebHost" type="text" placeholder="127.0.0.1">
+            </label>
+            <label class="cfg-label">
+              <span id="cfgLabelWebPassword">WebUI 密码（可选）</span>
+              <input id="cfgWebPassword" type="text" placeholder="">
+            </label>
+          </div>
+        </div>
+
+        <div class="cfg-block" id="cfgHumanWrap">
+          <div class="cfg-target-head">
+            <p class="cfg-title" id="cfgHumanTitle">软件目标（Human 模式）</p>
+            <div class="modal-actions">
+              <select id="cfgAddTargetType">
+                <option value="cargo_path_git">cargo_path_git</option>
+                <option value="command">command</option>
+                <option value="system_package">system_package</option>
+              </select>
+              <button id="cfgAddTargetBtn" class="primary">添加目标</button>
+            </div>
+          </div>
+          <div class="cfg-target-list" id="cfgHumanTargetList"></div>
+          <p class="cfg-mini" id="cfgHumanHint">可添加任意数量目标；字段会按 strategy 自动切换。</p>
+        </div>
+
+        <div class="cfg-block hidden" id="cfgDeveloperWrap">
+          <p class="cfg-title" id="cfgDeveloperTitle">开发者模式（targets_json）</p>
+          <textarea id="cfgTargetsJson" spellcheck="false"></textarea>
+          <p class="cfg-mini" id="cfgDeveloperHint">此 JSON 会直接写回插件配置。建议先在 Human 模式编辑常规字段。</p>
+        </div>
+
+        <div class="cfg-status" id="cfgStatus"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const state = {
       rows: [],
@@ -551,7 +843,10 @@
       debugSourceGroup: "all",
       debugAutoScroll: true,
       debugPollingTimer: null,
-      debugKeywordTimer: null
+      debugKeywordTimer: null,
+      configDraft: null,
+      configMeta: null,
+      configSaving: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -621,8 +916,58 @@
         err_poll_job: "任务轮询失败: {msg}",
         err_init: "初始化失败: {msg}",
         err_login_cancel: "登录已取消",
-        alert_open_config: "请在 AstrBot 插件管理页打开 OneSync 配置，修改目标与策略参数。",
         confirm_clear_logs: "确认清空当前 WebUI 调试日志？",
+        open_config_modal: "打开配置中心",
+        cfg_modal_title: "OneSync 插件配置",
+        cfg_reload: "重新加载",
+        cfg_save: "保存配置",
+        cfg_close: "关闭",
+        cfg_general_title: "基础设置",
+        cfg_enabled: "启用插件",
+        cfg_target_mode: "目标配置模式",
+        cfg_poll: "轮询间隔（分钟）",
+        cfg_default_check: "默认检查间隔（小时）",
+        cfg_auto_update: "定时自动更新",
+        cfg_notify_admin: "定时通知管理员",
+        cfg_notify_noop: "无更新也通知",
+        cfg_dry_run: "演练模式（developer）",
+        cfg_env_timeout: "环境检测超时（秒，developer）",
+        cfg_admin_sid: "管理员 SID 列表（逗号或换行）",
+        cfg_web_title: "WebUI 设置",
+        cfg_web_enabled: "启用 WebUI",
+        cfg_web_port: "WebUI 端口",
+        cfg_web_host: "WebUI Host",
+        cfg_web_password: "WebUI 密码（可选）",
+        cfg_human_title: "软件目标（Human 模式）",
+        cfg_human_add: "添加目标",
+        cfg_human_hint: "可添加任意数量目标；字段会按 strategy 自动切换。",
+        cfg_dev_title: "开发者模式（targets_json）",
+        cfg_dev_hint: "此 JSON 会直接写回插件配置。建议先在 Human 模式编辑常规字段。",
+        cfg_field_name: "目标名",
+        cfg_field_enabled: "启用",
+        cfg_field_strategy: "策略",
+        cfg_field_interval: "检查间隔(h)",
+        cfg_field_repo_path: "仓库路径",
+        cfg_field_binary_path: "二进制路径",
+        cfg_field_upstream_repo: "上游仓库",
+        cfg_field_branch: "分支（可选）",
+        cfg_field_build_commands: "构建命令（每行一条）",
+        cfg_field_current_cmd: "当前版本命令",
+        cfg_field_latest_cmd: "最新版本命令",
+        cfg_field_update_commands: "更新命令（每行一条）",
+        cfg_field_verify_cmd: "验证命令（可选）",
+        cfg_field_manager: "包管理器",
+        cfg_field_package_name: "包名",
+        cfg_field_require_sudo: "需要 sudo",
+        cfg_field_sudo_prefix: "sudo 前缀",
+        cfg_target_remove: "删除目标",
+        cfg_status_loading: "正在加载配置...",
+        cfg_status_saving: "正在保存配置...",
+        cfg_status_saved: "配置保存成功。",
+        cfg_status_load_failed: "加载配置失败: {msg}",
+        cfg_status_save_failed: "保存配置失败: {msg}",
+        cfg_status_invalid_json: "targets_json 不是合法 JSON：{msg}",
+        cfg_no_targets: "当前没有目标，点击“添加目标”开始配置。",
       },
       en: {
         app_title: "OneSync Operations Console",
@@ -688,8 +1033,58 @@
         err_poll_job: "Job polling failed: {msg}",
         err_init: "Initialization failed: {msg}",
         err_login_cancel: "Login canceled",
-        alert_open_config: "Open OneSync config in AstrBot plugin settings to edit target strategies and parameters.",
         confirm_clear_logs: "Clear current WebUI debug logs?",
+        open_config_modal: "Open Config Center",
+        cfg_modal_title: "OneSync Plugin Configuration",
+        cfg_reload: "Reload",
+        cfg_save: "Save Config",
+        cfg_close: "Close",
+        cfg_general_title: "General Settings",
+        cfg_enabled: "Enable Plugin",
+        cfg_target_mode: "Target Config Mode",
+        cfg_poll: "Polling Interval (minutes)",
+        cfg_default_check: "Default Check Interval (hours)",
+        cfg_auto_update: "Auto-update on schedule",
+        cfg_notify_admin: "Notify admins on schedule",
+        cfg_notify_noop: "Notify even when no update",
+        cfg_dry_run: "Dry-run mode (developer)",
+        cfg_env_timeout: "Env check timeout (seconds, developer)",
+        cfg_admin_sid: "Admin SID list (comma or newline)",
+        cfg_web_title: "WebUI Settings",
+        cfg_web_enabled: "Enable WebUI",
+        cfg_web_port: "WebUI Port",
+        cfg_web_host: "WebUI Host",
+        cfg_web_password: "WebUI Password (optional)",
+        cfg_human_title: "Software Targets (Human Mode)",
+        cfg_human_add: "Add Target",
+        cfg_human_hint: "No fixed slot limit. Fields switch automatically by strategy.",
+        cfg_dev_title: "Developer Mode (targets_json)",
+        cfg_dev_hint: "This JSON is written directly to plugin config. Use Human mode for common edits.",
+        cfg_field_name: "Target Name",
+        cfg_field_enabled: "Enabled",
+        cfg_field_strategy: "Strategy",
+        cfg_field_interval: "Check Interval (h)",
+        cfg_field_repo_path: "Repo Path",
+        cfg_field_binary_path: "Binary Path",
+        cfg_field_upstream_repo: "Upstream Repo",
+        cfg_field_branch: "Branch (optional)",
+        cfg_field_build_commands: "Build Commands (one per line)",
+        cfg_field_current_cmd: "Current Version Command",
+        cfg_field_latest_cmd: "Latest Version Command",
+        cfg_field_update_commands: "Update Commands (one per line)",
+        cfg_field_verify_cmd: "Verify Command (optional)",
+        cfg_field_manager: "Package Manager",
+        cfg_field_package_name: "Package Name",
+        cfg_field_require_sudo: "Require sudo",
+        cfg_field_sudo_prefix: "sudo Prefix",
+        cfg_target_remove: "Remove Target",
+        cfg_status_loading: "Loading configuration...",
+        cfg_status_saving: "Saving configuration...",
+        cfg_status_saved: "Configuration saved.",
+        cfg_status_load_failed: "Failed to load config: {msg}",
+        cfg_status_save_failed: "Failed to save config: {msg}",
+        cfg_status_invalid_json: "targets_json is invalid JSON: {msg}",
+        cfg_no_targets: "No target configured yet. Click \"Add Target\" to start.",
       },
     };
 
@@ -765,7 +1160,7 @@
       $("statusOptUnknown").textContent = t("status_unknown");
       $("statusOptDisabled").textContent = t("status_disabled");
       $("clearFilterBtn").textContent = t("clear_filter");
-      $("openConfigBtn").textContent = t("open_config");
+      $("openConfigBtn").textContent = t("open_config_modal");
       $("thSoftware").textContent = t("th_software");
       $("thCurrent").textContent = t("th_current");
       $("thLatest").textContent = t("th_latest");
@@ -786,6 +1181,31 @@
       $("densitySelect").options[0].textContent = t("density_comfortable");
       $("densitySelect").options[1].textContent = t("density_compact");
       $("densitySelect").options[2].textContent = t("density_ultra");
+      $("cfgModalTitle").textContent = t("cfg_modal_title");
+      $("cfgReloadBtn").textContent = t("cfg_reload");
+      $("cfgSaveBtn").textContent = t("cfg_save");
+      $("cfgCloseBtn").textContent = t("cfg_close");
+      $("cfgGeneralTitle").textContent = t("cfg_general_title");
+      $("cfgLabelEnabled").textContent = t("cfg_enabled");
+      $("cfgLabelTargetMode").textContent = t("cfg_target_mode");
+      $("cfgLabelPoll").textContent = t("cfg_poll");
+      $("cfgLabelDefaultCheck").textContent = t("cfg_default_check");
+      $("cfgLabelAutoUpdate").textContent = t("cfg_auto_update");
+      $("cfgLabelNotifyAdmin").textContent = t("cfg_notify_admin");
+      $("cfgLabelNotifyNoop").textContent = t("cfg_notify_noop");
+      $("cfgLabelDryRun").textContent = t("cfg_dry_run");
+      $("cfgLabelEnvTimeout").textContent = t("cfg_env_timeout");
+      $("cfgLabelAdminSid").textContent = t("cfg_admin_sid");
+      $("cfgWebTitle").textContent = t("cfg_web_title");
+      $("cfgLabelWebEnabled").textContent = t("cfg_web_enabled");
+      $("cfgLabelWebPort").textContent = t("cfg_web_port");
+      $("cfgLabelWebHost").textContent = t("cfg_web_host");
+      $("cfgLabelWebPassword").textContent = t("cfg_web_password");
+      $("cfgHumanTitle").textContent = t("cfg_human_title");
+      $("cfgAddTargetBtn").textContent = t("cfg_human_add");
+      $("cfgHumanHint").textContent = t("cfg_human_hint");
+      $("cfgDeveloperTitle").textContent = t("cfg_dev_title");
+      $("cfgDeveloperHint").textContent = t("cfg_dev_hint");
       syncDebugAutoScrollBtn();
       $("lastRefresh").textContent = t("last_refresh", { time: new Date().toLocaleString() });
       buildChips(
@@ -1028,6 +1448,420 @@
       }
     }
 
+    function boolToSelect(value) {
+      return value ? "true" : "false";
+    }
+
+    function parseBoolValue(text, defaultValue = false) {
+      if (text === "true") return true;
+      if (text === "false") return false;
+      return defaultValue;
+    }
+
+    function toNumber(value, fallback = 0, min = null) {
+      const n = Number(value);
+      if (Number.isNaN(n)) return fallback;
+      if (min !== null && n < min) return min;
+      return n;
+    }
+
+    function cloneJson(value) {
+      return JSON.parse(JSON.stringify(value || {}));
+    }
+
+    function splitTextList(text) {
+      return String(text || "")
+        .split(/[\n,]+/g)
+        .map((x) => x.trim())
+        .filter(Boolean);
+    }
+
+    function joinTextList(list) {
+      if (!Array.isArray(list)) return "";
+      return list.map((x) => String(x || "").trim()).filter(Boolean).join("\n");
+    }
+
+    function normalizeStrategy(strategy) {
+      const mapping = {
+        cmd: "command",
+        command: "command",
+        cargo_path_git: "cargo_path_git",
+        git_cargo: "cargo_path_git",
+        system_package: "system_package",
+        package: "system_package",
+        pkg: "system_package",
+        system_pkg: "system_package"
+      };
+      const key = String(strategy || "").trim().toLowerCase();
+      return mapping[key] || "command";
+    }
+
+    function defaultTargetByStrategy(strategy) {
+      const normalized = normalizeStrategy(strategy);
+      if (normalized === "cargo_path_git") {
+        return {
+          name: "",
+          enabled: true,
+          strategy: "cargo_path_git",
+          check_interval_hours: 12,
+          repo_path: "",
+          binary_path: "",
+          upstream_repo: "",
+          branch: "",
+          current_version_cmd: "",
+          verify_cmd: "",
+          build_commands: ["cargo install --path {repo_path}"]
+        };
+      }
+      if (normalized === "system_package") {
+        return {
+          name: "",
+          enabled: true,
+          strategy: "system_package",
+          check_interval_hours: 12,
+          manager: "apt_get",
+          package_name: "",
+          require_sudo: true,
+          sudo_prefix: "sudo",
+          current_version_cmd: "",
+          latest_version_cmd: "",
+          update_commands: [],
+          verify_cmd: ""
+        };
+      }
+      return {
+        name: "",
+        enabled: true,
+        strategy: "command",
+        check_interval_hours: 24,
+        current_version_cmd: "",
+        latest_version_cmd: "",
+        update_commands: [],
+        verify_cmd: ""
+      };
+    }
+
+    function managerOptionsHtml(selected) {
+      const candidates = (
+        state.configMeta
+        && Array.isArray(state.configMeta.system_package_managers)
+        && state.configMeta.system_package_managers.length
+      )
+        ? state.configMeta.system_package_managers
+        : ["apt_get", "yum", "dnf", "pacman", "zypper", "choco", "winget", "brew"];
+      return candidates.map((name) => {
+        const sel = name === selected ? "selected" : "";
+        return `<option value="${escapeHtml(name)}" ${sel}>${escapeHtml(name)}</option>`;
+      }).join("");
+    }
+
+    function strategyOptionsHtml(selected) {
+      const values = ["cargo_path_git", "command", "system_package"];
+      return values.map((name) => {
+        const sel = name === selected ? "selected" : "";
+        return `<option value="${escapeHtml(name)}" ${sel}>${escapeHtml(name)}</option>`;
+      }).join("");
+    }
+
+    function renderTargetExtraFields(target, index) {
+      const strategy = normalizeStrategy(target.strategy);
+      if (strategy === "cargo_path_git") {
+        return `
+          <div class="cfg-row">
+            <label class="cfg-label">
+              <span>${t("cfg_field_repo_path")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="repo_path" type="text" value="${escapeHtml(target.repo_path || "")}">
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_binary_path")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="binary_path" type="text" value="${escapeHtml(target.binary_path || "")}">
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_upstream_repo")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="upstream_repo" type="text" value="${escapeHtml(target.upstream_repo || "")}">
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_branch")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="branch" type="text" value="${escapeHtml(target.branch || "")}">
+            </label>
+          </div>
+          <div class="cfg-row-1">
+            <label class="cfg-label">
+              <span>${t("cfg_field_build_commands")}</span>
+              <textarea data-cfg-index="${index}" data-cfg-field="build_commands">${escapeHtml(joinTextList(target.build_commands || []))}</textarea>
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_current_cmd")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="current_version_cmd" type="text" value="${escapeHtml(target.current_version_cmd || "")}">
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_verify_cmd")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="verify_cmd" type="text" value="${escapeHtml(target.verify_cmd || "")}">
+            </label>
+          </div>
+        `;
+      }
+      if (strategy === "system_package") {
+        return `
+          <div class="cfg-row">
+            <label class="cfg-label">
+              <span>${t("cfg_field_manager")}</span>
+              <select data-cfg-index="${index}" data-cfg-field="manager">
+                ${managerOptionsHtml(String(target.manager || "apt_get"))}
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_package_name")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="package_name" type="text" value="${escapeHtml(target.package_name || "")}">
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_require_sudo")}</span>
+              <select data-cfg-index="${index}" data-cfg-field="require_sudo">
+                <option value="true" ${target.require_sudo !== false ? "selected" : ""}>true</option>
+                <option value="false" ${target.require_sudo === false ? "selected" : ""}>false</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_sudo_prefix")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="sudo_prefix" type="text" value="${escapeHtml(target.sudo_prefix || "sudo")}">
+            </label>
+          </div>
+          <div class="cfg-row-1">
+            <label class="cfg-label">
+              <span>${t("cfg_field_current_cmd")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="current_version_cmd" type="text" value="${escapeHtml(target.current_version_cmd || "")}">
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_latest_cmd")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="latest_version_cmd" type="text" value="${escapeHtml(target.latest_version_cmd || "")}">
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_update_commands")}</span>
+              <textarea data-cfg-index="${index}" data-cfg-field="update_commands">${escapeHtml(joinTextList(target.update_commands || []))}</textarea>
+            </label>
+            <label class="cfg-label">
+              <span>${t("cfg_field_verify_cmd")}</span>
+              <input data-cfg-index="${index}" data-cfg-field="verify_cmd" type="text" value="${escapeHtml(target.verify_cmd || "")}">
+            </label>
+          </div>
+        `;
+      }
+      return `
+        <div class="cfg-row-1">
+          <label class="cfg-label">
+            <span>${t("cfg_field_current_cmd")}</span>
+            <input data-cfg-index="${index}" data-cfg-field="current_version_cmd" type="text" value="${escapeHtml(target.current_version_cmd || "")}">
+          </label>
+          <label class="cfg-label">
+            <span>${t("cfg_field_latest_cmd")}</span>
+            <input data-cfg-index="${index}" data-cfg-field="latest_version_cmd" type="text" value="${escapeHtml(target.latest_version_cmd || "")}">
+          </label>
+          <label class="cfg-label">
+            <span>${t("cfg_field_update_commands")}</span>
+            <textarea data-cfg-index="${index}" data-cfg-field="update_commands">${escapeHtml(joinTextList(target.update_commands || []))}</textarea>
+          </label>
+          <label class="cfg-label">
+            <span>${t("cfg_field_verify_cmd")}</span>
+            <input data-cfg-index="${index}" data-cfg-field="verify_cmd" type="text" value="${escapeHtml(target.verify_cmd || "")}">
+          </label>
+        </div>
+      `;
+    }
+
+    function renderHumanTargetsEditor() {
+      const listEl = $("cfgHumanTargetList");
+      const draft = state.configDraft || {};
+      const targets = Array.isArray(draft.human_targets) ? draft.human_targets : [];
+      if (!targets.length) {
+        listEl.innerHTML = `<div class="debug-empty">${t("cfg_no_targets")}</div>`;
+        return;
+      }
+      listEl.innerHTML = targets.map((rawTarget, index) => {
+        const target = Object.assign(defaultTargetByStrategy(rawTarget.strategy), rawTarget || {});
+        target.strategy = normalizeStrategy(target.strategy);
+        const enabledValue = target.enabled === false ? "false" : "true";
+        return `
+          <div class="cfg-target-card" data-cfg-card-index="${index}">
+            <div class="cfg-target-head">
+              <span class="cfg-mini">#${index + 1}</span>
+              <button data-cfg-remove="${index}" class="warn">${t("cfg_target_remove")}</button>
+            </div>
+            <div class="cfg-row">
+              <label class="cfg-label">
+                <span>${t("cfg_field_name")}</span>
+                <input data-cfg-index="${index}" data-cfg-field="name" type="text" value="${escapeHtml(target.name || "")}">
+              </label>
+              <label class="cfg-label">
+                <span>${t("cfg_field_enabled")}</span>
+                <select data-cfg-index="${index}" data-cfg-field="enabled">
+                  <option value="true" ${enabledValue === "true" ? "selected" : ""}>true</option>
+                  <option value="false" ${enabledValue === "false" ? "selected" : ""}>false</option>
+                </select>
+              </label>
+              <label class="cfg-label">
+                <span>${t("cfg_field_strategy")}</span>
+                <select data-cfg-index="${index}" data-cfg-field="strategy">
+                  ${strategyOptionsHtml(target.strategy)}
+                </select>
+              </label>
+              <label class="cfg-label">
+                <span>${t("cfg_field_interval")}</span>
+                <input data-cfg-index="${index}" data-cfg-field="check_interval_hours" type="number" min="0" step="0.5" value="${escapeHtml(target.check_interval_hours || 0)}">
+              </label>
+            </div>
+            ${renderTargetExtraFields(target, index)}
+          </div>
+        `;
+      }).join("");
+    }
+
+    function updateTargetFieldFromEvent(target, field, value) {
+      if (!target || !field) return;
+      const listFields = new Set(["build_commands", "update_commands", "required_commands", "remote_candidates", "mirror_prefixes"]);
+      if (field === "enabled" || field === "require_sudo") {
+        target[field] = parseBoolValue(value, true);
+        return;
+      }
+      if (field === "check_interval_hours") {
+        target[field] = toNumber(value, 0, 0);
+        return;
+      }
+      if (listFields.has(field)) {
+        target[field] = splitTextList(value);
+        return;
+      }
+      target[field] = String(value || "");
+    }
+
+    function setCfgStatus(message, type = "") {
+      const el = $("cfgStatus");
+      el.textContent = message || "";
+      el.classList.remove("ok", "err");
+      if (type === "ok") el.classList.add("ok");
+      if (type === "err") el.classList.add("err");
+    }
+
+    function syncConfigModeVisibility() {
+      const mode = $("cfgTargetMode").value || "human";
+      const isDeveloper = mode === "developer";
+      $("cfgHumanWrap").classList.toggle("hidden", isDeveloper);
+      $("cfgDeveloperWrap").classList.toggle("hidden", !isDeveloper);
+      $("cfgDryRunWrap").classList.toggle("hidden", !isDeveloper);
+      $("cfgEnvTimeoutWrap").classList.toggle("hidden", !isDeveloper);
+      if (state.configDraft) {
+        state.configDraft.target_config_mode = mode;
+      }
+    }
+
+    function fillConfigForm(config) {
+      state.configDraft = cloneJson(config || {});
+      state.configDraft.human_targets = Array.isArray(state.configDraft.human_targets)
+        ? state.configDraft.human_targets
+        : [];
+
+      $("cfgEnabled").value = boolToSelect(Boolean(state.configDraft.enabled));
+      $("cfgTargetMode").value = String(state.configDraft.target_config_mode || "human");
+      $("cfgPollInterval").value = String(state.configDraft.poll_interval_minutes || 30);
+      $("cfgDefaultCheckInterval").value = String(state.configDraft.default_check_interval_hours || 24);
+      $("cfgAutoUpdate").value = boolToSelect(Boolean(state.configDraft.auto_update_on_schedule));
+      $("cfgNotifyAdmin").value = boolToSelect(Boolean(state.configDraft.notify_admin_on_schedule));
+      $("cfgNotifyNoop").value = boolToSelect(Boolean(state.configDraft.notify_on_schedule_noop));
+      $("cfgDryRun").value = boolToSelect(Boolean(state.configDraft.dry_run));
+      $("cfgEnvTimeout").value = String(state.configDraft.env_check_timeout_s || 8);
+      $("cfgAdminSidList").value = joinTextList(state.configDraft.admin_sid_list || []);
+      const webCfg = state.configDraft.web_admin || {};
+      $("cfgWebEnabled").value = boolToSelect(Boolean(webCfg.enabled));
+      $("cfgWebHost").value = String(webCfg.host || "127.0.0.1");
+      $("cfgWebPort").value = String(webCfg.port || 8099);
+      $("cfgWebPassword").value = String(webCfg.password || "");
+      $("cfgTargetsJson").value = String(state.configDraft.targets_json || "");
+      syncConfigModeVisibility();
+      renderHumanTargetsEditor();
+    }
+
+    function collectConfigDraftFromForm() {
+      const mode = $("cfgTargetMode").value || "human";
+      const draft = cloneJson(state.configDraft || {});
+      draft.enabled = parseBoolValue($("cfgEnabled").value, true);
+      draft.target_config_mode = mode;
+      draft.poll_interval_minutes = toNumber($("cfgPollInterval").value, 30, 1);
+      draft.default_check_interval_hours = toNumber($("cfgDefaultCheckInterval").value, 24, 0);
+      draft.auto_update_on_schedule = parseBoolValue($("cfgAutoUpdate").value, true);
+      draft.notify_admin_on_schedule = parseBoolValue($("cfgNotifyAdmin").value, true);
+      draft.notify_on_schedule_noop = parseBoolValue($("cfgNotifyNoop").value, false);
+      draft.dry_run = parseBoolValue($("cfgDryRun").value, false);
+      draft.env_check_timeout_s = toNumber($("cfgEnvTimeout").value, 8, 1);
+      draft.admin_sid_list = splitTextList($("cfgAdminSidList").value || "");
+      draft.web_admin = {
+        enabled: parseBoolValue($("cfgWebEnabled").value, false),
+        host: String($("cfgWebHost").value || "127.0.0.1").trim() || "127.0.0.1",
+        port: toNumber($("cfgWebPort").value, 8099, 1),
+        password: String($("cfgWebPassword").value || "")
+      };
+      if (mode === "developer") {
+        draft.targets_json = String($("cfgTargetsJson").value || "");
+      } else {
+        draft.human_targets = Array.isArray(state.configDraft?.human_targets)
+          ? state.configDraft.human_targets
+          : [];
+      }
+      return draft;
+    }
+
+    async function loadConfigForModal() {
+      setCfgStatus(t("cfg_status_loading"));
+      const data = await api("/api/config");
+      state.configMeta = data.meta || {};
+      fillConfigForm(data.config || {});
+      setCfgStatus("");
+    }
+
+    async function openConfigModal() {
+      $("configModal").classList.remove("hidden");
+      try {
+        await loadConfigForModal();
+      } catch (err) {
+        setCfgStatus(t("cfg_status_load_failed", { msg: err.message }), "err");
+      }
+    }
+
+    function closeConfigModal() {
+      $("configModal").classList.add("hidden");
+      setCfgStatus("");
+    }
+
+    async function saveConfigFromModal() {
+      if (state.configSaving) return;
+      const draft = collectConfigDraftFromForm();
+      if ((draft.target_config_mode || "human") === "developer") {
+        try {
+          JSON.parse(draft.targets_json || "{}");
+        } catch (err) {
+          setCfgStatus(t("cfg_status_invalid_json", { msg: err.message }), "err");
+          return;
+        }
+      }
+      state.configSaving = true;
+      $("cfgSaveBtn").disabled = true;
+      setCfgStatus(t("cfg_status_saving"));
+      try {
+        const payload = await api("/api/config", {
+          method: "POST",
+          body: JSON.stringify({ config: draft })
+        });
+        state.configMeta = payload.meta || state.configMeta;
+        fillConfigForm(payload.config || draft);
+        setCfgStatus(t("cfg_status_saved"), "ok");
+        await loadOverview();
+        await loadLatestJob();
+      } catch (err) {
+        setCfgStatus(t("cfg_status_save_failed", { msg: err.message }), "err");
+      } finally {
+        state.configSaving = false;
+        $("cfgSaveBtn").disabled = false;
+      }
+    }
+
     async function pollJob(jobId) {
       if (state.pollingTimer) {
         clearInterval(state.pollingTimer);
@@ -1175,8 +2009,81 @@
         }
       });
 
-      $("openConfigBtn").addEventListener("click", () => {
-        alert(t("alert_open_config"));
+      $("openConfigBtn").addEventListener("click", async () => {
+        await openConfigModal();
+      });
+
+      $("cfgCloseBtn").addEventListener("click", () => {
+        closeConfigModal();
+      });
+
+      $("cfgReloadBtn").addEventListener("click", async () => {
+        try {
+          await loadConfigForModal();
+        } catch (err) {
+          setCfgStatus(t("cfg_status_load_failed", { msg: err.message }), "err");
+        }
+      });
+
+      $("cfgSaveBtn").addEventListener("click", async () => {
+        await saveConfigFromModal();
+      });
+
+      $("cfgTargetMode").addEventListener("change", () => {
+        syncConfigModeVisibility();
+      });
+
+      $("cfgAddTargetBtn").addEventListener("click", () => {
+        if (!state.configDraft) {
+          state.configDraft = { human_targets: [] };
+        }
+        if (!Array.isArray(state.configDraft.human_targets)) {
+          state.configDraft.human_targets = [];
+        }
+        const template = $("cfgAddTargetType").value || "command";
+        state.configDraft.human_targets.push(defaultTargetByStrategy(template));
+        renderHumanTargetsEditor();
+      });
+
+      $("cfgHumanTargetList").addEventListener("click", (evt) => {
+        const button = evt.target.closest("[data-cfg-remove]");
+        if (!button) return;
+        const index = Number(button.getAttribute("data-cfg-remove"));
+        if (!Array.isArray(state.configDraft?.human_targets)) return;
+        if (Number.isNaN(index) || index < 0 || index >= state.configDraft.human_targets.length) return;
+        state.configDraft.human_targets.splice(index, 1);
+        renderHumanTargetsEditor();
+      });
+
+      const onHumanTargetInput = (evt) => {
+        const el = evt.target;
+        const index = Number(el?.dataset?.cfgIndex);
+        const field = el?.dataset?.cfgField;
+        if (Number.isNaN(index) || !field) return;
+        if (!Array.isArray(state.configDraft?.human_targets)) return;
+        const target = state.configDraft.human_targets[index];
+        if (!target) return;
+        const value = typeof el.value === "string" ? el.value : "";
+        if (field === "strategy") {
+          const normalized = normalizeStrategy(value);
+          const merged = Object.assign(
+            defaultTargetByStrategy(normalized),
+            target,
+            { strategy: normalized },
+          );
+          state.configDraft.human_targets[index] = merged;
+          renderHumanTargetsEditor();
+          return;
+        }
+        updateTargetFieldFromEvent(target, field, value);
+      };
+      $("cfgHumanTargetList").addEventListener("input", onHumanTargetInput);
+      $("cfgHumanTargetList").addEventListener("change", onHumanTargetInput);
+
+      $("configModal").addEventListener("click", (evt) => {
+        if (evt.target?.id === "configModal") {
+          closeConfigModal();
+        }
       });
 
       $("debugLevelFilter").addEventListener("change", async (evt) => {

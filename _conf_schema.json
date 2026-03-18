@@ -210,6 +210,73 @@
           }
         }
       },
+      "system_package": {
+        "name": "系统包管理器软件",
+        "hint": "适用于 apt/yum/dnf/pacman/zypper/choco/winget/brew 等系统包管理器。",
+        "items": {
+          "name": {
+            "type": "string",
+            "description": "目标名称（必填，唯一）",
+            "default": ""
+          },
+          "enabled": {
+            "type": "bool",
+            "description": "启用该目标",
+            "default": true
+          },
+          "strategy": {
+            "type": "string",
+            "description": "策略标识（无需修改）",
+            "default": "system_package"
+          },
+          "check_interval_hours": {
+            "type": "float",
+            "description": "检查间隔（小时）",
+            "default": 12
+          },
+          "manager": {
+            "type": "string",
+            "description": "包管理器",
+            "default": "apt_get",
+            "hint": "支持 apt_get/yum/dnf/pacman/zypper/choco/winget/brew"
+          },
+          "package_name": {
+            "type": "string",
+            "description": "包名（为空时默认使用 name）",
+            "default": ""
+          },
+          "require_sudo": {
+            "type": "bool",
+            "description": "更新命令是否自动加 sudo 前缀",
+            "default": true
+          },
+          "sudo_prefix": {
+            "type": "string",
+            "description": "sudo 前缀命令",
+            "default": "sudo"
+          },
+          "current_version_cmd": {
+            "type": "string",
+            "description": "当前版本命令（可选，留空使用内置命令）",
+            "default": ""
+          },
+          "latest_version_cmd": {
+            "type": "string",
+            "description": "最新版本命令（可选，留空使用内置命令）",
+            "default": ""
+          },
+          "update_commands": {
+            "type": "list",
+            "description": "更新命令列表（可选，留空使用内置命令）",
+            "default": []
+          },
+          "verify_cmd": {
+            "type": "string",
+            "description": "更新后验证命令",
+            "default": ""
+          }
+        }
+      },
       "command": {
         "name": "命令型软件",
         "hint": "适用于任意软件：通过命令读取版本并执行更新脚本。",
@@ -263,7 +330,7 @@
     "type": "text",
     "editor_mode": true,
     "editor_language": "json",
-    "hint": "仅在 target_config_mode=developer 时生效。可配置镜像策略、超时、正则、附加命令等完整高级参数。",
+    "hint": "仅在 target_config_mode=developer 时生效。可配置镜像策略、超时、正则、附加命令等完整高级参数；strategy 支持 cargo_path_git / command / system_package。",
     "condition": {
       "target_config_mode": "developer"
     },

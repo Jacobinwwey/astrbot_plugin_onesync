@@ -18,6 +18,7 @@ Core capabilities:
 - Scheduled checks + optional auto-update.
 - Manual operations (`/updater check`, `/updater run`, `/updater force`).
 - Multi-target architecture (not limited to `zeroclaw`).
+- Native strategy set: `cargo_path_git`, `command`, `system_package`.
 - Mirror probing and fallback for GitHub connectivity stability.
 - Persistent runtime state and events log for operations/audit.
 - Built-in WebUI (without modifying AstrBot Dashboard source).
@@ -31,6 +32,10 @@ Core capabilities:
 - For `cargo_path_git` strategy:
   - Local git repo path exists (for example `/path/to/zeroclaw`).
   - Upstream repo/mirror is reachable.
+- For `system_package` strategy:
+  - The host must provide one of the native package managers:
+    `apt_get/yum/dnf/pacman/zypper/choco/winget/brew`.
+  - The runtime user must have proper update permission (sudo is commonly needed on Linux).
 
 Recommended first check after installation:
 
@@ -106,6 +111,7 @@ WebUI features:
 - Filter targets by keyword and status.
 - `Run Update (Filtered)` with confirmation dialog.
 - `Run Update (All Managed)` with confirmation dialog.
+- Config Center: sync/read/write plugin config directly from WebUI.
 - Recent job panel (queued/running/success/partial/error).
 - Debug log panel with i18n-ready layout:
   - Tabs: `All / Run / Target / Scheduler / System`
@@ -185,7 +191,7 @@ Recommended quick setup:
 |---|---|---|
 | `name` | yes (human mode) | Unique target identifier. |
 | `enabled` | no | Enable/disable this target. |
-| `strategy` | yes | `cargo_path_git` or `command`. |
+| `strategy` | yes | `cargo_path_git`, `command`, or `system_package`. |
 | `check_interval_hours` | no | Per-target check interval. |
 | `check_timeout_s` | no | Timeout for version checks. |
 | `update_timeout_s` | no | Timeout for update execution. |
@@ -223,6 +229,19 @@ Recommended quick setup:
 | `update_commands` | yes | Commands to execute update. |
 | `latest_version_pattern` | no | Regex for latest version extraction. |
 | `current_version_pattern` | no | Regex for current version extraction. |
+
+### 7.5 `system_package` strategy fields
+
+| Field | Required | Description |
+|---|---|---|
+| `manager` | recommended | Manager id: `apt_get/yum/dnf/pacman/zypper/choco/winget/brew`. |
+| `package_name` | recommended | Package identifier; defaults to target `name` when omitted. |
+| `require_sudo` | no | Auto prepend sudo for built-in update commands. |
+| `sudo_prefix` | no | Custom sudo prefix command, default `sudo`. |
+| `current_version_cmd` | no | Override built-in current version command. |
+| `latest_version_cmd` | no | Override built-in latest version command. |
+| `check_update_cmd` | no | Fallback command for managers where latest version is not directly queryable. |
+| `update_commands` | no | Override built-in update command list. |
 
 ## 8. Extensibility Examples
 

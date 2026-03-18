@@ -16,7 +16,7 @@
 核心特性：
 
 - 支持多个目标软件（`human_targets` 可视化列表或 `targets_json` 开发者模式）。
-- 支持两种更新策略：`cargo_path_git` 与 `command`。
+- 支持三种更新策略：`cargo_path_git`、`command`、`system_package`。
 - 支持自动更新、手动检查、强制更新。
 - 支持镜像回退、多远端候选，提高更新可用性。
 - 支持更新前自动探测远端质量（连通性与延迟）并按质量排序。
@@ -31,6 +31,9 @@
 - 若使用 `cargo_path_git` 策略，需要：
   - 本地已有 git 仓库目录（如 `/path/to/zeroclaw`）。
   - 可访问上游仓库或镜像。
+- 若使用 `system_package` 策略，需要：
+  - 目标系统中存在对应包管理器命令（`apt_get/yum/dnf/pacman/zypper/choco/winget/brew` 之一）。
+  - 运行用户具备执行更新命令权限（Linux 环境通常需要 sudo）。
 - 若启用 OneSync 内置 WebUI（`web_admin.enabled=true`），需要可导入 `fastapi` 与 `uvicorn`。
 
 建议安装后执行一次 `/updater env`，让插件自动检测命令可用性和版本，避免运行时才发现环境缺失。
@@ -132,6 +135,7 @@ WebUI 支持：
 - 按关键字与状态筛选软件。
 - `立即更新（当前筛选）`：只更新当前筛选出的启用目标。
 - `立即全部更新（全部纳管）`：更新全部启用目标。
+- 配置中心：在 WebUI 内直接同步查看并修改插件配置（包括 Human/Developer 模式和目标参数）。
 - 两个按钮都带确认弹窗，防止误触。
 - 最近任务状态面板（运行中/成功/部分成功/失败）。
 - Debug 日志面板（多标签：运行/目标/调度/系统，支持实时滚动、级别筛选、关键字过滤、清空日志）。
@@ -228,7 +232,7 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `enabled` | bool | 是否启用该目标。 |
-| `strategy` | string | 更新策略：`cargo_path_git` 或 `command`。 |
+| `strategy` | string | 更新策略：`cargo_path_git`、`command`、`system_package`。 |
 | `check_interval_hours` | float | 该目标检查周期（小时，`<=0` 视为不参与定时）。 |
 | `check_timeout_s` | int | 检查相关命令超时时间。 |
 | `update_timeout_s` | int | 更新相关命令超时时间。 |
@@ -265,6 +269,19 @@ OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
 | `update_commands` | 更新时必填 | 执行更新的命令列表。 |
 | `latest_version_pattern` | 否 | 提取最新版本的正则。 |
 | `current_version_pattern` | 否 | 提取当前版本的正则。 |
+
+### 7.5 `system_package` 策略字段
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `manager` | 建议 | 包管理器标识：`apt_get/yum/dnf/pacman/zypper/choco/winget/brew`。 |
+| `package_name` | 建议 | 软件包名；为空时默认使用目标名。 |
+| `require_sudo` | 否 | 默认更新命令是否自动加 sudo 前缀。 |
+| `sudo_prefix` | 否 | sudo 前缀命令，默认 `sudo`。 |
+| `current_version_cmd` | 否 | 覆盖内置“当前版本检测”命令。 |
+| `latest_version_cmd` | 否 | 覆盖内置“最新版本检测”命令。 |
+| `check_update_cmd` | 否 | 仅判断是否可更新的补充命令（适配无法直接获取 latest version 的管理器）。 |
+| `update_commands` | 否 | 覆盖内置更新命令列表。 |
 
 ## 8. 可扩展配置示例
 

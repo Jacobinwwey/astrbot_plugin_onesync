@@ -114,6 +114,17 @@ class OneSyncWebUIServer:
         async def overview():
             return self.plugin.webui_get_overview_payload()
 
+        @self.app.get("/api/config")
+        async def get_config():
+            return self.plugin.webui_get_config_payload()
+
+        @self.app.post("/api/config")
+        async def update_config(payload: dict[str, Any]):
+            ret = self.plugin.webui_update_config(payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=400)
+            return ret
+
         @self.app.get("/api/jobs/latest")
         async def latest_job():
             latest = self.plugin.webui_get_latest_job()

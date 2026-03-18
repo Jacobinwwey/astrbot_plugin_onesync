@@ -9,6 +9,23 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Added
 - Placeholder for upcoming changes.
 
+## [v0.2.0] - 2026-03-17
+
+### Added
+- WebUI config center:
+  - Added `/api/config` GET/POST endpoints for config sync and persistence.
+  - WebUI can now load, edit, and save plugin config directly.
+  - Human/developer target models are synchronized (`human_targets` <-> `targets_json`).
+- New native `system_package` strategy:
+  - Built-in manager support: `apt_get`, `yum`, `dnf`, `pacman`, `zypper`, `choco`, `winget`, `brew`.
+  - Native check/update command defaults with customizable overrides.
+  - Added manager-aware environment check integration.
+
+### Changed
+- `CommandRunner` now supports cross-platform shell execution (`/bin/bash` on Unix, `cmd /C` on Windows) and PATH enrichment for common package manager binary locations.
+- Human target normalization and schema now include `system_package` template.
+- Docs and README updated for config center and new strategy coverage.
+
 ## [v0.1.0] - 2026-03-16
 
 ### Added
@@ -24,4 +41,3 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   - `/updater run [target]`
   - `/updater force [target]`
 - Default target configuration for `zeroclaw` with mirror fallback support.
-
