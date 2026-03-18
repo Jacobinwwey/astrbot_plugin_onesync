@@ -103,3 +103,4 @@ Before pushing, verify:
 - `_conf_schema.json` is valid JSON
 - Python files pass syntax checks
 - WebUI JavaScript has no syntax errors
+- WebUI routes are reachable (`/api/health` and `/api/config`)

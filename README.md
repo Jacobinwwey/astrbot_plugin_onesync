@@ -70,6 +70,20 @@ WebUI 关键能力：
 - 内置 Debug 日志面板：支持多标签视图（运行/目标/调度/系统）、实时滚动、级别筛选、关键字过滤与一键清空。
 - 内置 i18n：WebUI 支持中英文切换（界面文案、按钮、筛选项、日志面板标签同步切换）。
 
+### WebUI 常见问题：加载配置失败（404）
+
+如果看到 `加载配置失败: 404 Not Found`，通常是运行中的插件实例还在使用旧版本前端/后端路由。
+
+建议按以下顺序处理：
+
+1. 重启 AstrBot 服务：
+   `systemctl restart astrbot.service`
+2. 确认访问的是 OneSync `web_admin_url`（默认 `http://127.0.0.1:8099`），而不是 AstrBot Dashboard 地址。
+3. 浏览器强制刷新页面（`Ctrl+F5`）。
+4. 在主机上验证接口：
+   - `curl -i http://127.0.0.1:8099/api/config`
+   - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
+
 ## 快速设置同步时间（最短路径）
 
 同步节奏由两个参数共同决定：

@@ -141,6 +141,12 @@ WebUI 支持：
 - Debug 日志面板（多标签：运行/目标/调度/系统，支持实时滚动、级别筛选、关键字过滤、清空日志）。
 - i18n 双语支持（中文/English）：界面标题、按钮、筛选项、日志面板标签可一键切换。
 
+若出现 `加载配置失败: 404 Not Found`，优先执行：
+
+1. `systemctl restart astrbot.service`
+2. 打开 OneSync `web_admin_url`（默认 `http://127.0.0.1:8099`），不要误进 AstrBot Dashboard 地址。
+3. 浏览器强制刷新（`Ctrl+F5`）。
+
 ## 5. 快速设置同步时间（重点）
 
 OneSync 的“同步时间”不是单一参数，而是由以下两层控制：
@@ -379,6 +385,15 @@ git config --global --add safe.directory <repo_path>
 - 检查运行用户权限。
 - 检查 `update_timeout_s` 是否过短。
 - 在 shell 里单独执行 `update_commands` 验证。
+
+### 11.5 WebUI 提示“加载配置失败: 404 Not Found”
+
+- 重启服务并等待端口恢复：
+  - `systemctl restart astrbot.service`
+- 验证接口：
+  - `curl -i http://127.0.0.1:8099/api/config`
+  - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
+- 若 `openapi` 里有 `/api/config` 但页面仍报错，执行 `Ctrl+F5` 清理缓存后再试。
 
 ## 12. 维护者文档
 

@@ -6,8 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
-### Added
-- Placeholder for upcoming changes.
+### Fixed
+- WebUI API request fallback now retries relative path when absolute `/api/...` returns `404`, reducing route-mount mismatch issues.
+
+### Documentation
+- Added troubleshooting steps for `Failed to load config: 404 Not Found` in both Chinese and English docs.
+- Clarified WebUI access path and hard-refresh guidance for stale frontend cache.
 
 ## [v0.2.0] - 2026-03-17
 

@@ -119,6 +119,12 @@ WebUI features:
   - Keyword filter + auto-scroll + clear logs
 - Built-in UI language switch: Chinese / English (labels, filters, buttons, tab names).
 
+If you see `Failed to load config: 404 Not Found`, do this first:
+
+1. `systemctl restart astrbot.service`
+2. Open OneSync `web_admin_url` (default `http://127.0.0.1:8099`), not the AstrBot Dashboard URL.
+3. Hard refresh browser cache (`Ctrl+F5`).
+
 ## 5. Quick Sync Interval Setup
 
 Sync cadence is controlled by two layers:
@@ -322,6 +328,15 @@ git config --global --add safe.directory /path/to/repo
 - Run `/updater env <target>` to verify runtime dependencies.
 - Increase `update_timeout_s` for heavy build/install tasks.
 - Check stderr in events/debug logs for exact cause.
+
+### 11.5 WebUI shows `Failed to load config: 404 Not Found`
+
+- Restart service and wait until port is ready:
+  - `systemctl restart astrbot.service`
+- Verify endpoint availability:
+  - `curl -i http://127.0.0.1:8099/api/config`
+  - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
+- If `/api/config` exists in OpenAPI but UI still fails, hard refresh (`Ctrl+F5`) and retry.
 
 ## 12. Maintainer Docs
 

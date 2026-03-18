@@ -104,3 +104,4 @@ git push origin main --tags
 - `docs/` 是否包含维护文档
 - `_conf_schema.json` 是否可被 JSON 解析
 - Python 文件是否通过语法检查
+- WebUI 路由是否可用（至少校验 `/api/health` 与 `/api/config`）

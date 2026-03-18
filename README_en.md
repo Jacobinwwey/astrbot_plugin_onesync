@@ -40,6 +40,20 @@ WebUI capabilities:
 - Recent job panel and real-time debug logs.
 - UI i18n toggle (Chinese/English).
 
+### WebUI Troubleshooting: `Failed to load config (404)`
+
+If you see `Failed to load config: 404 Not Found`, the running plugin process is usually still serving an older route set.
+
+Use this sequence:
+
+1. Restart AstrBot:
+   `systemctl restart astrbot.service`
+2. Confirm you opened OneSync `web_admin_url` (default `http://127.0.0.1:8099`) instead of the AstrBot Dashboard URL.
+3. Hard refresh browser cache (`Ctrl+F5`).
+4. Verify endpoint on host:
+   - `curl -i http://127.0.0.1:8099/api/config`
+   - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
+
 ## Quick Interval Setup
 
 Sync cadence is controlled by:
@@ -80,5 +94,3 @@ Verification:
 - [安装与配置手册（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
 - [Operations and Sync Manual (English)](./docs/OPERATIONS_AND_SYNC_en.md)
 - [操作与同步手册（中文）](./docs/OPERATIONS_AND_SYNC_zh.md)
-- [GitHub About Template (English)](./docs/GITHUB_ABOUT_en.md)
-- [GitHub About 模板（中文）](./docs/GITHUB_ABOUT_zh.md)
