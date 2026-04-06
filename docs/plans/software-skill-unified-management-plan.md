@@ -81,6 +81,7 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - 新增 `/api/skills/*` 对应的插件方法
   - `POST /api/skills/deploy-targets/{target_id}` 支持按 target 整体更新 selected sources
   - `POST /api/skills/deploy-targets/repair-all` 支持按当前 snapshot 批量修复 repairable targets
+  - doctor 追加 runtime state / projection health，覆盖 `manifest.json`、`lock.json`、`sources/*.json`、`generated/*.json` 和 `skill_bindings` 投影一致性
 - 更新 `webui_server.py`
   - 暴露新的 `/api/skills/*` 路由
 

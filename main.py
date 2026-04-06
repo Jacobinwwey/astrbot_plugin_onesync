@@ -22,6 +22,7 @@ from .inventory_core import (
     normalize_software_catalog_payload,
     replace_bindings_for_scope,
 )
+from .skills_runtime_health import build_skills_runtime_health
 from .skills_core import (
     build_skills_overview,
     manifest_to_binding_rows,
@@ -996,6 +997,45 @@ class OneSyncPlugin(Star):
                 continue
             self._write_json_file(self.skills_generated_dir / f"{target_id}.json", item)
 
+    def _augment_skills_runtime_health(self, skills_snapshot: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(skills_snapshot, dict):
+            return {}
+
+        runtime_health = build_skills_runtime_health(
+            skills_snapshot,
+            current_bindings=self.config.get("skill_bindings", []),
+            manifest_path=self.skills_manifest_path,
+            lock_path=self.skills_lock_path,
+            sources_dir=self.skills_sources_dir,
+            generated_dir=self.skills_generated_dir,
+        )
+
+        counts = skills_snapshot.get("counts", {})
+        if not isinstance(counts, dict):
+            counts = {}
+            skills_snapshot["counts"] = counts
+        counts.update(runtime_health.get("counts", {}))
+
+        doctor = skills_snapshot.get("doctor", {})
+        if not isinstance(doctor, dict):
+            doctor = {}
+            skills_snapshot["doctor"] = doctor
+        doctor["state_health"] = runtime_health.get("state_health", {})
+        doctor["projection_health"] = runtime_health.get("projection_health", {})
+
+        warnings = _dedupe_keep_order(
+            [
+                str(item or "").strip()
+                for item in list(skills_snapshot.get("warnings", [])) + list(runtime_health.get("warnings", []))
+                if str(item or "").strip()
+            ],
+        )
+        skills_snapshot["warnings"] = warnings
+        doctor["warnings"] = warnings
+        doctor["warning_count"] = len(warnings)
+        doctor["ok"] = not warnings
+        return skills_snapshot
+
     def _refresh_skills_snapshot(
         self,
         inventory_snapshot: dict[str, Any] | None = None,
@@ -1077,6 +1117,10 @@ class OneSyncPlugin(Star):
                         inventory_snapshot=snapshot,
                         saved_manifest=manifest,
                     )
+            last_overview = self._skills_state().get("last_overview", {})
+            if isinstance(last_overview, dict) and last_overview:
+                self._augment_skills_runtime_health(last_overview)
+                self._skills_state()["last_overview"] = last_overview
         return snapshot
 
     def webui_get_inventory_payload(self) -> dict[str, Any]:

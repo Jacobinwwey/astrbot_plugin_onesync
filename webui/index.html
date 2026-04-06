@@ -2410,7 +2410,7 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "健康检查",
         inventory_doctor_waiting: "等待最新状态...",
-        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | 新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | 同步(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | 新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | 同步(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable} | 状态文件(manifest/lock/source_missing/generated_missing)={state_manifest}/{state_lock}/{state_source_missing}/{state_generated_missing} | 投影(binding_missing/extra)={projection_missing}/{projection_extra}",
         inventory_selection_note: "按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 ce:* Skill 单独展开。",
         inventory_sync_all: "同步全部 Source",
         inventory_sync_all_running: "同步中",
@@ -2754,7 +2754,7 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "Doctor",
         inventory_doctor_waiting: "Waiting for latest status...",
-        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Sync(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Sync(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable} | State(manifest/lock/source_missing/generated_missing)={state_manifest}/{state_lock}/{state_source_missing}/{state_generated_missing} | Projection(binding_missing/extra)={projection_missing}/{projection_extra}",
         inventory_selection_note: "Manage by source package. Compound Engineering appears as one bundle instead of expanding every ce:* skill.",
         inventory_sync_all: "Sync All Sources",
         inventory_sync_all_running: "Syncing",
@@ -3720,6 +3720,12 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
         deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
         deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
+        state_manifest: doctor.state_health && doctor.state_health.manifest_present ? 1 : 0,
+        state_lock: doctor.state_health && doctor.state_health.lock_present ? 1 : 0,
+        state_source_missing: doctor.state_health && doctor.state_health.source_files_missing_total || 0,
+        state_generated_missing: doctor.state_health && doctor.state_health.generated_files_missing_total || 0,
+        projection_missing: doctor.projection_health && doctor.projection_health.binding_rows_missing_total || 0,
+        projection_extra: doctor.projection_health && doctor.projection_health.binding_rows_extra_total || 0,
       });
       $("inventorySyncAllBtn").disabled = state.inventorySyncAllRunning;
       repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
@@ -4270,6 +4276,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
           deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
           deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
+          state_manifest: doctor.state_health && doctor.state_health.manifest_present ? 1 : 0,
+          state_lock: doctor.state_health && doctor.state_health.lock_present ? 1 : 0,
+          state_source_missing: doctor.state_health && doctor.state_health.source_files_missing_total || 0,
+          state_generated_missing: doctor.state_health && doctor.state_health.generated_files_missing_total || 0,
+          projection_missing: doctor.projection_health && doctor.projection_health.binding_rows_missing_total || 0,
+          projection_extra: doctor.projection_health && doctor.projection_health.binding_rows_extra_total || 0,
         }),
         warnings.length ? warnings.join("\n") : "OK",
       ].join("\n");

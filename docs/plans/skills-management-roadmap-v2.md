@@ -35,6 +35,7 @@ status: active
 - deploy target 当前目标 repair
 - deploy target repair-all 批量修复
 - WebUI drift detail 面板
+- runtime state / projection doctor 诊断
 
 ## 阶段 4：更广宿主生态
 - 扩更多 CLI / GUI / claw 家族
