@@ -1201,6 +1201,20 @@
       margin-top: 4px;
     }
 
+    .inventory-skill-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-skill-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .inventory-quick-title {
       margin: 10px 0 8px;
       color: var(--muted);
@@ -1290,6 +1304,14 @@
       margin-bottom: 6px;
     }
 
+    .inventory-source-badges {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
     .inventory-source-item .meta,
     .inventory-deploy-item .meta {
       color: var(--muted);
@@ -1317,6 +1339,18 @@
       background: color-mix(in srgb, #22c55e 18%, transparent);
       color: #166534;
       border-color: color-mix(in srgb, #22c55e 36%, transparent);
+    }
+
+    .skills-status-fresh {
+      background: color-mix(in srgb, #22c55e 18%, transparent);
+      color: #166534;
+      border-color: color-mix(in srgb, #22c55e 36%, transparent);
+    }
+
+    .skills-status-aging {
+      background: color-mix(in srgb, #f59e0b 16%, transparent);
+      color: #92400e;
+      border-color: color-mix(in srgb, #f59e0b 34%, transparent);
     }
 
     .skills-status-missing,
@@ -2305,7 +2339,7 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "健康检查",
         inventory_doctor_waiting: "等待最新状态...",
-        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | 新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
         inventory_selection_note: "按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 ce:* Skill 单独展开。",
         inventory_target_empty: "等待选择宿主软件...",
         inventory_target_kicker: "当前 Deploy Target",
@@ -2356,6 +2390,7 @@
         inventory_summary_software: "软件(可见/候选)={visible}/{total} 已安装={installed} 已纳管={managed}",
         inventory_summary_candidates: "隐藏未安装候选={count}",
         inventory_summary_skills: "Source={total} 展开成员={members} 已发现={discovered}",
+        inventory_summary_freshness: "新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{missing}",
         inventory_summary_compatible: "可部署={total} 已选择={selected}",
         inventory_summary_bindings: "绑定(有效/无效)={valid}/{invalid}",
         inventory_summary_deploy: "Deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
@@ -2374,6 +2409,10 @@
         inventory_skill_meta_scope: "范围",
         inventory_skill_meta_manage: "维护",
         inventory_skill_meta_deployed: "部署目标",
+        inventory_skill_meta_freshness: "新鲜度",
+        inventory_skill_meta_age: "年龄",
+        inventory_skill_meta_last_seen: "最近发现",
+        inventory_skill_meta_registry: "Registry",
         inventory_skill_source_auto: "自动发现",
         inventory_skill_source_manual: "手工配置",
         inventory_skill_source_bundle: "npx 聚合包",
@@ -2622,7 +2661,7 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "Doctor",
         inventory_doctor_waiting: "Waiting for latest status...",
-        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
         inventory_selection_note: "Manage by source package. Compound Engineering appears as one bundle instead of expanding every ce:* skill.",
         inventory_target_empty: "Select a host to inspect the current deploy target.",
         inventory_target_kicker: "Current Deploy Target",
@@ -2673,6 +2712,7 @@
         inventory_summary_software: "software(visible/eligible)={visible}/{total} installed={installed} managed={managed}",
         inventory_summary_candidates: "hidden uninstalled candidates={count}",
         inventory_summary_skills: "sources={total} members={members} discovered={discovered}",
+        inventory_summary_freshness: "freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{missing}",
         inventory_summary_compatible: "deployable={total} selected={selected}",
         inventory_summary_bindings: "bindings(valid/invalid)={valid}/{invalid}",
         inventory_summary_deploy: "deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
@@ -2691,6 +2731,10 @@
         inventory_skill_meta_scope: "scope",
         inventory_skill_meta_manage: "manage",
         inventory_skill_meta_deployed: "deploy",
+        inventory_skill_meta_freshness: "freshness",
+        inventory_skill_meta_age: "age",
+        inventory_skill_meta_last_seen: "last_seen",
+        inventory_skill_meta_registry: "registry",
         inventory_skill_source_auto: "auto",
         inventory_skill_source_manual: "manual",
         inventory_skill_source_bundle: "npx bundle",
@@ -3279,11 +3323,19 @@
 
     function renderSkillsStatusBadge(status) {
       const key = String(status || "idle").trim().toLowerCase() || "idle";
-      const cls = ["ready", "missing", "idle", "stale", "unavailable"].includes(key)
+      const cls = ["ready", "fresh", "aging", "missing", "idle", "stale", "unavailable"].includes(key)
         ? `skills-status-${key}`
         : "skills-status-idle";
       const label = key.replace(/_/g, " ").toUpperCase();
       return `<span class="skills-status-badge ${cls}">${escapeHtml(label)}</span>`;
+    }
+
+    function formatInventorySourceAge(value) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return "-";
+      }
+      return `${Math.floor(parsed)}d`;
     }
 
     function getSelectedInventoryTargetId() {
@@ -3408,6 +3460,11 @@
           const sourceId = String(item.source_id || item.id || "").trim();
           const memberCount = Number(item.member_count) || 1;
           const deployedCount = Number(item.deployed_target_count) || 0;
+          const freshnessStatus = String(item.freshness_status || (item.source_exists ? "fresh" : "missing")).trim().toLowerCase() || "missing";
+          const sourceAge = formatInventorySourceAge(item.source_age_days);
+          const lastSeen = String(item.last_seen_at || "-").trim() || "-";
+          const registryPackageName = String(item.registry_package_name || "").trim();
+          const registryPackageManager = String(item.registry_package_manager || "").trim();
           const preview = Array.isArray(item.member_skill_preview)
             ? item.member_skill_preview.map((entry) => String(entry || "").trim()).filter(Boolean)
             : [];
@@ -3417,7 +3474,10 @@
             <div class="inventory-source-item">
               <div class="title">
                 <span>${escapeHtml(item.display_name || sourceId)}</span>
-                ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
+                <span class="inventory-source-badges">
+                  ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
+                  ${renderSkillsStatusBadge(freshnessStatus)}
+                </span>
               </div>
               <div class="meta">
 ${escapeHtml(t("inventory_skill_meta_id"))}: ${escapeHtml(sourceId)}
@@ -3425,8 +3485,14 @@ ${escapeHtml(t("inventory_skill_meta_id"))}: ${escapeHtml(sourceId)}
  | ${escapeHtml(t("inventory_skill_meta_scope"))}: ${escapeHtml(item.source_scope || "-")}
  | ${escapeHtml(t("inventory_skill_meta_deployed"))}: ${escapeHtml(deployedCount)}
               </div>
+              <div class="meta">
+${escapeHtml(t("inventory_skill_meta_freshness"))}: ${escapeHtml(freshnessStatus)}
+ | ${escapeHtml(t("inventory_skill_meta_age"))}: ${escapeHtml(sourceAge)}
+ | ${escapeHtml(t("inventory_skill_meta_last_seen"))}: ${escapeHtml(lastSeen)}
+              </div>
               <div class="meta">${escapeHtml(previewText)}</div>
               ${managementHint ? `<div class="meta">${escapeHtml(t("inventory_skill_meta_manage"))}: ${escapeHtml(managementHint)}</div>` : ""}
+              ${registryPackageName ? `<div class="meta">${escapeHtml(t("inventory_skill_meta_registry"))}: ${escapeHtml(registryPackageName)}${registryPackageManager ? ` (${escapeHtml(registryPackageManager)})` : ""}</div>` : ""}
             </div>
           `;
         }).join("")
@@ -3467,6 +3533,10 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       doctorSummaryEl.textContent = t("inventory_doctor_summary", {
         ready: doctor.source_health && doctor.source_health.ready || 0,
         missing: doctor.source_health && doctor.source_health.missing || 0,
+        fresh: doctor.source_freshness && doctor.source_freshness.fresh || 0,
+        aging: doctor.source_freshness && doctor.source_freshness.aging || 0,
+        stale: doctor.source_freshness && doctor.source_freshness.stale || 0,
+        fresh_missing: doctor.source_freshness && doctor.source_freshness.missing || 0,
         deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
         deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
         deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
@@ -3661,6 +3731,11 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const checked = selectedSet.has(skillId) ? "checked" : "";
           const selectedCls = selectedSet.has(skillId) ? "selected" : "";
           const discovered = item.discovered ? t("yes") : t("no");
+          const freshnessStatus = String(item.freshness_status || (item.source_exists ? "fresh" : "missing")).trim().toLowerCase() || "missing";
+          const sourceAge = formatInventorySourceAge(item.source_age_days);
+          const lastSeen = String(item.last_seen_at || "-").trim() || "-";
+          const registryPackageName = String(item.registry_package_name || "").trim();
+          const registryPackageManager = String(item.registry_package_manager || "").trim();
           const sourceKind = item.skill_kind === "skill_bundle"
             ? t("inventory_skill_source_bundle")
             : item.auto_discovered
@@ -3676,17 +3751,29 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const previewText = preview.length ? preview.join(", ") : sourcePath;
           return `
             <label class="inventory-skill-item ${selectedCls}">
-              <input
-                type="checkbox"
-                data-inventory-skill-id="${escapeHtml(skillId)}"
-                ${checked}
-              >
-              <strong>${escapeHtml(item.display_name || skillId)}</strong>
+              <div class="inventory-skill-head">
+                <span class="inventory-skill-toggle">
+                  <input
+                    type="checkbox"
+                    data-inventory-skill-id="${escapeHtml(skillId)}"
+                    ${checked}
+                  >
+                  <strong>${escapeHtml(item.display_name || skillId)}</strong>
+                </span>
+                <span class="inventory-source-badges">
+                  ${renderSkillsStatusBadge(item.discovered ? "ready" : "missing")}
+                  ${renderSkillsStatusBadge(freshnessStatus)}
+                </span>
+              </div>
               <div class="meta">
                 ${t("inventory_skill_meta_id")}=${escapeHtml(skillId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
               </div>
+              <div class="meta">
+                ${t("inventory_skill_meta_freshness")}=${escapeHtml(freshnessStatus)} | ${t("inventory_skill_meta_age")}=${escapeHtml(sourceAge)} | ${t("inventory_skill_meta_last_seen")}=${escapeHtml(lastSeen)}
+              </div>
               <div class="meta">${escapeHtml(previewText)}</div>
               ${managementHint ? `<div class="meta">${t("inventory_skill_meta_manage")}=${escapeHtml(managementHint)}</div>` : ""}
+              ${registryPackageName ? `<div class="meta">${t("inventory_skill_meta_registry")}=${escapeHtml(registryPackageName)}${registryPackageManager ? ` (${escapeHtml(registryPackageManager)})` : ""}</div>` : ""}
             </label>
           `;
         }).join("");
@@ -3711,6 +3798,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           total: counts.skills_total || 0,
           members: counts.skills_members_total || counts.skills_total || 0,
           discovered: counts.skills_discovered || 0,
+        }),
+        t("inventory_summary_freshness", {
+          fresh: counts.source_fresh_total || counts.skills_fresh_total || 0,
+          aging: counts.source_aging_total || counts.skills_aging_total || 0,
+          stale: counts.source_stale_total || counts.skills_stale_total || 0,
+          missing: counts.source_missing_total || counts.skills_missing_total || 0,
         }),
         t("inventory_summary_compatible", {
           total: state.inventoryVisibleCompatibleSkillIds.length,
@@ -3861,6 +3954,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         t("inventory_doctor_summary", {
           ready: doctor.source_health && doctor.source_health.ready || 0,
           missing: doctor.source_health && doctor.source_health.missing || 0,
+          fresh: doctor.source_freshness && doctor.source_freshness.fresh || 0,
+          aging: doctor.source_freshness && doctor.source_freshness.aging || 0,
+          stale: doctor.source_freshness && doctor.source_freshness.stale || 0,
+          fresh_missing: doctor.source_freshness && doctor.source_freshness.missing || 0,
           deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
           deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
           deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,

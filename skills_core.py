@@ -161,6 +161,12 @@ def normalize_saved_skills_manifest(raw: Any) -> dict[str, Any]:
                 "member_skill_preview": _to_str_list(item.get("member_skill_preview", [])),
                 "member_skill_overflow": _to_int(item.get("member_skill_overflow", 0), 0, 0),
                 "management_hint": str(item.get("management_hint") or ""),
+                "source_exists": _to_bool(item.get("source_exists", False), False),
+                "last_seen_at": str(item.get("last_seen_at") or ""),
+                "source_age_days": _to_int(item.get("source_age_days"), 0) if item.get("source_age_days") is not None else None,
+                "freshness_status": str(item.get("freshness_status") or "missing"),
+                "registry_package_name": str(item.get("registry_package_name") or ""),
+                "registry_package_manager": str(item.get("registry_package_manager") or ""),
                 "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
                 "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
                 "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
@@ -287,6 +293,16 @@ def build_skills_manifest(
                 "member_skill_preview": _to_str_list(item.get("member_skill_preview", []) or saved_source.get("member_skill_preview", [])),
                 "member_skill_overflow": _to_int(item.get("member_skill_overflow", saved_source.get("member_skill_overflow", 0)), 0, 0),
                 "management_hint": str(item.get("management_hint") or saved_source.get("management_hint") or ""),
+                "source_exists": _to_bool(item.get("source_exists", saved_source.get("source_exists", False)), False),
+                "last_seen_at": str(item.get("last_seen_at") or saved_source.get("last_seen_at") or ""),
+                "source_age_days": (
+                    _to_int(item.get("source_age_days", saved_source.get("source_age_days")), 0)
+                    if item.get("source_age_days", saved_source.get("source_age_days")) is not None
+                    else None
+                ),
+                "freshness_status": str(item.get("freshness_status") or saved_source.get("freshness_status") or "missing"),
+                "registry_package_name": str(item.get("registry_package_name") or saved_source.get("registry_package_name") or ""),
+                "registry_package_manager": str(item.get("registry_package_manager") or saved_source.get("registry_package_manager") or ""),
                 "compatible_software_ids": compatible_hosts,
                 "compatible_software_families": _to_str_list(item.get("compatible_software_families", []) or saved_source.get("compatible_software_families", [])),
                 "tags": _dedupe_keep_order(_to_str_list(item.get("tags", [])) + _to_str_list(saved_source.get("tags", []))),
@@ -312,6 +328,16 @@ def build_skills_manifest(
                 "member_skill_preview": _to_str_list(saved_source.get("member_skill_preview", [])),
                 "member_skill_overflow": _to_int(saved_source.get("member_skill_overflow", 0), 0, 0),
                 "management_hint": str(saved_source.get("management_hint") or ""),
+                "source_exists": _to_bool(saved_source.get("source_exists", False), False),
+                "last_seen_at": str(saved_source.get("last_seen_at") or ""),
+                "source_age_days": (
+                    _to_int(saved_source.get("source_age_days"), 0)
+                    if saved_source.get("source_age_days") is not None
+                    else None
+                ),
+                "freshness_status": str(saved_source.get("freshness_status") or "missing"),
+                "registry_package_name": str(saved_source.get("registry_package_name") or ""),
+                "registry_package_manager": str(saved_source.get("registry_package_manager") or ""),
                 "compatible_software_ids": _dedupe_keep_order(_to_str_list(saved_source.get("compatible_software_ids", []))),
                 "compatible_software_families": _dedupe_keep_order(_to_str_list(saved_source.get("compatible_software_families", []))),
                 "tags": _dedupe_keep_order(_to_str_list(saved_source.get("tags", []))),
@@ -515,6 +541,10 @@ def build_skills_overview(
     for source in source_rows:
         if str(source.get("status", "")) == "missing":
             warnings.append(f"source[{source.get('source_id')}] is declared but not discovered")
+        elif str(source.get("freshness_status", "")) == "stale":
+            warnings.append(
+                f"source[{source.get('source_id')}] looks stale: age={source.get('source_age_days')}d last_seen={source.get('last_seen_at')}",
+            )
     for target in deploy_rows:
         if str(target.get("drift_status", "")) == "missing_source":
             warnings.append(
@@ -541,6 +571,9 @@ def build_skills_overview(
             "source_total": len(source_rows),
             "source_bundle_total": sum(1 for item in source_rows if str(item.get("source_kind", "")) == "skill_bundle"),
             "source_missing_total": sum(1 for item in source_rows if str(item.get("status", "")) == "missing"),
+            "source_fresh_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "fresh"),
+            "source_aging_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "aging"),
+            "source_stale_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "stale"),
             "deploy_target_total": len(deploy_rows),
             "deploy_ready_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "ready"),
             "deploy_idle_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "idle"),
@@ -556,6 +589,12 @@ def build_skills_overview(
         "source_health": {
             "ready": sum(1 for item in source_rows if str(item.get("status", "")) == "ready"),
             "missing": sum(1 for item in source_rows if str(item.get("status", "")) == "missing"),
+        },
+        "source_freshness": {
+            "fresh": counts.get("source_fresh_total", 0),
+            "aging": counts.get("source_aging_total", 0),
+            "stale": counts.get("source_stale_total", 0),
+            "missing": counts.get("source_missing_total", 0),
         },
         "deploy_health": {
             "ready": counts.get("deploy_ready_total", 0),

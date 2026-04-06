@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 import sys
@@ -188,6 +190,11 @@ class InventoryCoreTests(unittest.TestCase):
             skills = snapshot["skill_rows"]
             self.assertTrue(any(row.get("auto_discovered") for row in skills))
             self.assertTrue(any(row["id"] == "manual_skill" for row in skills))
+            manual_row = next(row for row in skills if row["id"] == "manual_skill")
+            self.assertTrue(manual_row["source_exists"])
+            self.assertEqual("fresh", manual_row["freshness_status"])
+            self.assertIsInstance(manual_row["source_age_days"], int)
+            self.assertTrue(manual_row["last_seen_at"])
 
     def test_build_inventory_snapshot_with_npx_skills_mode(self) -> None:
         software_catalog = normalize_software_catalog_payload(
@@ -258,10 +265,64 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertEqual(2, compound_row["member_count"])
         self.assertEqual("skill_bundle", compound_row["skill_kind"])
         self.assertEqual("bunx @every-env/compound-plugin", compound_row["management_hint"])
+        self.assertEqual("@every-env/compound-plugin", compound_row["registry_package_name"])
+        self.assertEqual("fresh", compound_row["freshness_status"])
 
         self.assertIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["codex"])
         self.assertNotIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["claude_code"])
         self.assertEqual(6, snapshot["counts"]["skills_members_total"])
+
+    def test_build_inventory_snapshot_marks_stale_skill_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            stale_skill_dir = root / "stale_skill"
+            stale_skill_dir.mkdir(parents=True, exist_ok=True)
+            skill_md = stale_skill_dir / "SKILL.md"
+            skill_md.write_text("# stale\n", encoding="utf-8")
+            old_ts = time.time() - (45 * 24 * 60 * 60)
+            os.utime(stale_skill_dir, (old_ts, old_ts))
+            os.utime(skill_md, (old_ts, old_ts))
+
+            software_catalog = normalize_software_catalog_payload(
+                [
+                    {
+                        "id": "soft_cli",
+                        "display_name": "Soft CLI",
+                        "software_kind": "cli",
+                        "provider_key": "generic_cli",
+                        "detect_paths": [str(root)],
+                        "skill_roots": [str(root)],
+                        "enabled": True,
+                    },
+                ],
+                fallback_defaults=False,
+            )
+            skill_catalog = normalize_skill_catalog_payload(
+                [
+                    {
+                        "id": "stale_skill",
+                        "display_name": "Stale Skill",
+                        "provider_key": "generic",
+                        "source_path": str(stale_skill_dir),
+                        "compatible_software_kinds": ["cli"],
+                        "enabled": True,
+                    },
+                ],
+            )
+
+            snapshot = build_inventory_snapshot(
+                software_catalog=software_catalog,
+                skill_catalog=skill_catalog,
+                skill_bindings=[],
+                target_rows={},
+                inventory_options={"skill_management_mode": "filesystem", "auto_discover_cli": False},
+            )
+
+            stale_row = next(row for row in snapshot["skill_rows"] if row["id"] == "stale_skill")
+            self.assertTrue(stale_row["source_exists"])
+            self.assertEqual("stale", stale_row["freshness_status"])
+            self.assertGreaterEqual(stale_row["source_age_days"], 44)
+            self.assertTrue(stale_row["last_seen_at"])
 
     def test_build_inventory_snapshot_with_auto_cli_discovery(self) -> None:
         software_catalog = normalize_software_catalog_payload([], fallback_defaults=False)

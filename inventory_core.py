@@ -13,6 +13,8 @@ from typing import Any, Callable
 VALID_SOFTWARE_KINDS = {"cli", "gui", "claw", "other"}
 VALID_BINDING_SCOPES = {"global", "workspace"}
 VALID_SKILL_MANAGEMENT_MODES = {"npx", "filesystem", "hybrid"}
+SOURCE_FRESH_MAX_AGE_DAYS = 7
+SOURCE_AGING_MAX_AGE_DAYS = 30
 
 PROVIDER_DEFAULTS: dict[str, dict[str, Any]] = {
     "claude_code": {
@@ -249,6 +251,8 @@ NPX_NAMESPACE_BUNDLE_RULES = [
         "display_name": "Compound Engineering",
         "provider_key": "compound_engineering",
         "management_hint": "bunx @every-env/compound-plugin",
+        "registry_package_name": "@every-env/compound-plugin",
+        "registry_package_manager": "npm",
     },
 ]
 
@@ -544,6 +548,10 @@ def normalize_skill_catalog_payload(raw: Any) -> list[dict[str, Any]]:
                 ),
                 "tags": _to_str_list(item.get("tags")),
                 "auto_discovered": False,
+                "source_scope": str(item.get("source_scope") or "global"),
+                "management_hint": str(item.get("management_hint") or ""),
+                "registry_package_name": str(item.get("registry_package_name") or ""),
+                "registry_package_manager": str(item.get("registry_package_manager") or ""),
             },
         )
     return normalized
@@ -627,6 +635,85 @@ def _resolve_path(path_text: str) -> str:
     return str(Path(os.path.expanduser(text)).resolve())
 
 
+def _source_freshness_status(age_days: int | None, *, exists: bool) -> str:
+    if not exists:
+        return "missing"
+    if age_days is None:
+        return "fresh"
+    if age_days <= SOURCE_FRESH_MAX_AGE_DAYS:
+        return "fresh"
+    if age_days <= SOURCE_AGING_MAX_AGE_DAYS:
+        return "aging"
+    return "stale"
+
+
+def _source_last_seen_timestamp(path: Path) -> float | None:
+    try:
+        latest_ts = path.stat().st_mtime
+    except Exception:
+        return None
+    if path.is_dir():
+        skill_md = path / "SKILL.md"
+        if skill_md.exists():
+            try:
+                latest_ts = max(latest_ts, skill_md.stat().st_mtime)
+            except Exception:
+                pass
+    return latest_ts
+
+
+def _build_source_diagnostics(
+    source_path: str,
+    detect_paths: list[str] | tuple[str, ...] | None = None,
+    *,
+    now_dt: datetime,
+) -> dict[str, Any]:
+    raw_candidates = [str(source_path or "").strip()] + _to_str_list(detect_paths or [])
+    candidates = _dedupe_keep_order(
+        [_resolve_path(item) for item in raw_candidates if str(item or "").strip()],
+    )
+
+    existing_paths: list[str] = []
+    latest_ts: float | None = None
+    for candidate in candidates:
+        path = Path(candidate)
+        if not path.exists():
+            continue
+        existing_paths.append(candidate)
+        candidate_ts = _source_last_seen_timestamp(path)
+        if candidate_ts is None:
+            continue
+        if latest_ts is None or candidate_ts > latest_ts:
+            latest_ts = candidate_ts
+
+    source_exists = bool(existing_paths)
+    last_seen_at = ""
+    source_age_days: int | None = None
+    if source_exists and latest_ts is not None:
+        last_seen_dt = datetime.fromtimestamp(latest_ts, tz=timezone.utc)
+        last_seen_at = last_seen_dt.isoformat()
+        age_seconds = max(0.0, (now_dt - last_seen_dt).total_seconds())
+        source_age_days = int(age_seconds // 86400)
+
+    return {
+        "source_exists": source_exists,
+        "last_seen_at": last_seen_at,
+        "source_age_days": source_age_days,
+        "freshness_status": _source_freshness_status(source_age_days, exists=source_exists),
+    }
+
+
+def _attach_source_diagnostics(row: dict[str, Any], *, now_dt: datetime) -> dict[str, Any]:
+    diagnostics = _build_source_diagnostics(
+        str(row.get("source_path", "")).strip(),
+        row.get("detect_paths", []),
+        now_dt=now_dt,
+    )
+    row.update(diagnostics)
+    row["discovered"] = bool(row.get("discovered", False) or diagnostics["source_exists"])
+    return row
+
+
 def _display_name_from_command(command_name: str) -> str:
     text = str(command_name or "").strip()
     if not text:
@@ -703,7 +790,7 @@ def _match_npx_root_bundle(source_path: str) -> dict[str, Any] | None:
     return None
 
 
-def _build_npx_skill_row_from_raw(raw_item: dict[str, Any]) -> dict[str, Any]:
+def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime) -> dict[str, Any]:
     name = str(raw_item.get("name", "")).strip()
     source_scope = str(raw_item.get("source_scope", "global")).strip().lower() or "global"
     source_path = str(raw_item.get("source_path", "")).strip()
@@ -711,7 +798,7 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any]) -> dict[str, Any]:
     compatible_families = _map_agents_to_software_families(agents)
     tags = [f"npx-scope:{source_scope}", "npx-managed"]
     tags.extend([f"agent:{_slug(agent, default='agent')}" for agent in agents if str(agent or "").strip()])
-    return {
+    row = {
         "id": f"npx_{_slug(f'{source_scope}:{name}', default='skill')}",
         "display_name": name,
         "provider_key": "npx_skills",
@@ -729,13 +816,18 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any]) -> dict[str, Any]:
         "member_skill_preview": [name] if name else [],
         "member_skill_overflow": 0,
         "management_hint": "",
+        "registry_package_name": "",
+        "registry_package_manager": "",
     }
+    return _attach_source_diagnostics(row, now_dt=now_dt)
 
 
 def _build_npx_bundle_row(
     bundle_meta: dict[str, Any],
     scope_name: str,
     members: list[dict[str, Any]],
+    *,
+    now_dt: datetime,
 ) -> dict[str, Any]:
     scope = str(scope_name or "global").strip().lower() or "global"
     member_names = sorted(
@@ -762,7 +854,7 @@ def _build_npx_bundle_row(
     bundle_key = _slug(bundle_meta.get("bundle_key"), default="bundle")
     preview = member_names[:6]
     overflow = max(0, len(member_names) - len(preview))
-    return {
+    row = {
         "id": f"npx_bundle_{bundle_key}_{scope}",
         "display_name": str(bundle_meta.get("display_name") or bundle_key),
         "provider_key": str(bundle_meta.get("provider_key") or bundle_key),
@@ -783,7 +875,10 @@ def _build_npx_bundle_row(
         "member_skill_preview": preview,
         "member_skill_overflow": overflow,
         "management_hint": str(bundle_meta.get("management_hint", "")).strip(),
+        "registry_package_name": str(bundle_meta.get("registry_package_name") or "").strip(),
+        "registry_package_manager": str(bundle_meta.get("registry_package_manager") or "").strip(),
     }
+    return _attach_source_diagnostics(row, now_dt=now_dt)
 
 
 def _normalize_inventory_options(raw: Any) -> dict[str, Any]:
@@ -864,6 +959,7 @@ def _discover_skills_from_npx(
     include_project: bool,
     include_global: bool,
     command_runner: Callable[..., Any],
+    now_dt: datetime,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     warnings: list[str] = []
     raw_items: list[dict[str, Any]] = []
@@ -933,7 +1029,9 @@ def _discover_skills_from_npx(
 
     result_rows: list[dict[str, Any]] = []
     for group in explicit_groups.values():
-        result_rows.append(_build_npx_bundle_row(group["meta"], group["scope"], group["members"]))
+        result_rows.append(
+            _build_npx_bundle_row(group["meta"], group["scope"], group["members"], now_dt=now_dt),
+        )
 
     grouped_passthrough_keys = {
         key
@@ -944,10 +1042,12 @@ def _discover_skills_from_npx(
         if key not in grouped_passthrough_keys:
             passthrough_items.extend(group["members"])
             continue
-        result_rows.append(_build_npx_bundle_row(group["meta"], group["scope"], group["members"]))
+        result_rows.append(
+            _build_npx_bundle_row(group["meta"], group["scope"], group["members"], now_dt=now_dt),
+        )
 
     for raw_item in passthrough_items:
-        result_rows.append(_build_npx_skill_row_from_raw(raw_item))
+        result_rows.append(_build_npx_skill_row_from_raw(raw_item, now_dt=now_dt))
 
     result_rows.sort(key=lambda item: str(item.get("display_name", "")).lower())
     return result_rows, warnings
@@ -1110,6 +1210,7 @@ def _discover_skills_from_roots(
     *,
     max_depth: int = 4,
     max_hits: int = 300,
+    now_dt: datetime,
 ) -> list[dict[str, Any]]:
     discovered: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -1143,31 +1244,37 @@ def _discover_skills_from_roots(
                 skill_name = Path(current_dir).name
                 skill_id = "auto_" + hashlib.sha1(source_path.encode("utf-8")).hexdigest()[:12]
                 discovered.append(
-                    {
-                        "id": skill_id,
-                        "display_name": skill_name,
-                        "provider_key": provider_key,
-                        "skill_kind": "skill",
-                        "enabled": True,
-                        "source_path": source_path,
-                        "detect_paths": [source_path],
-                        "compatible_software_kinds": [software_kind] if software_kind in VALID_SOFTWARE_KINDS else [],
-                        "compatible_software_families": [_slug(provider_key, default="")] if provider_key else [],
-                        "tags": [software_id, "auto-discovered"],
-                        "auto_discovered": True,
-                        "discovered": True,
-                        "member_count": 1,
-                        "member_skill_preview": [skill_name],
-                        "member_skill_overflow": 0,
-                        "management_hint": "",
-                    },
+                    _attach_source_diagnostics(
+                        {
+                            "id": skill_id,
+                            "display_name": skill_name,
+                            "provider_key": provider_key,
+                            "skill_kind": "skill",
+                            "enabled": True,
+                            "source_path": source_path,
+                            "detect_paths": [source_path],
+                            "compatible_software_kinds": [software_kind] if software_kind in VALID_SOFTWARE_KINDS else [],
+                            "compatible_software_families": [_slug(provider_key, default="")] if provider_key else [],
+                            "tags": [software_id, "auto-discovered"],
+                            "auto_discovered": True,
+                            "discovered": True,
+                            "source_scope": "global",
+                            "member_count": 1,
+                            "member_skill_preview": [skill_name],
+                            "member_skill_overflow": 0,
+                            "management_hint": "",
+                            "registry_package_name": "",
+                            "registry_package_manager": "",
+                        },
+                        now_dt=now_dt,
+                    ),
                 )
                 if len(discovered) >= max_hits:
                     return discovered
     return discovered
 
 
-def _build_manual_skill_rows(skill_catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_manual_skill_rows(skill_catalog: list[dict[str, Any]], *, now_dt: datetime) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in skill_catalog:
         detect_paths = [
@@ -1180,24 +1287,30 @@ def _build_manual_skill_rows(skill_catalog: list[dict[str, Any]]) -> list[dict[s
         if not source_path and existing_paths:
             source_path = existing_paths[0]
         rows.append(
-            {
-                "id": str(item.get("id", "")),
-                "display_name": str(item.get("display_name", "")).strip() or str(item.get("id", "")),
-                "provider_key": str(item.get("provider_key", "generic")),
-                "skill_kind": str(item.get("skill_kind", "skill")),
-                "enabled": _to_bool(item.get("enabled", True), True),
-                "source_path": source_path,
-                "detect_paths": detect_paths,
-                "compatible_software_kinds": _to_str_list(item.get("compatible_software_kinds", [])),
-                "compatible_software_families": _to_str_list(item.get("compatible_software_families", [])),
-                "tags": _to_str_list(item.get("tags", [])),
-                "auto_discovered": False,
-                "discovered": bool(existing_paths or (source_path and Path(source_path).exists())),
-                "member_count": 1,
-                "member_skill_preview": [str(item.get("display_name", "")).strip() or str(item.get("id", ""))],
-                "member_skill_overflow": 0,
-                "management_hint": "",
-            },
+            _attach_source_diagnostics(
+                {
+                    "id": str(item.get("id", "")),
+                    "display_name": str(item.get("display_name", "")).strip() or str(item.get("id", "")),
+                    "provider_key": str(item.get("provider_key", "generic")),
+                    "skill_kind": str(item.get("skill_kind", "skill")),
+                    "enabled": _to_bool(item.get("enabled", True), True),
+                    "source_path": source_path,
+                    "detect_paths": detect_paths,
+                    "compatible_software_kinds": _to_str_list(item.get("compatible_software_kinds", [])),
+                    "compatible_software_families": _to_str_list(item.get("compatible_software_families", [])),
+                    "tags": _to_str_list(item.get("tags", [])),
+                    "auto_discovered": False,
+                    "discovered": bool(existing_paths or (source_path and Path(source_path).exists())),
+                    "source_scope": str(item.get("source_scope") or "global"),
+                    "member_count": 1,
+                    "member_skill_preview": [str(item.get("display_name", "")).strip() or str(item.get("id", ""))],
+                    "member_skill_overflow": 0,
+                    "management_hint": str(item.get("management_hint") or ""),
+                    "registry_package_name": str(item.get("registry_package_name") or ""),
+                    "registry_package_manager": str(item.get("registry_package_manager") or ""),
+                },
+                now_dt=now_dt,
+            ),
         )
     return rows
 
@@ -1231,7 +1344,8 @@ def build_inventory_snapshot(
     command_runner: Callable[..., Any] = subprocess.run,
 ) -> dict[str, Any]:
     options = _normalize_inventory_options(inventory_options)
-    generated_at = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    generated_at = now_dt.isoformat()
     warnings: list[str] = []
 
     runtime_software_catalog = software_catalog
@@ -1310,8 +1424,8 @@ def build_inventory_snapshot(
     skill_rows_collected: list[dict[str, Any]] = []
     skill_mode = options["skill_management_mode"]
     if skill_mode in {"filesystem", "hybrid"}:
-        manual_skill_rows = _build_manual_skill_rows(skill_catalog)
-        auto_skill_rows = _discover_skills_from_roots(software_rows)
+        manual_skill_rows = _build_manual_skill_rows(skill_catalog, now_dt=now_dt)
+        auto_skill_rows = _discover_skills_from_roots(software_rows, now_dt=now_dt)
         skill_rows_collected.extend(manual_skill_rows)
         skill_rows_collected.extend(auto_skill_rows)
     if skill_mode in {"npx", "hybrid"}:
@@ -1322,6 +1436,7 @@ def build_inventory_snapshot(
             include_project=options["npx_include_project"],
             include_global=options["npx_include_global"],
             command_runner=command_runner,
+            now_dt=now_dt,
         )
         warnings.extend(npx_warnings)
         skill_rows_collected.extend(npx_rows)
@@ -1411,6 +1526,10 @@ def build_inventory_snapshot(
         owners = sorted(skill_binding_reverse.get(skill_id, set()))
         skill["bound_software_count"] = len(owners)
         skill["bound_software_ids"] = owners
+        if str(skill.get("freshness_status", "")).strip().lower() == "stale":
+            warnings.append(
+                f"source[{skill_id}] is stale: age={skill.get('source_age_days')}d path={skill.get('source_path')}",
+            )
 
     counts = {
         "software_total": len(software_rows),
@@ -1428,6 +1547,10 @@ def build_inventory_snapshot(
             if "npx-managed" in _to_str_list(row.get("tags", []))
         ),
         "skills_members_total": sum(max(1, _to_int(row.get("member_count", 1), 1, 1)) for row in skill_rows),
+        "skills_fresh_total": sum(1 for row in skill_rows if str(row.get("freshness_status", "")) == "fresh"),
+        "skills_aging_total": sum(1 for row in skill_rows if str(row.get("freshness_status", "")) == "aging"),
+        "skills_stale_total": sum(1 for row in skill_rows if str(row.get("freshness_status", "")) == "stale"),
+        "skills_missing_total": sum(1 for row in skill_rows if str(row.get("freshness_status", "")) == "missing"),
         "bindings_total": len(binding_rows),
         "bindings_valid": valid_binding_count,
         "bindings_invalid": invalid_binding_count,

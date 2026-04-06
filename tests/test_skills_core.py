@@ -167,6 +167,45 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertFalse(overview["doctor"]["ok"])
         self.assertGreaterEqual(overview["doctor"]["warning_count"], 2)
 
+    def test_build_skills_overview_propagates_source_freshness_metadata(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["skill_rows"][0].update(
+            {
+                "source_exists": True,
+                "last_seen_at": "2026-04-06T07:58:00+00:00",
+                "source_age_days": 0,
+                "freshness_status": "fresh",
+                "registry_package_name": "@every-env/compound-plugin",
+                "registry_package_manager": "npm",
+            },
+        )
+        snapshot["skill_rows"][1].update(
+            {
+                "source_exists": False,
+                "last_seen_at": "",
+                "source_age_days": None,
+                "freshness_status": "missing",
+            },
+        )
+
+        overview = build_skills_overview(snapshot)
+
+        compound = next(
+            item
+            for item in overview["source_rows"]
+            if item["source_id"] == "npx_bundle_compound_engineering_global"
+        )
+        self.assertTrue(compound["source_exists"])
+        self.assertEqual("fresh", compound["freshness_status"])
+        self.assertEqual("@every-env/compound-plugin", compound["registry_package_name"])
+
+        self.assertEqual(1, overview["counts"]["source_fresh_total"])
+        self.assertEqual(1, overview["counts"]["source_missing_total"])
+        self.assertEqual(0, overview["counts"]["source_aging_total"])
+        self.assertEqual(0, overview["counts"]["source_stale_total"])
+        self.assertEqual(1, overview["doctor"]["source_freshness"]["fresh"])
+        self.assertEqual(1, overview["doctor"]["source_freshness"]["missing"])
+
     def test_build_skills_lock_marks_missing_target_path_and_repair_actions(self) -> None:
         snapshot = copy.deepcopy(self.inventory_snapshot)
         missing_root = Path(self._tempdir.name) / "missing-codex-skills"
