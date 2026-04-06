@@ -14,6 +14,7 @@ OneSync is an extensible software update manager plugin for AstrBot.
 - Built-in debug log panel with tabs (`All/Run/Target/Scheduler/System`).
 - WebUI config center can now read/write plugin config and sync Human/Developer target models.
 - Native `system_package` strategy for `apt_get/yum/dnf/pacman/zypper/choco/winget/brew`.
+- v1 adds a `Skills Management` panel with npx-based skill discovery, auto CLI asset discovery, compatibility filtering, and skill binding updates.
 
 ## Configuration Modes
 
@@ -39,8 +40,61 @@ WebUI capabilities:
 - `Config Center`: edit plugin settings and target definitions directly in WebUI.
 - `AI Assistant`: generate copy-ready prompts for bootstrap/add/diagnose/full-suite workflows.
 - `Guide`: built-in user and developer operation flows, plus direct doc links.
+- `Skills Management`: inspect local software assets, aggregate skills via `npx skills ls`, and save per-software compatible skill bindings.
+- The software list shows installed, skill-capable software by default; users can explicitly reveal uninstalled candidates from the panel.
+- The inventory panel supports binding scope switching (`global/workspace`) and quick selection actions (select compatible / discovered-only / clear).
+- The software snapshot area supports `CLI/GUI/CLAW/OTHER` filtering and click-to-switch selection.
 - Recent job panel and real-time debug logs.
 - UI i18n toggle (Chinese/English).
+
+### Skills Management (v1)
+
+New config fields:
+
+- `software_catalog`: base software assets (optional manual additions; PATH CLI auto-discovery can append more).
+- `skill_catalog`: optional manual skill assets (used in `filesystem/hybrid` modes).
+- `skill_bindings`: software-skill bindings (with `global/workspace` scope).
+- `skill_management_mode`: `npx / filesystem / hybrid`, default is `npx`.
+- `npx_skills_*`: command/scope/timeout controls for `npx skills ls`.
+- `auto_discover_cli*`: auto CLI discovery toggle, limit, include/exclude lists.
+
+WebUI/API endpoints:
+
+- `GET /api/inventory/overview`: latest inventory overview (software rows, skill rows, compatibility map, binding summary, scope-grouped binding map, warnings).
+- `GET /api/inventory/software`: read-only software inventory details (good for external scripts).
+- `GET /api/inventory/skills`: read-only skill inventory details (including discovery/source fields).
+- `GET /api/inventory/bindings`: read-only binding details (`binding_map` + `binding_map_by_scope`).
+- `POST /api/inventory/scan`: trigger a rescan and refresh inventory snapshot.
+- `POST /api/inventory/bindings`: save bindings with compatibility validation.
+
+Notes:
+
+- The v1 inventory layer is additive and does not replace existing update execution paths (`/api/run`, scheduler, `/updater` commands).
+- Default mode builds the skill inventory from `npx skills ls --json` (project scope) and `npx skills ls -g --json` (global scope).
+- In `npx` mode, the UI prefers package-level bundles over raw skill explosion. For example, `ce:*` is grouped as `Compound Engineering` with one maintenance command.
+- In `filesystem/hybrid` mode, skill discovery can still scan `SKILL.md` under configured `skill_roots` and merge with manual `skill_catalog`.
+
+### Stitch MCP Baseline Runner (UI Calibration)
+
+The repo includes `scripts/stitch_mcp_runner.py` for a resilient Stitch flow when generation connections are unstable: single destructive call, polling reads, and artifact download.
+
+Quick examples:
+
+```bash
+# Read-only: list projects
+python3 scripts/stitch_mcp_runner.py projects --limit 10
+
+# Baseline flow: trigger variants once, then poll
+python3 scripts/stitch_mcp_runner.py baseline \
+  --project-id 13653968230990294035 \
+  --mode variants \
+  --base-screen-id 3ed0716291bf49c4ac5ff29285fe9a2d \
+  --prompt "Refine unified software+skills dashboard hierarchy" \
+  --download new
+```
+
+For full parameters and reliability notes, see:
+- [Stitch WebUI Baseline Notes](./docs/plans/stitch-webui-baseline-2026-04-06.md)
 
 ### Embedded AI Assistant and Guide
 

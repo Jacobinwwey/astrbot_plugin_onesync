@@ -114,6 +114,94 @@ class OneSyncWebUIServer:
         async def overview():
             return self.plugin.webui_get_overview_payload()
 
+        @self.app.get("/api/inventory/overview")
+        async def inventory_overview():
+            return self.plugin.webui_get_inventory_payload()
+
+        @self.app.get("/api/skills/overview")
+        async def skills_overview():
+            return self.plugin.webui_get_skills_payload()
+
+        @self.app.get("/api/skills/sources")
+        async def skills_sources():
+            return self.plugin.webui_get_skill_sources_payload()
+
+        @self.app.get("/api/skills/sources/{source_id}")
+        async def skill_source_detail(source_id: str):
+            ret = self.plugin.webui_get_skill_source_payload(source_id)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
+        @self.app.post("/api/skills/import")
+        async def skills_import(payload: dict[str, Any]):
+            return await self.plugin.webui_import_skills(payload)
+
+        @self.app.post("/api/skills/sources/{source_id}/sync")
+        async def skill_source_sync(source_id: str, payload: dict[str, Any]):
+            _ = payload
+            ret = self.plugin.webui_sync_skill_source(source_id)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
+        @self.app.post("/api/skills/sources/{source_id}/deploy")
+        async def skill_source_deploy(source_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_deploy_skill_source(source_id, payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=400)
+            return ret
+
+        @self.app.post("/api/skills/doctor")
+        async def skills_doctor():
+            return self.plugin.webui_doctor_skills()
+
+        @self.app.get("/api/inventory/software")
+        async def inventory_software():
+            snapshot = self.plugin.webui_get_inventory_payload()
+            return {
+                "ok": bool(snapshot.get("ok", True)),
+                "generated_at": snapshot.get("generated_at"),
+                "counts": snapshot.get("counts", {}),
+                "items": snapshot.get("software_rows", []),
+                "warnings": snapshot.get("warnings", []),
+            }
+
+        @self.app.get("/api/inventory/skills")
+        async def inventory_skills():
+            snapshot = self.plugin.webui_get_inventory_payload()
+            return {
+                "ok": bool(snapshot.get("ok", True)),
+                "generated_at": snapshot.get("generated_at"),
+                "counts": snapshot.get("counts", {}),
+                "items": snapshot.get("skill_rows", []),
+                "warnings": snapshot.get("warnings", []),
+            }
+
+        @self.app.get("/api/inventory/bindings")
+        async def inventory_bindings_list():
+            snapshot = self.plugin.webui_get_inventory_payload()
+            return {
+                "ok": bool(snapshot.get("ok", True)),
+                "generated_at": snapshot.get("generated_at"),
+                "counts": snapshot.get("counts", {}),
+                "items": snapshot.get("binding_rows", []),
+                "binding_map": snapshot.get("binding_map", {}),
+                "binding_map_by_scope": snapshot.get("binding_map_by_scope", {}),
+                "warnings": snapshot.get("warnings", []),
+            }
+
+        @self.app.post("/api/inventory/scan")
+        async def inventory_scan():
+            return await self.plugin.webui_scan_inventory()
+
+        @self.app.post("/api/inventory/bindings")
+        async def inventory_bindings(payload: dict[str, Any]):
+            ret = self.plugin.webui_update_inventory_bindings(payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=400)
+            return ret
+
         @self.app.get("/api/config")
         async def get_config():
             return self.plugin.webui_get_config_payload()

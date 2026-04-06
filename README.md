@@ -13,6 +13,7 @@ OneSync 是一个面向 AstrBot 的通用可扩展软件更新器插件。
 - 支持内置 WebUI 管理端（无需改 AstrBot Dashboard 源码），提供“立即更新（当前筛选）/立即全部更新”并带确认弹窗。
 - WebUI 现已支持读取与修改插件配置（含 Human/Developer 双模式目标编辑与 `targets_json` 互相同步）。
 - 原生支持 `system_package` 策略：`apt_get/yum/dnf/pacman/zypper/choco/winget/brew`。
+- v1 新增“Skills管理”资产面板：支持 npx-based Skills 发现、CLI 资产自动发现、兼容性过滤和 Skill 绑定保存。
 
 ## 配置模式（重要）
 
@@ -68,9 +69,62 @@ WebUI 关键能力：
 - `配置中心`：在 WebUI 内直接修改插件配置、目标模式、软件列表与目标参数。
 - `AI 配置助手`：在 WebUI 内生成可直接发送给 AI 的 Prompt（初始化/增量新增/诊断/完整套件）。
 - `使用指引`：内置用户流程与开发者流程，并提供文档直达链接。
+- `Skills管理`：查看本地软件资产、基于 `npx skills ls` 汇总 Skills、按软件类型筛选可兼容 Skill 并保存绑定。
+- 软件列表默认只显示已安装且可调用 Skills 的软件；可在面板中切换显示未安装候选。
+- 统一管理面板支持绑定作用域切换（`global/workspace`）与快速选择（全选兼容 / 仅已发现 / 清空选择）。
+- 软件速览区支持按 `CLI/GUI/CLAW/OTHER` 过滤并点击卡片快速切换当前软件。
 - 两个操作均有确认弹窗，防止误触。
 - 内置 Debug 日志面板：支持多标签视图（运行/目标/调度/系统）、实时滚动、级别筛选、关键字过滤与一键清空。
 - 内置 i18n：WebUI 支持中英文切换（界面文案、按钮、筛选项、日志面板标签同步切换）。
+
+### Skills管理（v1）
+
+配置新增三组字段：
+
+- `software_catalog`：基础软件资产清单（可选手工补充，系统会额外自动发现 PATH 中 CLI）。
+- `skill_catalog`：可选手工 skill 清单（`filesystem/hybrid` 模式下参与合并）。
+- `skill_bindings`：软件与 skill 绑定关系（支持 `global/workspace` scope）。
+- `skill_management_mode`：`npx / filesystem / hybrid`，默认 `npx`。
+- `npx_skills_*`：`npx skills ls` 探测命令、范围和超时。
+- `auto_discover_cli*`：CLI 自动发现开关、数量上限与包含/排除列表。
+
+WebUI 与 API：
+
+- `GET /api/inventory/overview`：获取最新库存总览（软件行、skill 行、兼容矩阵、绑定摘要、按 `scope` 分组绑定映射、告警）。
+- `GET /api/inventory/software`：只读软件资产明细（适合外部脚本快速拉取本机软件状态）。
+- `GET /api/inventory/skills`：只读 Skill 资产明细（含发现状态与来源路径）。
+- `GET /api/inventory/bindings`：只读绑定明细（含 `binding_map` 与 `binding_map_by_scope`）。
+- `POST /api/inventory/scan`：触发重新扫描并刷新 inventory 快照。
+- `POST /api/inventory/bindings`：保存绑定；会执行软件-技能兼容性校验。
+
+说明：
+
+- v1 资产层是增量能力，不替代现有更新执行链路（`/api/run`、调度器、`/updater` 命令保持不变）。
+- 默认模式使用 `npx skills ls --json`（项目级）与 `npx skills ls -g --json`（全局级）构建 Skills 资产。
+- npx 模式下会优先按“可统一维护的技能包”聚合展示，而不是逐条展开所有 skill。比如 `ce:*` 会折叠成 `Compound Engineering`，并提示统一维护命令。
+- `filesystem/hybrid` 模式下，仍支持从 `skill_roots` 扫描 `SKILL.md` 并与手工 `skill_catalog` 合并去重。
+
+### Stitch MCP 基线脚本（前端校正）
+
+仓库提供 `scripts/stitch_mcp_runner.py`，用于在 Stitch 链路不稳定时做“单次生成 + 轮询读取 + 资源下载”。
+
+快速示例：
+
+```bash
+# 只读：列出项目
+python3 scripts/stitch_mcp_runner.py projects --limit 10
+
+# 基线流程：发起一次 variants 并轮询
+python3 scripts/stitch_mcp_runner.py baseline \
+  --project-id 13653968230990294035 \
+  --mode variants \
+  --base-screen-id 3ed0716291bf49c4ac5ff29285fe9a2d \
+  --prompt "Refine unified software+skills dashboard hierarchy" \
+  --download new
+```
+
+更多参数与稳定性策略见：
+- [Stitch WebUI 基线记录](./docs/plans/stitch-webui-baseline-2026-04-06.md)
 
 ### WebUI 内嵌 AI 助手与使用指引
 
