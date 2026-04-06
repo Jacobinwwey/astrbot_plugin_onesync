@@ -2353,7 +2353,8 @@
         inventory_no_skills: "暂无 Skill 数据",
         inventory_no_compatible: "当前软件暂无可兼容 Skill。",
         inventory_summary_scope: "作用域={scope}",
-        inventory_summary_software: "软件={total} 已安装={installed} 已纳管={managed}",
+        inventory_summary_software: "软件(可见/候选)={visible}/{total} 已安装={installed} 已纳管={managed}",
+        inventory_summary_candidates: "隐藏未安装候选={count}",
         inventory_summary_skills: "Source={total} 展开成员={members} 已发现={discovered}",
         inventory_summary_compatible: "可部署={total} 已选择={selected}",
         inventory_summary_bindings: "绑定(有效/无效)={valid}/{invalid}",
@@ -2669,7 +2670,8 @@
         inventory_no_skills: "No skill data",
         inventory_no_compatible: "No compatible skills for this software.",
         inventory_summary_scope: "scope={scope}",
-        inventory_summary_software: "software={total} installed={installed} managed={managed}",
+        inventory_summary_software: "software(visible/eligible)={visible}/{total} installed={installed} managed={managed}",
+        inventory_summary_candidates: "hidden uninstalled candidates={count}",
         inventory_summary_skills: "sources={total} members={members} discovered={discovered}",
         inventory_summary_compatible: "deployable={total} selected={selected}",
         inventory_summary_bindings: "bindings(valid/invalid)={valid}/{invalid}",
@@ -3513,6 +3515,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const currentTargetId = `${selectedSoftwareId}:${bindingScope}`;
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
+      const hiddenUninstalledCandidates = Math.max(0, skillCapableRows.length - softwareRows.length);
       const compatibleSkillIds = new Set(
         Array.isArray(compatibility[selectedSoftwareId]) ? compatibility[selectedSoftwareId] : [],
       );
@@ -3699,7 +3702,8 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const summaryLines = [
         t("inventory_summary_scope", { scope: scopeLabel }),
         t("inventory_summary_software", {
-          total: softwareRows.length,
+          visible: softwareRows.length,
+          total: skillCapableRows.length,
           installed: filteredInstalled,
           managed: filteredManaged,
         }),
@@ -3723,6 +3727,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           repairable: counts.deploy_repairable_total || 0,
         }),
       ];
+      if (!showUninstalled && hiddenUninstalledCandidates > 0) {
+        summaryLines.push(t("inventory_summary_candidates", { count: hiddenUninstalledCandidates }));
+      }
       if (warnings.length) {
         summaryLines.push(t("inventory_summary_warnings", { count: warnings.length }));
       }

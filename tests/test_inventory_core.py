@@ -26,6 +26,27 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertIn("claude_code", ids)
         self.assertIn("codex", ids)
         self.assertIn("zeroclaw", ids)
+        self.assertIn("cursor_agent", ids)
+        self.assertIn("gemini_cli", ids)
+        self.assertIn("qwen_code", ids)
+        self.assertIn("windsurf", ids)
+
+    def test_software_catalog_defaults_expand_skill_capable_hosts(self) -> None:
+        rows = normalize_software_catalog_payload([], fallback_defaults=True)
+        by_id = {row["id"]: row for row in rows}
+
+        self.assertEqual("gui", by_id["cursor_agent"]["software_kind"])
+        self.assertIn("cursor-agent", by_id["cursor_agent"]["detect_commands"])
+        self.assertTrue(any("cursor" in path.lower() for path in by_id["cursor_agent"]["skill_roots"]))
+
+        self.assertEqual("cli", by_id["gemini_cli"]["software_kind"])
+        self.assertIn("gemini-cli", by_id["gemini_cli"]["detect_commands"])
+
+        self.assertEqual("cli", by_id["openhands"]["software_kind"])
+        self.assertIn("openhands", by_id["openhands"]["detect_commands"])
+
+        self.assertEqual("gui", by_id["windsurf"]["software_kind"])
+        self.assertIn("windsurf", by_id["windsurf"]["detect_commands"])
 
     def test_software_catalog_duplicate_id_raises(self) -> None:
         with self.assertRaises(ValueError):
