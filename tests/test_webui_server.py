@@ -227,6 +227,25 @@ class _FakePlugin:
             "inventory": self.inventory_snapshot,
         }
 
+    def webui_repair_all_deploy_targets(self, payload: dict) -> dict:
+        _ = payload
+        return {
+            "ok": True,
+            "repaired_target_ids": ["claude_code:global"],
+            "repairable_target_ids": ["claude_code:global"],
+            "results": [
+                {
+                    "target_id": "claude_code:global",
+                    "changes": ["drop_missing_sources"],
+                    "requested_actions": ["drop_missing_sources"],
+                },
+            ],
+            "failed_targets": [],
+            "remaining_repairable_total": 0,
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
     def webui_doctor_skills(self) -> dict:
         return {
             "ok": True,
@@ -383,6 +402,15 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, repair_resp.status_code)
         self.assertTrue(repair_resp.json()["ok"])
         self.assertEqual(["drop_missing_sources"], repair_resp.json()["changes"])
+
+        repair_all_resp = self.client.post(
+            "/api/skills/deploy-targets/repair-all",
+            json={},
+        )
+        self.assertEqual(200, repair_all_resp.status_code)
+        self.assertTrue(repair_all_resp.json()["ok"])
+        self.assertEqual(["claude_code:global"], repair_all_resp.json()["repaired_target_ids"])
+        self.assertEqual(0, repair_all_resp.json()["remaining_repairable_total"])
 
         bad_target_resp = self.client.post(
             "/api/skills/deploy-targets/missing:global",

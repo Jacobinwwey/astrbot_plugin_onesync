@@ -29,6 +29,13 @@ status: active
 - 增加 source update available / stale age
 - 增加更清晰的 target path / projection 健康诊断
 
+### 2026-04-06 已落地增量
+- Source freshness / stale age 诊断
+- npm-backed source sync 与 sync-all
+- deploy target 当前目标 repair
+- deploy target repair-all 批量修复
+- WebUI drift detail 面板
+
 ## 阶段 4：更广宿主生态
 - 扩更多 CLI / GUI / claw 家族
 - 增加 git source / registry source

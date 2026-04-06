@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
   <title>OneSync WebUI</title>
   <style>
     :root {
@@ -1145,6 +1146,13 @@
       gap: 8px;
     }
 
+    .inventory-repair-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     .inventory-action-pill {
       display: inline-flex;
       align-items: center;
@@ -1161,6 +1169,45 @@
       color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
+    }
+
+    .inventory-target-drift {
+      display: grid;
+      gap: 8px;
+      padding-top: 2px;
+    }
+
+    .inventory-target-drift-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .inventory-target-drift-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .inventory-target-drift-item,
+    .inventory-target-drift-empty {
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .inventory-target-drift-item {
+      border: 1px solid color-mix(in srgb, var(--warn) 28%, var(--border));
+      background: color-mix(in srgb, var(--warn) 10%, transparent);
+      color: var(--text);
+    }
+
+    .inventory-target-drift-empty {
+      border: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel) 86%, transparent);
     }
 
     .inventory-skill-list {
@@ -1641,7 +1688,10 @@
                     <div class="inventory-repair-title" id="inventoryRepairTitle">当前目标修复</div>
                     <div class="inventory-repair-note" id="inventoryRepairNote">等待最新 drift 状态...</div>
                   </div>
-                  <button id="inventoryRepairTargetBtn" class="warn" type="button">修复当前目标</button>
+                  <div class="inventory-repair-buttons">
+                    <button id="inventoryRepairAllBtn" type="button">修复全部漂移目标</button>
+                    <button id="inventoryRepairTargetBtn" class="warn" type="button">修复当前目标</button>
+                  </div>
                 </div>
                 <div class="inventory-repair-actions" id="inventoryRepairActions"></div>
               </div>
@@ -2116,7 +2166,8 @@
       inventorySyncAllRunning: false,
       inventorySaving: false,
       inventoryTargetDetail: null,
-      inventoryRepairing: false
+      inventoryRepairing: false,
+      inventoryRepairAllRunning: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -2344,6 +2395,8 @@
         inventory_refresh: "刷新资产",
         inventory_save_bindings: "保存部署选择",
         inventory_repair_target: "修复当前目标",
+        inventory_repair_all: "修复全部漂移目标",
+        inventory_repair_all_running: "批量修复中",
         inventory_loading: "正在加载资产信息...",
         inventory_software_label: "选择宿主软件",
         inventory_scope_label: "部署范围",
@@ -2385,11 +2438,20 @@
         inventory_repair_success: "目标修复完成: {actions}",
         inventory_repair_noop: "当前目标没有需要修复的漂移项。",
         inventory_repair_error: "修复当前目标失败: {msg}",
+        inventory_repair_all_success: "批量修复完成: 已处理 {count} 个目标，剩余可修复 {remaining} 个。",
+        inventory_repair_all_noop: "当前没有可批量修复的 Deploy Target。",
+        inventory_repair_all_error: "批量修复漂移目标失败: {msg}",
         inventory_drift_ok: "正常",
         inventory_drift_missing_source: "存在缺失 Source",
         inventory_drift_incompatible_selection: "存在不兼容选择",
         inventory_drift_missing_target_path: "目标目录缺失",
         inventory_drift_target_uninstalled: "宿主未安装",
+        inventory_target_drift_title: "Drift 明细",
+        inventory_target_drift_none: "当前目标没有发现需要处理的 drift 细项。",
+        inventory_target_drift_missing_sources: "缺失 Source: {ids}",
+        inventory_target_drift_incompatible_sources: "不兼容 Source: {ids}",
+        inventory_target_drift_path_missing: "目标目录缺失: {path}",
+        inventory_target_drift_uninstalled: "宿主软件未安装，当前选择无法部署。",
         inventory_source_empty: "暂无 Source / Bundle 数据",
         inventory_deploy_empty: "暂无 Deploy Target",
         inventory_kind_filter_label: "软件类型",
@@ -2677,6 +2739,8 @@
         inventory_refresh: "Refresh Inventory",
         inventory_save_bindings: "Save Deployment",
         inventory_repair_target: "Repair Current Target",
+        inventory_repair_all: "Repair All Drifted Targets",
+        inventory_repair_all_running: "Repairing All",
         inventory_loading: "Loading inventory data...",
         inventory_software_label: "Select Host",
         inventory_scope_label: "Deploy Scope",
@@ -2718,11 +2782,20 @@
         inventory_repair_success: "Target repaired: {actions}",
         inventory_repair_noop: "No repairable drift was found for the current target.",
         inventory_repair_error: "Failed to repair current target: {msg}",
+        inventory_repair_all_success: "Batch repair finished: processed {count} targets, {remaining} still repairable.",
+        inventory_repair_all_noop: "No deploy targets currently need batch repair.",
+        inventory_repair_all_error: "Failed to repair drifted targets in batch: {msg}",
         inventory_drift_ok: "healthy",
         inventory_drift_missing_source: "missing sources selected",
         inventory_drift_incompatible_selection: "incompatible sources selected",
         inventory_drift_missing_target_path: "target path missing",
         inventory_drift_target_uninstalled: "host is not installed",
+        inventory_target_drift_title: "Drift Details",
+        inventory_target_drift_none: "No actionable drift details were found for this target.",
+        inventory_target_drift_missing_sources: "Missing sources: {ids}",
+        inventory_target_drift_incompatible_sources: "Incompatible sources: {ids}",
+        inventory_target_drift_path_missing: "Missing target path: {path}",
+        inventory_target_drift_uninstalled: "The host software is not installed, so the current selection cannot be deployed.",
         inventory_source_empty: "No source or bundle data",
         inventory_deploy_empty: "No deploy target",
         inventory_kind_filter_label: "Software Kind",
@@ -2924,6 +2997,9 @@
         ? t("inventory_sync_all_running")
         : t("inventory_sync_all");
       $("inventorySaveBindingsBtn").textContent = t("inventory_save_bindings");
+      $("inventoryRepairAllBtn").textContent = state.inventoryRepairAllRunning
+        ? t("inventory_repair_all_running")
+        : t("inventory_repair_all");
       $("inventoryRepairTargetBtn").textContent = t("inventory_repair_target");
       $("inventoryRepairTitle").textContent = t("inventory_repair_title");
       $("inventoryRepairNote").textContent = t("inventory_repair_waiting");
@@ -3416,6 +3492,32 @@
       return mapping[key] || key.replace(/_/g, " ");
     }
 
+    function inventoryTargetDriftNotes(targetRow) {
+      if (!targetRow || typeof targetRow !== "object") return [];
+      const notes = [];
+      const driftStatus = String(targetRow.drift_status || "").trim().toLowerCase();
+      const targetPath = String(targetRow.target_path || "-").trim() || "-";
+      const missingSources = Array.isArray(targetRow.missing_source_ids)
+        ? targetRow.missing_source_ids.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const incompatibleSources = Array.isArray(targetRow.incompatible_source_ids)
+        ? targetRow.incompatible_source_ids.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      if (driftStatus === "target_uninstalled") {
+        notes.push(t("inventory_target_drift_uninstalled"));
+      }
+      if (driftStatus === "missing_target_path") {
+        notes.push(t("inventory_target_drift_path_missing", { path: targetPath }));
+      }
+      if (missingSources.length) {
+        notes.push(t("inventory_target_drift_missing_sources", { ids: missingSources.join(", ") }));
+      }
+      if (incompatibleSources.length) {
+        notes.push(t("inventory_target_drift_incompatible_sources", { ids: incompatibleSources.join(", ") }));
+      }
+      return notes;
+    }
+
     async function refreshSelectedDeployTargetDetail({ silent = true } = {}) {
       const targetId = getSelectedInventoryTargetId();
       if (!targetId) {
@@ -3455,6 +3557,7 @@
       const repairNoteEl = $("inventoryRepairNote");
       const repairActionsEl = $("inventoryRepairActions");
       const saveBtn = $("inventorySaveBindingsBtn");
+      const repairAllBtn = $("inventoryRepairAllBtn");
       const repairBtn = $("inventoryRepairTargetBtn");
       const selectAllBtn = $("inventorySelectAllBtn");
       const selectDiscoveredBtn = $("inventorySelectDiscoveredBtn");
@@ -3493,6 +3596,12 @@
       const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
       const deployRows = Array.isArray(overview.deploy_rows) ? overview.deploy_rows : [];
       const doctor = overview.doctor && typeof overview.doctor === "object" ? overview.doctor : {};
+      const repairableTotal = Number(counts.deploy_repairable_total) || deployRows.filter((item) => (
+        item
+        && typeof item === "object"
+        && Array.isArray(item.repair_actions)
+        && item.repair_actions.map((entry) => String(entry || "").trim()).filter(Boolean).length
+      )).length;
       const selectedTargetId = getSelectedInventoryTargetId();
       const detailTarget = state.inventoryTargetDetail && state.inventoryTargetDetail.deploy_target
         ? state.inventoryTargetDetail.deploy_target
@@ -3613,6 +3722,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
       });
       $("inventorySyncAllBtn").disabled = state.inventorySyncAllRunning;
+      repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
 
       if (!softwareRows.length) {
         const noVisibleSoftwareText = skillCapableRows.length
@@ -3632,6 +3742,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         state.inventoryTargetDetail = null;
         saveBtn.disabled = true;
         repairBtn.disabled = true;
+        repairAllBtn.disabled = true;
         selectAllBtn.disabled = true;
         selectDiscoveredBtn.disabled = true;
         clearSelectionBtn.disabled = true;
@@ -3726,6 +3837,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const repairActions = Array.isArray(selectedDeployRow.repair_actions)
           ? selectedDeployRow.repair_actions.map((item) => String(item || "").trim()).filter(Boolean)
           : [];
+        const driftNotes = inventoryTargetDriftNotes(selectedDeployRow);
         const heroTargetPath = String(selectedDeployRow.target_path || "-").trim() || "-";
         targetHeroEl.innerHTML = `
           <div class="inventory-target-top">
@@ -3772,6 +3884,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
               <div class="value">${escapeHtml(repairActions.length)}</div>
             </div>
           </div>
+          <div class="inventory-target-drift">
+            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_drift_title"))}</div>
+            <div class="inventory-target-drift-list">
+              ${driftNotes.length
+                ? driftNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">${escapeHtml(t("inventory_target_drift_none"))}</div>`}
+            </div>
+          </div>
         `;
         repairNoteEl.textContent = repairActions.length
           ? t("inventory_repair_hint", {
@@ -3781,12 +3901,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         repairActionsEl.innerHTML = repairActions.length
           ? repairActions.map((action) => `<span class="inventory-action-pill">${escapeHtml(inventoryRepairActionLabel(action))}</span>`).join("")
           : "";
-        repairBtn.disabled = !repairActions.length || state.inventoryRepairing;
+        repairBtn.disabled = !repairActions.length || state.inventoryRepairing || state.inventoryRepairAllRunning;
+        repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
       } else {
         targetHeroEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_target_empty"))}</div>`;
         repairNoteEl.textContent = t("inventory_repair_waiting");
         repairActionsEl.innerHTML = "";
         repairBtn.disabled = true;
+        repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
       }
 
       if (!compatibleSkills.length) {
@@ -4056,7 +4178,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       if (state.inventoryRepairing) return;
 
       state.inventoryRepairing = true;
-      $("inventoryRepairTargetBtn").disabled = true;
+      renderInventoryPanel();
       try {
         const result = await api(`/api/skills/deploy-targets/${encodeURIComponent(targetId)}/repair`, {
           method: "POST",
@@ -4078,7 +4200,50 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
       } finally {
         state.inventoryRepairing = false;
-        $("inventoryRepairTargetBtn").disabled = false;
+        renderInventoryPanel();
+      }
+    }
+
+    async function repairAllDeployTargets() {
+      const deployRows = Array.isArray(state.inventoryOverview && state.inventoryOverview.deploy_rows)
+        ? state.inventoryOverview.deploy_rows
+        : [];
+      const repairableTargets = deployRows.filter((item) => (
+        item
+        && typeof item === "object"
+        && Array.isArray(item.repair_actions)
+        && item.repair_actions.map((entry) => String(entry || "").trim()).filter(Boolean).length
+      ));
+      if (!repairableTargets.length) {
+        alert(t("inventory_repair_all_noop"));
+        return;
+      }
+      if (state.inventoryRepairAllRunning || state.inventoryRepairing) return;
+
+      state.inventoryRepairAllRunning = true;
+      renderInventoryPanel();
+      try {
+        const result = await api("/api/skills/deploy-targets/repair-all", {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+        const repairedTargetIds = Array.isArray(result.repaired_target_ids)
+          ? result.repaired_target_ids.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        if (repairedTargetIds.length) {
+          alert(t("inventory_repair_all_success", {
+            count: repairedTargetIds.length,
+            remaining: Number(result.remaining_repairable_total) || 0,
+          }));
+        } else {
+          alert(t("inventory_repair_all_noop"));
+        }
+      } finally {
+        state.inventoryRepairAllRunning = false;
+        renderInventoryPanel();
       }
     }
 
@@ -5309,6 +5474,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           await repairSelectedDeployTarget();
         } catch (err) {
           alert(t("inventory_repair_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryRepairAllBtn").addEventListener("click", async () => {
+        try {
+          await repairAllDeployTargets();
+        } catch (err) {
+          alert(t("inventory_repair_all_error", { msg: err.message }));
         }
       });
 

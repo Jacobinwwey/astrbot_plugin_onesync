@@ -1490,21 +1490,20 @@ class OneSyncPlugin(Star):
             "skills": updated_skills_snapshot,
         }
 
-    def webui_repair_deploy_target(self, target_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        normalized_target_id = str(target_id or "").strip()
-        if not normalized_target_id:
-            return {"ok": False, "message": "target_id is required"}
+    def _prepare_deploy_target_repair(
+        self,
+        deploy_target: dict[str, Any],
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if not isinstance(deploy_target, dict):
+            return {"ok": False, "message": "deploy_target is required"}
         if payload is not None and not isinstance(payload, dict):
             return {"ok": False, "message": "invalid payload, expected object"}
         payload = payload or {}
 
-        target_payload = self.webui_get_deploy_target_payload(normalized_target_id)
-        if not target_payload.get("ok"):
-            return target_payload
-
-        deploy_target = target_payload.get("deploy_target", {})
-        if not isinstance(deploy_target, dict):
-            return {"ok": False, "message": f"target_id not found: {normalized_target_id}"}
+        normalized_target_id = str(deploy_target.get("target_id", "")).strip()
+        if not normalized_target_id:
+            return {"ok": False, "message": "target_id is required"}
 
         available_actions = _dedupe_keep_order(_to_str_list(deploy_target.get("repair_actions", [])))
         requested_actions = _dedupe_keep_order(_to_str_list(payload.get("actions", []))) or available_actions
@@ -1545,9 +1544,37 @@ class OneSyncPlugin(Star):
                 selected_source_ids = next_source_ids
                 changes.append("drop_incompatible_sources")
 
+        return {
+            "ok": True,
+            "target_id": normalized_target_id,
+            "requested_actions": requested_actions,
+            "changes": changes,
+            "selected_source_ids": selected_source_ids,
+        }
+
+    def webui_repair_deploy_target(self, target_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        normalized_target_id = str(target_id or "").strip()
+        if not normalized_target_id:
+            return {"ok": False, "message": "target_id is required"}
+        if payload is not None and not isinstance(payload, dict):
+            return {"ok": False, "message": "invalid payload, expected object"}
+        payload = payload or {}
+
+        target_payload = self.webui_get_deploy_target_payload(normalized_target_id)
+        if not target_payload.get("ok"):
+            return target_payload
+
+        deploy_target = target_payload.get("deploy_target", {})
+        if not isinstance(deploy_target, dict):
+            return {"ok": False, "message": f"target_id not found: {normalized_target_id}"}
+
+        repair_result = self._prepare_deploy_target_repair(deploy_target, payload)
+        if not repair_result.get("ok"):
+            return repair_result
+
         manifest = self._update_saved_manifest_target_selection(
             target_id=normalized_target_id,
-            selected_source_ids=selected_source_ids,
+            selected_source_ids=_to_str_list(repair_result.get("selected_source_ids", [])),
         )
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         updated_skills_snapshot = self._skills_state().get("last_overview", {})
@@ -1562,18 +1589,103 @@ class OneSyncPlugin(Star):
             "info",
             (
                 "deploy target repaired: "
-                f"target={normalized_target_id} actions={','.join(changes or requested_actions or ['noop'])}"
+                "target="
+                f"{normalized_target_id} actions="
+                f"{','.join(_to_str_list(repair_result.get('changes', [])) or _to_str_list(repair_result.get('requested_actions', [])) or ['noop'])}"
             ),
             source="webui",
         )
         return {
             "ok": True,
-            "changes": changes,
-            "requested_actions": requested_actions,
+            "changes": _to_str_list(repair_result.get("changes", [])),
+            "requested_actions": _to_str_list(repair_result.get("requested_actions", [])),
             "manifest": manifest,
             "inventory": inventory_snapshot,
             "skills": updated_skills_snapshot,
             "deploy_target": refreshed_target or deploy_target,
+        }
+
+    def webui_repair_all_deploy_targets(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        if payload is not None and not isinstance(payload, dict):
+            return {"ok": False, "message": "invalid payload, expected object"}
+        payload = payload or {}
+
+        requested_target_ids = {
+            str(item or "").strip()
+            for item in _to_str_list(payload.get("target_ids", []))
+            if str(item or "").strip()
+        }
+        skills_snapshot = self.webui_get_skills_payload()
+        deploy_rows = [
+            item
+            for item in skills_snapshot.get("deploy_rows", [])
+            if isinstance(item, dict)
+            and _to_str_list(item.get("repair_actions", []))
+            and (
+                not requested_target_ids
+                or str(item.get("target_id", "")).strip() in requested_target_ids
+            )
+        ]
+
+        repair_results: list[dict[str, Any]] = []
+        failed_targets: list[dict[str, Any]] = []
+        repaired_target_ids: list[str] = []
+
+        for deploy_target in deploy_rows:
+            repair_result = self._prepare_deploy_target_repair(deploy_target, payload)
+            normalized_target_id = str(deploy_target.get("target_id", "")).strip()
+            if not repair_result.get("ok"):
+                failed_targets.append(
+                    {
+                        "target_id": normalized_target_id,
+                        "message": str(repair_result.get("message") or "repair failed"),
+                    },
+                )
+                continue
+
+            self._update_saved_manifest_target_selection(
+                target_id=normalized_target_id,
+                selected_source_ids=_to_str_list(repair_result.get("selected_source_ids", [])),
+            )
+            if _to_str_list(repair_result.get("changes", [])):
+                repaired_target_ids.append(normalized_target_id)
+            repair_results.append(
+                {
+                    "target_id": normalized_target_id,
+                    "changes": _to_str_list(repair_result.get("changes", [])),
+                    "requested_actions": _to_str_list(repair_result.get("requested_actions", [])),
+                },
+            )
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        updated_skills_snapshot = self._skills_state().get("last_overview", {})
+        deploy_target_index = {
+            str(item.get("target_id", "")).strip(): item
+            for item in updated_skills_snapshot.get("deploy_rows", [])
+            if isinstance(item, dict) and str(item.get("target_id", "")).strip()
+        }
+        self._push_debug_log(
+            "info" if not failed_targets else "warn",
+            (
+                "deploy targets repair-all: "
+                f"candidates={len(deploy_rows)} repaired={len(repaired_target_ids)} failed={len(failed_targets)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "inventory": inventory_snapshot,
+            "skills": updated_skills_snapshot,
+            "repairable_target_ids": [str(item.get("target_id", "")).strip() for item in deploy_rows if str(item.get("target_id", "")).strip()],
+            "repaired_target_ids": repaired_target_ids,
+            "results": repair_results,
+            "failed_targets": failed_targets,
+            "remaining_repairable_total": updated_skills_snapshot.get("counts", {}).get("deploy_repairable_total", 0),
+            "deploy_targets": [
+                deploy_target_index[target_id]
+                for target_id in repaired_target_ids
+                if target_id in deploy_target_index
+            ],
         }
 
     def webui_deploy_skill_source(self, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:

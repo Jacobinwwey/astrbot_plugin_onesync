@@ -48,6 +48,7 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - `POST /api/skills/sources/{source_id}/sync`
   - `POST /api/skills/sources/{source_id}/deploy`
   - `POST /api/skills/deploy-targets/{target_id}`
+  - `POST /api/skills/deploy-targets/repair-all`
   - `POST /api/skills/doctor`
 
 ### 3. 前端视图升级
@@ -79,6 +80,7 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - 将 manifest 反向投影到 `skill_bindings` 以维持 inventory 兼容
   - 新增 `/api/skills/*` 对应的插件方法
   - `POST /api/skills/deploy-targets/{target_id}` 支持按 target 整体更新 selected sources
+  - `POST /api/skills/deploy-targets/repair-all` 支持按当前 snapshot 批量修复 repairable targets
 - 更新 `webui_server.py`
   - 暴露新的 `/api/skills/*` 路由
 
@@ -88,6 +90,7 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - `Save Skill Bindings` 更名为 `保存部署选择`
   - 新增 source/deploy 面板与 doctor 摘要
   - 保留已验证可用的软件筛选、scope 选择、兼容 source 快速勾选
+  - 当前 Deploy Target 面板补充 drift 明细，并增加批量修复入口
 
 ## Test Plan
 - `tests/test_inventory_core.py`
