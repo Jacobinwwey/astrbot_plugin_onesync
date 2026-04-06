@@ -185,6 +185,13 @@ class _FakePlugin:
             return {"ok": False, "message": "software_ids or target_ids is required"}
         return {"ok": True, "skills": self.skills_snapshot, "inventory": self.inventory_snapshot}
 
+    def webui_update_deploy_target(self, target_id: str, payload: dict) -> dict:
+        if target_id != "claude_code:global":
+            return {"ok": False, "message": "target not found"}
+        if not isinstance(payload.get("selected_source_ids"), list):
+            return {"ok": False, "message": "selected_source_ids is required"}
+        return {"ok": True, "skills": self.skills_snapshot, "inventory": self.inventory_snapshot}
+
     def webui_doctor_skills(self) -> dict:
         return {
             "ok": True,
@@ -313,6 +320,20 @@ class WebUIServerTests(unittest.TestCase):
         doctor_resp = self.client.post("/api/skills/doctor", json={})
         self.assertEqual(200, doctor_resp.status_code)
         self.assertTrue(doctor_resp.json()["ok"])
+
+        target_resp = self.client.post(
+            "/api/skills/deploy-targets/claude_code:global",
+            json={"selected_source_ids": ["skill_cli"]},
+        )
+        self.assertEqual(200, target_resp.status_code)
+        self.assertTrue(target_resp.json()["ok"])
+
+        bad_target_resp = self.client.post(
+            "/api/skills/deploy-targets/missing:global",
+            json={"selected_source_ids": ["skill_cli"]},
+        )
+        self.assertEqual(400, bad_target_resp.status_code)
+        self.assertFalse(bad_target_resp.json()["ok"])
 
 
 if __name__ == "__main__":

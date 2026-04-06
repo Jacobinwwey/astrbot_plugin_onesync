@@ -22,7 +22,11 @@ from .inventory_core import (
     normalize_software_catalog_payload,
     replace_bindings_for_scope,
 )
-from .skills_core import build_skills_overview
+from .skills_core import (
+    build_skills_overview,
+    manifest_to_binding_rows,
+    normalize_saved_skills_manifest,
+)
 from .updater_core import (
     CheckResult,
     CommandRunner,
@@ -883,8 +887,14 @@ class OneSyncPlugin(Star):
 
         return software_catalog, skill_catalog, skill_bindings, self._inventory_runtime_options()
 
-    def _build_inventory_snapshot(self) -> dict[str, Any]:
+    def _build_inventory_snapshot(
+        self,
+        *,
+        skill_bindings_override: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         software_catalog, skill_catalog, skill_bindings, inventory_options = self._inventory_catalogs()
+        if skill_bindings_override is not None:
+            skill_bindings = normalize_skill_bindings_payload(skill_bindings_override)
         target_rows = self._target_rows_for_inventory()
         return build_inventory_snapshot(
             software_catalog=software_catalog,
@@ -894,9 +904,50 @@ class OneSyncPlugin(Star):
             inventory_options=inventory_options,
         )
 
-    def _build_skills_snapshot(self, inventory_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _build_skills_snapshot(
+        self,
+        inventory_snapshot: dict[str, Any] | None = None,
+        *,
+        saved_manifest: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         snapshot = inventory_snapshot if isinstance(inventory_snapshot, dict) else self._build_inventory_snapshot()
-        return build_skills_overview(snapshot)
+        return build_skills_overview(snapshot, saved_manifest=saved_manifest)
+
+    def _read_json_file(self, path: Path) -> Any:
+        if not path.exists():
+            return {}
+        raw = path.read_text(encoding="utf-8")
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {}
+
+    def _load_saved_skills_manifest(self) -> dict[str, Any]:
+        skills_state = self._skills_state()
+        cached = skills_state.get("saved_manifest")
+        if isinstance(cached, dict) and cached:
+            return normalize_saved_skills_manifest(cached)
+        manifest = normalize_saved_skills_manifest(self._read_json_file(self.skills_manifest_path))
+        if manifest:
+            skills_state["saved_manifest"] = manifest
+        return manifest
+
+    def _save_skills_manifest(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        normalized = normalize_saved_skills_manifest(manifest)
+        skills_state = self._skills_state()
+        skills_state["saved_manifest"] = normalized
+        self.skills_state_dir.mkdir(parents=True, exist_ok=True)
+        self._write_json_file(self.skills_manifest_path, normalized)
+        return normalized
+
+    def _sync_skill_bindings_projection(self, manifest: dict[str, Any]) -> bool:
+        projected_bindings = normalize_skill_bindings_payload(manifest_to_binding_rows(manifest))
+        current_bindings = normalize_skill_bindings_payload(self.config.get("skill_bindings", []))
+        if current_bindings == projected_bindings:
+            return False
+        self.config["skill_bindings"] = projected_bindings
+        self._persist_plugin_config()
+        return True
 
     def _write_json_file(self, path: Path, payload: Any) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -944,9 +995,14 @@ class OneSyncPlugin(Star):
                 continue
             self._write_json_file(self.skills_generated_dir / f"{target_id}.json", item)
 
-    def _refresh_skills_snapshot(self, inventory_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _refresh_skills_snapshot(
+        self,
+        inventory_snapshot: dict[str, Any] | None = None,
+        *,
+        saved_manifest: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         try:
-            skills_snapshot = self._build_skills_snapshot(inventory_snapshot)
+            skills_snapshot = self._build_skills_snapshot(inventory_snapshot, saved_manifest=saved_manifest)
         except Exception as exc:
             logger.error("[onesync] skills snapshot build failed: %s", exc)
             skills_snapshot = {
@@ -981,6 +1037,7 @@ class OneSyncPlugin(Star):
         return skills_snapshot
 
     def _refresh_inventory_snapshot(self, *, sync_skills: bool = True) -> dict[str, Any]:
+        saved_manifest = self._load_saved_skills_manifest()
         try:
             snapshot = self._build_inventory_snapshot()
         except Exception as exc:
@@ -1001,7 +1058,24 @@ class OneSyncPlugin(Star):
         inventory_state["last_snapshot"] = snapshot
         inventory_state["last_scanned_at"] = snapshot.get("generated_at", _now_iso())
         if sync_skills:
-            self._refresh_skills_snapshot(inventory_snapshot=snapshot)
+            skills_snapshot = self._refresh_skills_snapshot(
+                inventory_snapshot=snapshot,
+                saved_manifest=saved_manifest,
+            )
+            manifest = skills_snapshot.get("manifest", {})
+            if isinstance(manifest, dict) and manifest:
+                self._save_skills_manifest(manifest)
+                bindings_changed = self._sync_skill_bindings_projection(manifest)
+                if bindings_changed:
+                    snapshot = self._build_inventory_snapshot(
+                        skill_bindings_override=manifest_to_binding_rows(manifest),
+                    )
+                    inventory_state["last_snapshot"] = snapshot
+                    inventory_state["last_scanned_at"] = snapshot.get("generated_at", _now_iso())
+                    self._refresh_skills_snapshot(
+                        inventory_snapshot=snapshot,
+                        saved_manifest=manifest,
+                    )
         return snapshot
 
     def webui_get_inventory_payload(self) -> dict[str, Any]:
@@ -1098,6 +1172,111 @@ class OneSyncPlugin(Star):
         _ = snapshot
         return self.webui_get_skill_source_payload(source_id)
 
+    def _update_saved_manifest_target_selection(
+        self,
+        *,
+        target_id: str,
+        selected_source_ids: list[str],
+    ) -> dict[str, Any]:
+        normalized_target_id = str(target_id or "").strip()
+        if not normalized_target_id:
+            return {}
+        manifest = self._load_saved_skills_manifest()
+        deploy_targets = manifest.get("deploy_targets", [])
+        if not isinstance(deploy_targets, list):
+            deploy_targets = []
+
+        selected_ids = _dedupe_keep_order([
+            _normalize_inventory_id(item, default="")
+            for item in selected_source_ids
+            if _normalize_inventory_id(item, default="")
+        ])
+
+        software_id, _, scope_text = normalized_target_id.partition(":")
+        software_key = _normalize_inventory_id(software_id, default="")
+        scope = _normalize_inventory_id(scope_text or "global", default="global")
+        if scope not in {"global", "workspace"}:
+            scope = "global"
+
+        updated = False
+        for item in deploy_targets:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("target_id", "")).strip() != normalized_target_id:
+                continue
+            item["software_id"] = software_key
+            item["scope"] = scope
+            item["selected_source_ids"] = selected_ids
+            updated = True
+            break
+        if not updated:
+            deploy_targets.append(
+                {
+                    "target_id": normalized_target_id,
+                    "software_id": software_key,
+                    "scope": scope,
+                    "selected_source_ids": selected_ids,
+                },
+            )
+        manifest["deploy_targets"] = deploy_targets
+        return self._save_skills_manifest(manifest)
+
+    def webui_update_deploy_target(self, target_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized_target_id = str(target_id or "").strip()
+        if not normalized_target_id:
+            return {"ok": False, "message": "target_id is required"}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        skills_snapshot = self.webui_get_skills_payload()
+        deploy_rows = skills_snapshot.get("deploy_rows", [])
+        target = next(
+            (
+                item for item in deploy_rows
+                if isinstance(item, dict) and str(item.get("target_id", "")) == normalized_target_id
+            ),
+            None,
+        )
+        if not target:
+            return {"ok": False, "message": f"target_id not found: {normalized_target_id}"}
+
+        available_source_ids = set(_to_str_list(target.get("available_source_ids", [])))
+        requested_source_ids = _dedupe_keep_order([
+            _normalize_inventory_id(item, default="")
+            for item in _to_str_list(payload.get("selected_source_ids", []))
+            if _normalize_inventory_id(item, default="")
+        ])
+        incompatible = [item for item in requested_source_ids if item not in available_source_ids]
+        if incompatible:
+            return {
+                "ok": False,
+                "message": (
+                    "some selected_source_ids are incompatible with target "
+                    f"{normalized_target_id}: {', '.join(incompatible)}"
+                ),
+            }
+
+        manifest = self._update_saved_manifest_target_selection(
+            target_id=normalized_target_id,
+            selected_source_ids=requested_source_ids,
+        )
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        updated_skills_snapshot = self._skills_state().get("last_overview", {})
+        self._push_debug_log(
+            "info",
+            (
+                "deploy target updated: "
+                f"target={normalized_target_id} selected={','.join(requested_source_ids)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "manifest": manifest,
+            "inventory": inventory_snapshot,
+            "skills": updated_skills_snapshot,
+        }
+
     def webui_deploy_skill_source(self, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         normalized_source_id = _normalize_inventory_id(source_id, default="")
         if not normalized_source_id:
@@ -1128,11 +1307,8 @@ class OneSyncPlugin(Star):
         if not requested_software_ids:
             return {"ok": False, "message": "software_ids or target_ids is required"}
 
-        snapshot = self._build_inventory_snapshot()
+        snapshot = self.webui_get_skills_payload()
         compatibility = snapshot.get("compatibility", {})
-        current_bindings = normalize_skill_bindings_payload(self.config.get("skill_bindings", []))
-        next_bindings = list(current_bindings)
-
         for software_id in requested_software_ids:
             compatible_ids = set(_to_str_list(compatibility.get(software_id, [])))
             if normalized_source_id not in compatible_ids:
@@ -1140,27 +1316,24 @@ class OneSyncPlugin(Star):
                     "ok": False,
                     "message": f"source {normalized_source_id} is incompatible with software {software_id}",
                 }
-            exists = any(
-                str(item.get("software_id", "")) == software_id
-                and str(item.get("skill_id", "")) == normalized_source_id
-                and str(item.get("scope", "global")) == scope
-                for item in next_bindings
-                if isinstance(item, dict)
+        manifest = self._load_saved_skills_manifest()
+        for software_id in requested_software_ids:
+            target_id = f"{software_id}:{scope}"
+            current_target = next(
+                (
+                    item for item in manifest.get("deploy_targets", [])
+                    if isinstance(item, dict) and str(item.get("target_id", "")) == target_id
+                ),
+                None,
             )
-            if exists:
-                continue
-            next_bindings.append(
-                {
-                    "software_id": software_id,
-                    "skill_id": normalized_source_id,
-                    "scope": scope,
-                    "enabled": True,
-                    "settings": {},
-                },
+            next_source_ids = _dedupe_keep_order(
+                _to_str_list(current_target.get("selected_source_ids", [])) + [normalized_source_id],
+            ) if isinstance(current_target, dict) else [normalized_source_id]
+            manifest = self._update_saved_manifest_target_selection(
+                target_id=target_id,
+                selected_source_ids=next_source_ids,
             )
 
-        self.config["skill_bindings"] = normalize_skill_bindings_payload(next_bindings)
-        self._persist_plugin_config()
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         skills_snapshot = self._skills_state().get("last_overview", {})
         self._push_debug_log(
@@ -1173,6 +1346,7 @@ class OneSyncPlugin(Star):
         )
         return {
             "ok": True,
+            "manifest": manifest,
             "inventory": inventory_snapshot,
             "skills": skills_snapshot,
             "source": self.webui_get_skill_source_payload(normalized_source_id).get("source"),
@@ -1244,6 +1418,29 @@ class OneSyncPlugin(Star):
             )
 
         self.config["skill_bindings"] = next_bindings
+        manifest = self._load_saved_skills_manifest()
+        target_key = f"{software_id}:{scope}" if incoming_bindings is None else ""
+        if incoming_bindings is None and target_key:
+            manifest = self._update_saved_manifest_target_selection(
+                target_id=target_key,
+                selected_source_ids=requested_skill_ids,
+            )
+        elif incoming_bindings is not None:
+            for item in next_bindings:
+                if not isinstance(item, dict):
+                    continue
+                target_key = f"{item.get('software_id', '')}:{item.get('scope', 'global')}"
+                selected_for_target = [
+                    str(row.get("skill_id", "")).strip()
+                    for row in next_bindings
+                    if isinstance(row, dict)
+                    and str(row.get("software_id", "")).strip() == str(item.get("software_id", "")).strip()
+                    and str(row.get("scope", "global")).strip() == str(item.get("scope", "global")).strip()
+                ]
+                manifest = self._update_saved_manifest_target_selection(
+                    target_id=target_key,
+                    selected_source_ids=selected_for_target,
+                )
         self._persist_plugin_config()
         snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         skills_snapshot = self._skills_state().get("last_overview", {})
@@ -1260,6 +1457,7 @@ class OneSyncPlugin(Star):
             "skill_bindings": next_bindings,
             "inventory": snapshot,
             "skills": skills_snapshot,
+            "manifest": manifest,
         }
 
     @staticmethod

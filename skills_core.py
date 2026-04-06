@@ -90,6 +90,13 @@ def _stable_hash(payload: Any) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def _normalize_scope(value: Any, default: str = "global") -> str:
+    scope = _slug(value, default=default)
+    if scope not in VALID_DEPLOY_SCOPES:
+        scope = default
+    return scope
+
+
 def _preferred_target_path(software: dict[str, Any], scope: str) -> str:
     resolved_roots = _to_str_list(software.get("resolved_skill_roots", []))
     declared_roots = _to_str_list(software.get("declared_skill_roots", []))
@@ -101,12 +108,112 @@ def _preferred_target_path(software: dict[str, Any], scope: str) -> str:
     return candidates[0]
 
 
+def _saved_manifest_index(saved_manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    source_index: dict[str, dict[str, Any]] = {}
+    for item in saved_manifest.get("sources", []):
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("source_id", "")).strip()
+        if not source_id:
+            continue
+        source_index[source_id] = copy.deepcopy(item)
+
+    target_index: dict[str, dict[str, Any]] = {}
+    for item in saved_manifest.get("deploy_targets", []):
+        if not isinstance(item, dict):
+            continue
+        target_id = str(item.get("target_id", "")).strip()
+        if not target_id:
+            continue
+        target_index[target_id] = copy.deepcopy(item)
+    return source_index, target_index
+
+
+def normalize_saved_skills_manifest(raw: Any) -> dict[str, Any]:
+    manifest = raw if isinstance(raw, dict) else {}
+    sources: list[dict[str, Any]] = []
+    for item in manifest.get("sources", []):
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("source_id", "")).strip()
+        if not source_id:
+            continue
+        sources.append(
+            {
+                "source_id": source_id,
+                "display_name": str(item.get("display_name") or source_id),
+                "source_kind": str(item.get("source_kind") or "skill"),
+                "provider_key": str(item.get("provider_key") or "generic"),
+                "enabled": _to_bool(item.get("enabled", True), True),
+                "discovered": _to_bool(item.get("discovered", False), False),
+                "auto_discovered": _to_bool(item.get("auto_discovered", False), False),
+                "source_scope": str(item.get("source_scope") or "global"),
+                "source_path": str(item.get("source_path") or ""),
+                "member_count": _to_int(item.get("member_count", 1), 1, 1),
+                "member_skill_preview": _to_str_list(item.get("member_skill_preview", [])),
+                "member_skill_overflow": _to_int(item.get("member_skill_overflow", 0), 0, 0),
+                "management_hint": str(item.get("management_hint") or ""),
+                "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
+                "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
+                "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
+            },
+        )
+
+    deploy_targets: list[dict[str, Any]] = []
+    for item in manifest.get("deploy_targets", []):
+        if not isinstance(item, dict):
+            continue
+        target_id = str(item.get("target_id", "")).strip()
+        if not target_id:
+            continue
+        deploy_targets.append(
+            {
+                "target_id": target_id,
+                "software_id": str(item.get("software_id") or ""),
+                "scope": _normalize_scope(item.get("scope", "global")),
+                "selected_source_ids": _dedupe_keep_order(_to_str_list(item.get("selected_source_ids", []))),
+            },
+        )
+
+    return {
+        "version": _to_int(manifest.get("version", 1), 1, 1),
+        "generated_at": str(manifest.get("generated_at") or ""),
+        "sources": sources,
+        "deploy_targets": deploy_targets,
+    }
+
+
+def manifest_to_binding_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in manifest.get("deploy_targets", []):
+        if not isinstance(item, dict):
+            continue
+        software_id = str(item.get("software_id", "")).strip()
+        if not software_id:
+            continue
+        scope = _normalize_scope(item.get("scope", "global"))
+        for source_id in _dedupe_keep_order(_to_str_list(item.get("selected_source_ids", []))):
+            rows.append(
+                {
+                    "software_id": software_id,
+                    "skill_id": source_id,
+                    "scope": scope,
+                    "enabled": True,
+                    "settings": {},
+                },
+            )
+    return rows
+
+
 def build_skills_manifest(
     inventory_snapshot: dict[str, Any],
     *,
+    saved_manifest: dict[str, Any] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
+    normalized_saved_manifest = normalize_saved_skills_manifest(saved_manifest or {})
+    saved_source_index, saved_target_index = _saved_manifest_index(normalized_saved_manifest)
     software_rows = [
         copy.deepcopy(item)
         for item in inventory_snapshot.get("software_rows", [])
@@ -156,24 +263,50 @@ def build_skills_manifest(
         if not source_id:
             continue
         compatible_hosts = _dedupe_keep_order(compatible_hosts_by_source.get(source_id, []))
+        saved_source = saved_source_index.get(source_id, {})
         sources.append(
             {
                 "source_id": source_id,
-                "display_name": str(item.get("display_name") or source_id),
-                "source_kind": str(item.get("skill_kind") or "skill"),
-                "provider_key": str(item.get("provider_key") or "generic"),
-                "enabled": _to_bool(item.get("enabled", True), True),
+                "display_name": str(item.get("display_name") or saved_source.get("display_name") or source_id),
+                "source_kind": str(item.get("skill_kind") or saved_source.get("source_kind") or "skill"),
+                "provider_key": str(item.get("provider_key") or saved_source.get("provider_key") or "generic"),
+                "enabled": _to_bool(saved_source.get("enabled", item.get("enabled", True)), True),
                 "discovered": _to_bool(item.get("discovered", False), False),
                 "auto_discovered": _to_bool(item.get("auto_discovered", False), False),
-                "source_scope": str(item.get("source_scope") or "global"),
-                "source_path": str(item.get("source_path") or ""),
-                "member_count": _to_int(item.get("member_count", 1), 1, 1),
-                "member_skill_preview": _to_str_list(item.get("member_skill_preview", [])),
-                "member_skill_overflow": _to_int(item.get("member_skill_overflow", 0), 0, 0),
-                "management_hint": str(item.get("management_hint") or ""),
+                "source_scope": str(item.get("source_scope") or saved_source.get("source_scope") or "global"),
+                "source_path": str(item.get("source_path") or saved_source.get("source_path") or ""),
+                "member_count": _to_int(item.get("member_count", saved_source.get("member_count", 1)), 1, 1),
+                "member_skill_preview": _to_str_list(item.get("member_skill_preview", []) or saved_source.get("member_skill_preview", [])),
+                "member_skill_overflow": _to_int(item.get("member_skill_overflow", saved_source.get("member_skill_overflow", 0)), 0, 0),
+                "management_hint": str(item.get("management_hint") or saved_source.get("management_hint") or ""),
                 "compatible_software_ids": compatible_hosts,
-                "compatible_software_families": _to_str_list(item.get("compatible_software_families", [])),
-                "tags": _to_str_list(item.get("tags", [])),
+                "compatible_software_families": _to_str_list(item.get("compatible_software_families", []) or saved_source.get("compatible_software_families", [])),
+                "tags": _dedupe_keep_order(_to_str_list(item.get("tags", [])) + _to_str_list(saved_source.get("tags", []))),
+            },
+        )
+
+    discovered_source_ids = {str(item.get("source_id", "")).strip() for item in sources}
+    for source_id, saved_source in saved_source_index.items():
+        if source_id in discovered_source_ids:
+            continue
+        sources.append(
+            {
+                "source_id": source_id,
+                "display_name": str(saved_source.get("display_name") or source_id),
+                "source_kind": str(saved_source.get("source_kind") or "skill"),
+                "provider_key": str(saved_source.get("provider_key") or "generic"),
+                "enabled": _to_bool(saved_source.get("enabled", True), True),
+                "discovered": False,
+                "auto_discovered": _to_bool(saved_source.get("auto_discovered", False), False),
+                "source_scope": str(saved_source.get("source_scope") or "global"),
+                "source_path": str(saved_source.get("source_path") or ""),
+                "member_count": _to_int(saved_source.get("member_count", 1), 1, 1),
+                "member_skill_preview": _to_str_list(saved_source.get("member_skill_preview", [])),
+                "member_skill_overflow": _to_int(saved_source.get("member_skill_overflow", 0), 0, 0),
+                "management_hint": str(saved_source.get("management_hint") or ""),
+                "compatible_software_ids": _dedupe_keep_order(_to_str_list(saved_source.get("compatible_software_ids", []))),
+                "compatible_software_families": _dedupe_keep_order(_to_str_list(saved_source.get("compatible_software_families", []))),
+                "tags": _dedupe_keep_order(_to_str_list(saved_source.get("tags", []))),
             },
         )
 
@@ -181,12 +314,18 @@ def build_skills_manifest(
     for host in software_hosts:
         software_id = str(host.get("id", ""))
         for scope in VALID_DEPLOY_SCOPES:
-            selected_ids = _dedupe_keep_order(
+            target_id = f"{software_id}:{scope}"
+            selected_from_inventory = _dedupe_keep_order(
                 _to_str_list(binding_map_by_scope.get(scope, {}).get(software_id, [])),
+            )
+            saved_target = saved_target_index.get(target_id, {})
+            selected_ids = _dedupe_keep_order(
+                _to_str_list(saved_target.get("selected_source_ids", []))
+                or selected_from_inventory,
             )
             deploy_targets.append(
                 {
-                    "target_id": f"{software_id}:{scope}",
+                    "target_id": target_id,
                     "software_id": software_id,
                     "software_display_name": str(host.get("display_name") or software_id),
                     "software_family": str(host.get("software_family") or software_id),
@@ -205,7 +344,7 @@ def build_skills_manifest(
         "version": 1,
         "generated_at": ts,
         "software_hosts": software_hosts,
-        "sources": sources,
+        "sources": sorted(sources, key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("source_id", "")).lower())),
         "deploy_targets": deploy_targets,
     }
 
@@ -309,10 +448,11 @@ def build_skills_lock(
 def build_skills_overview(
     inventory_snapshot: dict[str, Any],
     *,
+    saved_manifest: dict[str, Any] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
-    manifest = build_skills_manifest(inventory_snapshot, generated_at=ts)
+    manifest = build_skills_manifest(inventory_snapshot, saved_manifest=saved_manifest, generated_at=ts)
     lock = build_skills_lock(manifest, inventory_snapshot, generated_at=ts)
 
     source_rows = [

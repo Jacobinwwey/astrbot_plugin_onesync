@@ -2081,7 +2081,7 @@
         inventory_skill_source_auto: "自动发现",
         inventory_skill_source_manual: "手工配置",
         inventory_skill_source_bundle: "npx 聚合包",
-        inventory_save_error: "保存 Skill 绑定失败: {msg}",
+        inventory_save_error: "保存部署选择失败: {msg}",
         inventory_scan_error: "刷新资产失败: {msg}",
         inventory_doctor_error: "健康检查失败: {msg}",
         inventory_deploy_meta_scope: "范围",
@@ -2372,7 +2372,7 @@
         inventory_deploy_meta_available: "available",
         inventory_deploy_meta_path: "target_path",
         inventory_deploy_meta_drift: "drift",
-        inventory_save_error: "Failed to save skill bindings: {msg}",
+        inventory_save_error: "Failed to save deployment selection: {msg}",
         inventory_scan_error: "Failed to refresh inventory: {msg}",
       },
     };
@@ -3277,12 +3277,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       state.inventorySaving = true;
       $("inventorySaveBindingsBtn").disabled = true;
       try {
+        const scope = normalizeInventoryScope(state.inventorySelectedScope);
+        const targetId = `${softwareId}:${scope}`;
         const payload = {
-          software_id: softwareId,
-          skill_ids: state.inventoryDraftSkillIds,
-          scope: normalizeInventoryScope(state.inventorySelectedScope),
+          selected_source_ids: state.inventoryDraftSkillIds,
         };
-        const result = await api("/api/inventory/bindings", {
+        const result = await api(`/api/skills/deploy-targets/${encodeURIComponent(targetId)}`, {
           method: "POST",
           body: JSON.stringify(payload),
         });
