@@ -569,6 +569,10 @@ def build_skills_overview(
             warnings.append(
                 f"source[{source.get('source_id')}] looks stale: age={source.get('source_age_days')}d last_seen={source.get('last_seen_at')}",
             )
+        if str(source.get("sync_status", "")) == "error":
+            warnings.append(
+                f"source[{source.get('source_id')}] sync failed: {source.get('sync_message')}",
+            )
     for target in deploy_rows:
         if str(target.get("drift_status", "")) == "missing_source":
             warnings.append(
@@ -598,6 +602,21 @@ def build_skills_overview(
             "source_fresh_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "fresh"),
             "source_aging_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "aging"),
             "source_stale_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "stale"),
+            "source_syncable_total": sum(
+                1
+                for item in source_rows
+                if str(item.get("registry_package_name", "")).strip()
+                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+            ),
+            "source_synced_total": sum(1 for item in source_rows if str(item.get("sync_status", "")) == "ok"),
+            "source_sync_error_total": sum(1 for item in source_rows if str(item.get("sync_status", "")) == "error"),
+            "source_sync_pending_total": sum(
+                1
+                for item in source_rows
+                if str(item.get("registry_package_name", "")).strip()
+                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+                and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
+            ),
             "deploy_target_total": len(deploy_rows),
             "deploy_ready_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "ready"),
             "deploy_idle_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "idle"),
@@ -619,6 +638,12 @@ def build_skills_overview(
             "aging": counts.get("source_aging_total", 0),
             "stale": counts.get("source_stale_total", 0),
             "missing": counts.get("source_missing_total", 0),
+        },
+        "source_sync": {
+            "syncable": counts.get("source_syncable_total", 0),
+            "ok": counts.get("source_synced_total", 0),
+            "error": counts.get("source_sync_error_total", 0),
+            "pending": counts.get("source_sync_pending_total", 0),
         },
         "deploy_health": {
             "ready": counts.get("deploy_ready_total", 0),

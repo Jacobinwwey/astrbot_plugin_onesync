@@ -1260,6 +1260,64 @@ class OneSyncPlugin(Star):
             "sync": sync_record,
         }
 
+    def webui_sync_all_skill_sources(self) -> dict[str, Any]:
+        skills_snapshot = self.webui_get_skills_payload()
+        source_rows = [
+            item
+            for item in skills_snapshot.get("source_rows", [])
+            if isinstance(item, dict)
+        ]
+        syncable_sources = [
+            item
+            for item in source_rows
+            if str(item.get("registry_package_name", "")).strip()
+            and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+        ]
+
+        synced_source_ids: list[str] = []
+        failed_sources: list[dict[str, Any]] = []
+        manifest = self._load_saved_skills_manifest()
+
+        for source in syncable_sources:
+            source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            sync_record = build_source_sync_record(source)
+            manifest = self._update_saved_manifest_source_metadata(
+                source_id=source_id,
+                source_payload=source,
+                sync_payload=sync_record,
+            )
+            if str(sync_record.get("sync_status") or "") == "ok":
+                synced_source_ids.append(source_id)
+            else:
+                failed_sources.append(
+                    {
+                        "source_id": source_id,
+                        "sync_status": str(sync_record.get("sync_status") or ""),
+                        "sync_message": str(sync_record.get("sync_message") or ""),
+                    },
+                )
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        self._push_debug_log(
+            "info" if not failed_sources else "warn",
+            (
+                "skill source batch sync: "
+                f"syncable={len(syncable_sources)} ok={len(synced_source_ids)} failed={len(failed_sources)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "manifest": manifest,
+            "inventory": inventory_snapshot,
+            "skills": refreshed_skills_snapshot,
+            "synced_source_ids": synced_source_ids,
+            "failed_sources": failed_sources,
+        }
+
     def _update_saved_manifest_source_metadata(
         self,
         *,

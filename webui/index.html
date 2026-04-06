@@ -1590,6 +1590,7 @@
             </div>
             <div class="modal-actions">
               <button id="inventoryRefreshBtn">刷新资产</button>
+              <button id="inventorySyncAllBtn">同步全部 Source</button>
             </div>
           </div>
           <p class="inventory-summary" id="inventorySummary">正在加载资产信息...</p>
@@ -2112,6 +2113,7 @@
       inventoryVisibleCompatibleSkillIds: [],
       inventoryVisibleDiscoveredSkillIds: [],
       inventorySyncingSourceIds: [],
+      inventorySyncAllRunning: false,
       inventorySaving: false,
       inventoryTargetDetail: null,
       inventoryRepairing: false
@@ -2355,8 +2357,10 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "健康检查",
         inventory_doctor_waiting: "等待最新状态...",
-        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | 新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | 新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | 同步(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
         inventory_selection_note: "按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 ce:* Skill 单独展开。",
+        inventory_sync_all: "同步全部 Source",
+        inventory_sync_all_running: "同步中",
         inventory_target_empty: "等待选择宿主软件...",
         inventory_target_kicker: "当前 Deploy Target",
         inventory_target_scope_host: "{host} · {scope}",
@@ -2407,6 +2411,7 @@
         inventory_summary_candidates: "隐藏未安装候选={count}",
         inventory_summary_skills: "Source={total} 展开成员={members} 已发现={discovered}",
         inventory_summary_freshness: "新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{missing}",
+        inventory_summary_sync: "同步(syncable/ok/error/pending)={syncable}/{ok}/{error}/{pending}",
         inventory_summary_compatible: "可部署={total} 已选择={selected}",
         inventory_summary_bindings: "绑定(有效/无效)={valid}/{invalid}",
         inventory_summary_deploy: "Deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
@@ -2438,6 +2443,7 @@
         inventory_source_sync: "同步源",
         inventory_source_syncing: "同步中",
         inventory_sync_pending: "未同步",
+        inventory_sync_all_error: "批量同步 Source 失败: {msg}",
         inventory_save_error: "保存部署选择失败: {msg}",
         inventory_sync_error: "同步 Source 失败: {msg}",
         inventory_scan_error: "刷新资产失败: {msg}",
@@ -2684,8 +2690,10 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "Doctor",
         inventory_doctor_waiting: "Waiting for latest status...",
-        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Sync(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
         inventory_selection_note: "Manage by source package. Compound Engineering appears as one bundle instead of expanding every ce:* skill.",
+        inventory_sync_all: "Sync All Sources",
+        inventory_sync_all_running: "Syncing",
         inventory_target_empty: "Select a host to inspect the current deploy target.",
         inventory_target_kicker: "Current Deploy Target",
         inventory_target_scope_host: "{host} · {scope}",
@@ -2736,6 +2744,7 @@
         inventory_summary_candidates: "hidden uninstalled candidates={count}",
         inventory_summary_skills: "sources={total} members={members} discovered={discovered}",
         inventory_summary_freshness: "freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{missing}",
+        inventory_summary_sync: "sync(syncable/ok/error/pending)={syncable}/{ok}/{error}/{pending}",
         inventory_summary_compatible: "deployable={total} selected={selected}",
         inventory_summary_bindings: "bindings(valid/invalid)={valid}/{invalid}",
         inventory_summary_deploy: "deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
@@ -2767,6 +2776,7 @@
         inventory_source_sync: "Sync Source",
         inventory_source_syncing: "Syncing",
         inventory_sync_pending: "unsynced",
+        inventory_sync_all_error: "Failed to sync all sources: {msg}",
         inventory_doctor_error: "Doctor check failed: {msg}",
         inventory_deploy_meta_scope: "scope",
         inventory_deploy_meta_status: "status",
@@ -2910,6 +2920,9 @@
       $("inventoryTitle").textContent = t("inventory_title");
       $("inventoryHeadNote").textContent = t("inventory_head_note");
       $("inventoryRefreshBtn").textContent = t("inventory_refresh");
+      $("inventorySyncAllBtn").textContent = state.inventorySyncAllRunning
+        ? t("inventory_sync_all_running")
+        : t("inventory_sync_all");
       $("inventorySaveBindingsBtn").textContent = t("inventory_save_bindings");
       $("inventoryRepairTargetBtn").textContent = t("inventory_repair_target");
       $("inventoryRepairTitle").textContent = t("inventory_repair_title");
@@ -3590,11 +3603,16 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         aging: doctor.source_freshness && doctor.source_freshness.aging || 0,
         stale: doctor.source_freshness && doctor.source_freshness.stale || 0,
         fresh_missing: doctor.source_freshness && doctor.source_freshness.missing || 0,
+        syncable: doctor.source_sync && doctor.source_sync.syncable || 0,
+        sync_ok: doctor.source_sync && doctor.source_sync.ok || 0,
+        sync_error: doctor.source_sync && doctor.source_sync.error || 0,
+        sync_pending: doctor.source_sync && doctor.source_sync.pending || 0,
         deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
         deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
         deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
         deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
       });
+      $("inventorySyncAllBtn").disabled = state.inventorySyncAllRunning;
 
       if (!softwareRows.length) {
         const noVisibleSoftwareText = skillCapableRows.length
@@ -3864,6 +3882,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           stale: counts.source_stale_total || counts.skills_stale_total || 0,
           missing: counts.source_missing_total || counts.skills_missing_total || 0,
         }),
+        t("inventory_summary_sync", {
+          syncable: counts.source_syncable_total || 0,
+          ok: counts.source_synced_total || 0,
+          error: counts.source_sync_error_total || 0,
+          pending: counts.source_sync_pending_total || 0,
+        }),
         t("inventory_summary_compatible", {
           total: state.inventoryVisibleCompatibleSkillIds.length,
           selected: state.inventoryDraftSkillIds.length,
@@ -3930,6 +3954,26 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         );
         nextSyncing.delete(normalizedSourceId);
         state.inventorySyncingSourceIds = [...nextSyncing];
+        renderInventoryPanel();
+      }
+    }
+
+    async function syncAllInventorySources() {
+      if (state.inventorySyncAllRunning) {
+        return;
+      }
+      state.inventorySyncAllRunning = true;
+      renderInventoryPanel();
+      try {
+        const result = await api("/api/skills/sources/sync-all", {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+      } finally {
+        state.inventorySyncAllRunning = false;
         renderInventoryPanel();
       }
     }
@@ -4053,6 +4097,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           aging: doctor.source_freshness && doctor.source_freshness.aging || 0,
           stale: doctor.source_freshness && doctor.source_freshness.stale || 0,
           fresh_missing: doctor.source_freshness && doctor.source_freshness.missing || 0,
+          syncable: doctor.source_sync && doctor.source_sync.syncable || 0,
+          sync_ok: doctor.source_sync && doctor.source_sync.ok || 0,
+          sync_error: doctor.source_sync && doctor.source_sync.error || 0,
+          sync_pending: doctor.source_sync && doctor.source_sync.pending || 0,
           deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
           deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
           deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
@@ -5237,6 +5285,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           await loadInventory({ force: true });
         } catch (err) {
           alert(t("inventory_scan_error", { msg: err.message }));
+        }
+      });
+
+      $("inventorySyncAllBtn").addEventListener("click", async () => {
+        try {
+          await syncAllInventorySources();
+        } catch (err) {
+          alert(t("inventory_sync_all_error", { msg: err.message }));
         }
       });
 

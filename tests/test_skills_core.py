@@ -236,6 +236,41 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("2026-04-06T08:05:00+00:00", compound["sync_checked_at"])
         self.assertEqual("https://github.com/every-env/compound-plugin", compound["registry_homepage"])
 
+    def test_build_skills_overview_summarizes_source_sync_health(self) -> None:
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_bundle_compound_engineering_global",
+                    "registry_package_name": "@every-env/compound-plugin",
+                    "registry_package_manager": "npm",
+                    "sync_status": "ok",
+                    "sync_checked_at": "2026-04-06T08:05:00+00:00",
+                    "registry_latest_version": "2.62.1",
+                },
+                {
+                    "source_id": "npx_global_find_skills",
+                    "registry_package_name": "@demo/find-skills-pack",
+                    "registry_package_manager": "npm",
+                    "sync_status": "error",
+                    "sync_checked_at": "2026-04-06T08:06:00+00:00",
+                    "sync_message": "registry timeout",
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_manifest=saved_manifest)
+
+        self.assertEqual(2, overview["counts"]["source_syncable_total"])
+        self.assertEqual(1, overview["counts"]["source_synced_total"])
+        self.assertEqual(1, overview["counts"]["source_sync_error_total"])
+        self.assertEqual(0, overview["counts"]["source_sync_pending_total"])
+        self.assertEqual(2, overview["doctor"]["source_sync"]["syncable"])
+        self.assertEqual(1, overview["doctor"]["source_sync"]["ok"])
+        self.assertEqual(1, overview["doctor"]["source_sync"]["error"])
+        self.assertIn("registry timeout", "\n".join(overview["warnings"]))
+
     def test_build_skills_lock_marks_missing_target_path_and_repair_actions(self) -> None:
         snapshot = copy.deepcopy(self.inventory_snapshot)
         missing_root = Path(self._tempdir.name) / "missing-codex-skills"

@@ -183,6 +183,15 @@ class _FakePlugin:
     def webui_sync_skill_source(self, source_id: str) -> dict:
         return self.webui_get_skill_source_payload(source_id)
 
+    def webui_sync_all_skill_sources(self) -> dict:
+        return {
+            "ok": True,
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+            "synced_source_ids": ["skill_cli"],
+            "failed_sources": [],
+        }
+
     def webui_deploy_skill_source(self, source_id: str, payload: dict) -> dict:
         if source_id != "skill_cli":
             return {"ok": False, "message": "not found"}
@@ -336,6 +345,11 @@ class WebUIServerTests(unittest.TestCase):
         sync_resp = self.client.post("/api/skills/sources/skill_cli/sync", json={})
         self.assertEqual(200, sync_resp.status_code)
         self.assertTrue(sync_resp.json()["ok"])
+
+        sync_all_resp = self.client.post("/api/skills/sources/sync-all", json={})
+        self.assertEqual(200, sync_all_resp.status_code)
+        self.assertTrue(sync_all_resp.json()["ok"])
+        self.assertEqual(["skill_cli"], sync_all_resp.json()["synced_source_ids"])
 
         deploy_resp = self.client.post(
             "/api/skills/sources/skill_cli/deploy",

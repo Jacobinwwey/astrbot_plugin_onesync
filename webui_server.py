@@ -152,6 +152,14 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
+        @self.app.post("/api/skills/sources/sync-all")
+        async def skill_source_sync_all(payload: dict[str, Any]):
+            _ = payload
+            ret = self.plugin.webui_sync_all_skill_sources()
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=400)
+            return ret
+
         @self.app.post("/api/skills/sources/{source_id}/deploy")
         async def skill_source_deploy(source_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_deploy_skill_source(source_id, payload)
