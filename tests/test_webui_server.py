@@ -124,8 +124,13 @@ class _FakePlugin:
                     "software_display_name": "Claude Code",
                     "scope": "global",
                     "status": "ready",
+                    "drift_status": "ok",
                     "selected_source_ids": ["skill_cli"],
                     "available_source_ids": ["skill_cli"],
+                    "ready_source_ids": ["skill_cli"],
+                    "missing_source_ids": [],
+                    "incompatible_source_ids": [],
+                    "repair_actions": [],
                 },
             ],
             "software_hosts": [
@@ -191,6 +196,27 @@ class _FakePlugin:
         if not isinstance(payload.get("selected_source_ids"), list):
             return {"ok": False, "message": "selected_source_ids is required"}
         return {"ok": True, "skills": self.skills_snapshot, "inventory": self.inventory_snapshot}
+
+    def webui_get_deploy_target_payload(self, target_id: str) -> dict:
+        if target_id != "claude_code:global":
+            return {"ok": False, "message": "target not found"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "deploy_target": self.skills_snapshot["deploy_rows"][0],
+            "warnings": [],
+        }
+
+    def webui_repair_deploy_target(self, target_id: str, payload: dict) -> dict:
+        if target_id != "claude_code:global":
+            return {"ok": False, "message": "target not found"}
+        return {
+            "ok": True,
+            "changes": ["drop_missing_sources"],
+            "deploy_target": self.skills_snapshot["deploy_rows"][0],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
 
     def webui_doctor_skills(self) -> dict:
         return {
@@ -294,6 +320,14 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, detail_resp.status_code)
         self.assertEqual("skill_cli", detail_resp.json()["source"]["source_id"])
 
+        target_detail_resp = self.client.get("/api/skills/deploy-targets/claude_code:global")
+        self.assertEqual(200, target_detail_resp.status_code)
+        self.assertEqual("claude_code:global", target_detail_resp.json()["deploy_target"]["target_id"])
+
+        missing_target_detail_resp = self.client.get("/api/skills/deploy-targets/missing:global")
+        self.assertEqual(404, missing_target_detail_resp.status_code)
+        self.assertFalse(missing_target_detail_resp.json()["ok"])
+
     def test_skills_mutation_routes_return_expected_statuses(self) -> None:
         import_resp = self.client.post("/api/skills/import", json={})
         self.assertEqual(200, import_resp.status_code)
@@ -328,12 +362,27 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, target_resp.status_code)
         self.assertTrue(target_resp.json()["ok"])
 
+        repair_resp = self.client.post(
+            "/api/skills/deploy-targets/claude_code:global/repair",
+            json={},
+        )
+        self.assertEqual(200, repair_resp.status_code)
+        self.assertTrue(repair_resp.json()["ok"])
+        self.assertEqual(["drop_missing_sources"], repair_resp.json()["changes"])
+
         bad_target_resp = self.client.post(
             "/api/skills/deploy-targets/missing:global",
             json={"selected_source_ids": ["skill_cli"]},
         )
         self.assertEqual(400, bad_target_resp.status_code)
         self.assertFalse(bad_target_resp.json()["ok"])
+
+        bad_repair_resp = self.client.post(
+            "/api/skills/deploy-targets/missing:global/repair",
+            json={},
+        )
+        self.assertEqual(400, bad_repair_resp.status_code)
+        self.assertFalse(bad_repair_resp.json()["ok"])
 
 
 if __name__ == "__main__":

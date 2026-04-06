@@ -1128,6 +1128,49 @@ class OneSyncPlugin(Star):
             "warnings": snapshot.get("warnings", []),
         }
 
+    def webui_get_deploy_target_payload(self, target_id: str) -> dict[str, Any]:
+        normalized_target_id = str(target_id or "").strip()
+        if not normalized_target_id:
+            return {"ok": False, "message": "target_id is required"}
+
+        snapshot = self.webui_get_skills_payload()
+        deploy_rows = snapshot.get("deploy_rows", [])
+        deploy_target = next(
+            (
+                item for item in deploy_rows
+                if isinstance(item, dict) and str(item.get("target_id", "")) == normalized_target_id
+            ),
+            None,
+        )
+        if not deploy_target:
+            return {"ok": False, "message": f"target_id not found: {normalized_target_id}"}
+
+        source_rows = snapshot.get("source_rows", [])
+        source_index = {
+            str(item.get("source_id", "")).strip(): item
+            for item in source_rows
+            if isinstance(item, dict) and str(item.get("source_id", "")).strip()
+        }
+        selected_source_ids = _to_str_list(deploy_target.get("selected_source_ids", []))
+        available_source_ids = _to_str_list(deploy_target.get("available_source_ids", []))
+
+        return {
+            "ok": True,
+            "generated_at": snapshot.get("generated_at"),
+            "deploy_target": deploy_target,
+            "selected_sources": [
+                source_index[source_id]
+                for source_id in selected_source_ids
+                if source_id in source_index
+            ],
+            "available_sources": [
+                source_index[source_id]
+                for source_id in available_source_ids
+                if source_id in source_index
+            ],
+            "warnings": snapshot.get("warnings", []),
+        }
+
     async def webui_scan_inventory(self) -> dict[str, Any]:
         snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         await self._save_state()
@@ -1275,6 +1318,92 @@ class OneSyncPlugin(Star):
             "manifest": manifest,
             "inventory": inventory_snapshot,
             "skills": updated_skills_snapshot,
+        }
+
+    def webui_repair_deploy_target(self, target_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        normalized_target_id = str(target_id or "").strip()
+        if not normalized_target_id:
+            return {"ok": False, "message": "target_id is required"}
+        if payload is not None and not isinstance(payload, dict):
+            return {"ok": False, "message": "invalid payload, expected object"}
+        payload = payload or {}
+
+        target_payload = self.webui_get_deploy_target_payload(normalized_target_id)
+        if not target_payload.get("ok"):
+            return target_payload
+
+        deploy_target = target_payload.get("deploy_target", {})
+        if not isinstance(deploy_target, dict):
+            return {"ok": False, "message": f"target_id not found: {normalized_target_id}"}
+
+        available_actions = _dedupe_keep_order(_to_str_list(deploy_target.get("repair_actions", [])))
+        requested_actions = _dedupe_keep_order(_to_str_list(payload.get("actions", []))) or available_actions
+        invalid_actions = [action for action in requested_actions if action not in available_actions]
+        if invalid_actions:
+            return {
+                "ok": False,
+                "message": (
+                    "unsupported repair actions for target "
+                    f"{normalized_target_id}: {', '.join(invalid_actions)}"
+                ),
+            }
+
+        selected_source_ids = _dedupe_keep_order(_to_str_list(deploy_target.get("selected_source_ids", [])))
+        changes: list[str] = []
+
+        if "create_target_path" in requested_actions:
+            target_path = str(deploy_target.get("target_path", "") or "").strip()
+            if not target_path:
+                return {"ok": False, "message": f"target {normalized_target_id} does not declare a target_path"}
+            try:
+                Path(target_path).mkdir(parents=True, exist_ok=True)
+            except Exception as exc:
+                return {"ok": False, "message": f"failed to create target path for {normalized_target_id}: {exc}"}
+            changes.append("create_target_path")
+
+        if "drop_missing_sources" in requested_actions:
+            missing_sources = set(_to_str_list(deploy_target.get("missing_source_ids", [])))
+            next_source_ids = [source_id for source_id in selected_source_ids if source_id not in missing_sources]
+            if next_source_ids != selected_source_ids:
+                selected_source_ids = next_source_ids
+                changes.append("drop_missing_sources")
+
+        if "drop_incompatible_sources" in requested_actions:
+            incompatible_sources = set(_to_str_list(deploy_target.get("incompatible_source_ids", [])))
+            next_source_ids = [source_id for source_id in selected_source_ids if source_id not in incompatible_sources]
+            if next_source_ids != selected_source_ids:
+                selected_source_ids = next_source_ids
+                changes.append("drop_incompatible_sources")
+
+        manifest = self._update_saved_manifest_target_selection(
+            target_id=normalized_target_id,
+            selected_source_ids=selected_source_ids,
+        )
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        updated_skills_snapshot = self._skills_state().get("last_overview", {})
+        refreshed_target = next(
+            (
+                item for item in updated_skills_snapshot.get("deploy_rows", [])
+                if isinstance(item, dict) and str(item.get("target_id", "")) == normalized_target_id
+            ),
+            None,
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "deploy target repaired: "
+                f"target={normalized_target_id} actions={','.join(changes or requested_actions or ['noop'])}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "changes": changes,
+            "requested_actions": requested_actions,
+            "manifest": manifest,
+            "inventory": inventory_snapshot,
+            "skills": updated_skills_snapshot,
+            "deploy_target": refreshed_target or deploy_target,
         }
 
     def webui_deploy_skill_source(self, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:

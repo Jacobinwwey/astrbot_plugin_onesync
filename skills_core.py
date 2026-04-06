@@ -108,6 +108,14 @@ def _preferred_target_path(software: dict[str, Any], scope: str) -> str:
     return candidates[0]
 
 
+def _target_path_exists(target_path: str) -> bool:
+    text = str(target_path or "").strip()
+    if not text:
+        return False
+    path = Path(text)
+    return path.exists() and path.is_dir()
+
+
 def _saved_manifest_index(saved_manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
     source_index: dict[str, dict[str, Any]] = {}
     for item in saved_manifest.get("sources", []):
@@ -396,13 +404,27 @@ def build_skills_lock(
         if not isinstance(target, dict):
             continue
         selected_source_ids = _dedupe_keep_order(_to_str_list(target.get("selected_source_ids", [])))
+        available_source_ids = _dedupe_keep_order(_to_str_list(target.get("available_source_ids", [])))
         selected_sources = [source_index[source_id] for source_id in selected_source_ids if source_id in source_index]
         missing_sources = [
             str(source.get("source_id", "")).strip()
             for source in selected_sources
             if not _to_bool(source.get("discovered", False), False)
         ]
+        incompatible_sources = [
+            source_id
+            for source_id in selected_source_ids
+            if source_id not in available_source_ids
+        ]
+        ready_sources = [
+            source_id
+            for source_id in selected_source_ids
+            if source_id not in missing_sources and source_id not in incompatible_sources
+        ]
         target_installed = _to_bool(target.get("installed", False), False)
+        target_path = str(target.get("target_path", "") or "")
+        target_path_exists = _target_path_exists(target_path)
+        repair_actions: list[str] = []
 
         if not selected_source_ids:
             status = "idle"
@@ -410,21 +432,39 @@ def build_skills_lock(
         elif not target_installed:
             status = "unavailable"
             drift_status = "target_uninstalled"
+        elif target_path and not target_path_exists:
+            status = "stale"
+            drift_status = "missing_target_path"
         elif missing_sources:
             status = "stale"
             drift_status = "missing_source"
+        elif incompatible_sources:
+            status = "stale"
+            drift_status = "incompatible_selection"
         else:
             status = "ready"
             drift_status = "ok"
+
+        if selected_source_ids and target_installed and target_path and not target_path_exists:
+            repair_actions.append("create_target_path")
+        if missing_sources:
+            repair_actions.append("drop_missing_sources")
+        if incompatible_sources:
+            repair_actions.append("drop_incompatible_sources")
 
         deploy_locks.append(
             {
                 **target,
                 "status": status,
                 "drift_status": drift_status,
+                "target_path_exists": target_path_exists,
+                "ready_source_ids": ready_sources,
                 "missing_source_ids": missing_sources,
-                "available_source_count": len(_to_str_list(target.get("available_source_ids", []))),
+                "incompatible_source_ids": incompatible_sources,
+                "available_source_count": len(available_source_ids),
                 "selected_source_count": len(selected_source_ids),
+                "ready_source_count": len(ready_sources),
+                "repair_actions": repair_actions,
                 "deployment_hash": _stable_hash(
                     {
                         "target_id": target.get("target_id"),
@@ -481,6 +521,13 @@ def build_skills_overview(
                 f"deploy[{target.get('target_id')}] references missing sources: "
                 + ", ".join(_to_str_list(target.get("missing_source_ids", []))),
             )
+        elif str(target.get("drift_status", "")) == "incompatible_selection":
+            warnings.append(
+                f"deploy[{target.get('target_id')}] contains incompatible sources: "
+                + ", ".join(_to_str_list(target.get("incompatible_source_ids", []))),
+            )
+        elif str(target.get("drift_status", "")) == "missing_target_path":
+            warnings.append(f"deploy[{target.get('target_id')}] target path is missing: {target.get('target_path')}")
         elif str(target.get("drift_status", "")) == "target_uninstalled":
             warnings.append(f"deploy[{target.get('target_id')}] selected while software is not installed")
 
@@ -499,6 +546,7 @@ def build_skills_overview(
             "deploy_idle_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "idle"),
             "deploy_unavailable_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "unavailable"),
             "deploy_stale_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "stale"),
+            "deploy_repairable_total": sum(1 for item in deploy_rows if _to_str_list(item.get("repair_actions", []))),
         },
     )
 

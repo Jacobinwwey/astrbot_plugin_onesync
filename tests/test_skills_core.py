@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -18,6 +20,8 @@ from skills_core import (
 
 class SkillsCoreTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tempdir.cleanup)
         self.inventory_snapshot = {
             "ok": True,
             "generated_at": "2026-04-06T08:00:00+00:00",
@@ -162,6 +166,78 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["counts"]["deploy_unavailable_total"])
         self.assertFalse(overview["doctor"]["ok"])
         self.assertGreaterEqual(overview["doctor"]["warning_count"], 2)
+
+    def test_build_skills_lock_marks_missing_target_path_and_repair_actions(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        missing_root = Path(self._tempdir.name) / "missing-codex-skills"
+        snapshot["software_rows"][0]["resolved_skill_roots"] = [str(missing_root)]
+        snapshot["software_rows"][0]["declared_skill_roots"] = [str(missing_root)]
+
+        manifest = build_skills_manifest(snapshot)
+        lock = build_skills_lock(manifest, snapshot)
+
+        codex_global = next(item for item in lock["deploy_targets"] if item["target_id"] == "codex:global")
+        self.assertEqual("stale", codex_global["status"])
+        self.assertEqual("missing_target_path", codex_global["drift_status"])
+        self.assertFalse(codex_global["target_path_exists"])
+        self.assertEqual(["npx_bundle_compound_engineering_global"], codex_global["ready_source_ids"])
+        self.assertEqual(["create_target_path"], codex_global["repair_actions"])
+
+    def test_build_skills_lock_marks_incompatible_selection_and_drop_action(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["software_rows"][1]["installed"] = True
+        compatible_root = Path(self._tempdir.name) / "antigravity-skills"
+        compatible_root.mkdir(parents=True, exist_ok=True)
+        snapshot["software_rows"][1]["resolved_skill_roots"] = [str(compatible_root)]
+        snapshot["software_rows"][1]["declared_skill_roots"] = [str(compatible_root)]
+
+        snapshot["skill_rows"].append(
+            {
+                "id": "gui_only_bundle",
+                "display_name": "GUI Only Bundle",
+                "skill_kind": "skill_bundle",
+                "provider_key": "gui_bundle",
+                "enabled": True,
+                "discovered": True,
+                "auto_discovered": False,
+                "source_scope": "global",
+                "source_path": str(compatible_root / "gui-only"),
+                "member_count": 2,
+                "member_skill_preview": ["gui:launch", "gui:inspect"],
+                "member_skill_overflow": 0,
+                "management_hint": "bunx gui-only-plugin",
+                "compatible_software_families": ["antigravity"],
+                "tags": ["npx-managed"],
+            },
+        )
+        snapshot["compatibility"]["antigravity"] = ["gui_only_bundle", "npx_global_find_skills"]
+        snapshot["binding_rows"] = []
+        snapshot["binding_map"] = {"codex": [], "antigravity": []}
+        snapshot["binding_map_by_scope"] = {
+            "global": {"codex": [], "antigravity": []},
+            "workspace": {"codex": [], "antigravity": []},
+        }
+
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": ["gui_only_bundle"],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(snapshot, saved_manifest=saved_manifest)
+        codex_global = next(item for item in overview["deploy_rows"] if item["target_id"] == "codex:global")
+        self.assertEqual("stale", codex_global["status"])
+        self.assertEqual("incompatible_selection", codex_global["drift_status"])
+        self.assertEqual(["gui_only_bundle"], codex_global["incompatible_source_ids"])
+        self.assertEqual(["drop_incompatible_sources"], codex_global["repair_actions"])
+        self.assertIn("contains incompatible sources", "\n".join(overview["warnings"]))
 
     def test_saved_manifest_preserves_missing_sources_and_selected_targets(self) -> None:
         saved_manifest = {

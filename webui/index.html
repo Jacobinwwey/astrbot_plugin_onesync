@@ -900,9 +900,22 @@
       flex-wrap: wrap;
     }
 
+    .inventory-head-copy {
+      display: grid;
+      gap: 3px;
+    }
+
     .inventory-controls {
       display: grid;
       gap: 8px;
+    }
+
+    .inventory-workspace-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 10px 0 8px;
     }
 
     .inventory-skill-tools {
@@ -910,7 +923,6 @@
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
-      margin-bottom: 8px;
     }
 
     .inventory-filter-tools {
@@ -928,6 +940,14 @@
       font-weight: 700;
     }
 
+    .inventory-head-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      max-width: 720px;
+    }
+
     .inventory-summary {
       margin: 0 0 8px;
       color: var(--muted);
@@ -938,40 +958,237 @@
 
     .inventory-grid {
       display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 10px;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .inventory-software-rail,
+    .inventory-workspace {
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 14px;
+      padding: 12px;
+      background:
+        radial-gradient(220px 120px at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+        linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 90%, transparent), color-mix(in srgb, var(--panel) 78%, transparent));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
     }
 
     .inventory-soft-meta {
       margin-top: 8px;
       border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      border-radius: 8px;
-      padding: 8px;
+      border-radius: 12px;
+      padding: 10px;
       font-size: 12px;
       color: var(--muted);
-      line-height: 1.45;
+      line-height: 1.5;
       white-space: pre-wrap;
-      min-height: 104px;
+      min-height: 124px;
+      background: color-mix(in srgb, var(--panel-strong) 82%, transparent);
     }
 
-    .inventory-skill-list {
+    .inventory-target-hero {
+      position: relative;
+      overflow: hidden;
       border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      border-radius: 8px;
-      padding: 8px;
-      max-height: 260px;
-      overflow: auto;
+      border-radius: 16px;
+      padding: 14px;
+      background:
+        radial-gradient(220px 130px at 100% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
+        radial-gradient(180px 120px at 0% 100%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 60%),
+        linear-gradient(155deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel-strong) 90%, transparent));
+      box-shadow: var(--shadow-lg);
+    }
+
+    .inventory-target-hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 32%);
+    }
+
+    .inventory-target-top {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .inventory-target-copy {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .inventory-target-kicker {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .inventory-target-title {
+      margin: 0;
+      font-family: var(--display);
+      font-size: 24px;
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+    }
+
+    .inventory-target-subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 780px;
+    }
+
+    .inventory-target-chip-row {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .inventory-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      padding: 5px 10px;
+      font-size: 11px;
+      color: var(--text);
+      background: color-mix(in srgb, var(--panel-soft) 70%, transparent);
+    }
+
+    .inventory-chip strong {
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .inventory-target-metrics {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .inventory-target-metric {
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      padding: 10px 11px;
+      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
+    }
+
+    .inventory-target-metric .label {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .inventory-target-metric .value {
+      margin-top: 4px;
+      font-family: var(--display);
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .inventory-repair-bar {
+      margin-top: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
       display: grid;
       gap: 8px;
     }
 
+    .inventory-repair-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-repair-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .inventory-repair-title {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .inventory-repair-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .inventory-repair-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .inventory-action-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--warn) 44%, var(--border));
+      padding: 4px 9px;
+      font-size: 11px;
+      color: var(--warn);
+      background: color-mix(in srgb, var(--warn) 12%, transparent);
+    }
+
+    .inventory-selection-note {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .inventory-skill-list {
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 12px;
+      padding: 10px;
+      max-height: 430px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      background: color-mix(in srgb, var(--panel-strong) 66%, transparent);
+    }
+
     .inventory-skill-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 8px;
-      padding: 8px;
+      border-radius: 12px;
+      padding: 10px;
       background: linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 65%, transparent));
       font-size: 12px;
       line-height: 1.45;
-      transition: border-color 0.15s ease, transform 0.15s ease;
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      display: grid;
+      gap: 6px;
+    }
+
+    .inventory-skill-item.selected {
+      border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
     }
 
     .inventory-skill-item:hover {
@@ -989,12 +1206,15 @@
       color: var(--muted);
       font-size: 12px;
       font-weight: 600;
+      letter-spacing: 0.03em;
     }
 
     .inventory-software-rows {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      grid-template-columns: 1fr;
       gap: 8px;
+      max-height: 470px;
+      overflow: auto;
     }
 
     .skills-secondary-grid {
@@ -1037,8 +1257,26 @@
     .inventory-deploy-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
       border-radius: 10px;
-      padding: 8px;
+      padding: 10px;
       background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
+    }
+
+    .inventory-deploy-item {
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      width: 100%;
+      text-align: left;
+      color: var(--text);
+    }
+
+    .inventory-deploy-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      transform: translateY(-1px);
+    }
+
+    .inventory-deploy-item.active {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
     }
 
     .inventory-source-item .title,
@@ -1195,6 +1433,12 @@
       .skills-secondary-grid {
         grid-template-columns: 1fr;
       }
+      .inventory-software-rows {
+        max-height: none;
+      }
+      .inventory-target-title {
+        font-size: 20px;
+      }
     }
   </style>
 </head>
@@ -1291,15 +1535,17 @@
 
         <div class="inventory-panel" id="sectionInventory">
           <div class="inventory-head">
-            <p class="inventory-title" id="inventoryTitle">Skills管理</p>
+            <div class="inventory-head-copy">
+              <p class="inventory-title" id="inventoryTitle">Skills管理</p>
+              <p class="inventory-head-note" id="inventoryHeadNote">按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。</p>
+            </div>
             <div class="modal-actions">
               <button id="inventoryRefreshBtn">刷新资产</button>
-              <button id="inventorySaveBindingsBtn" class="success">保存 Skill 绑定</button>
             </div>
           </div>
           <p class="inventory-summary" id="inventorySummary">正在加载资产信息...</p>
           <div class="inventory-grid">
-            <div>
+            <div class="inventory-software-rail">
               <div class="inventory-controls">
                 <label class="cfg-label">
                   <span id="inventorySoftwareLabel">选择软件</span>
@@ -1314,37 +1560,52 @@
                 </label>
               </div>
               <div class="inventory-soft-meta" id="inventorySoftwareMeta">-</div>
+              <div class="inventory-filter-tools">
+                <label class="cfg-label">
+                  <span id="inventoryKindFilterLabel">软件类型</span>
+                  <select id="inventoryKindFilterSelect">
+                    <option value="all" id="inventoryKindOptAll">全部</option>
+                    <option value="cli" id="inventoryKindOptCli">CLI</option>
+                    <option value="gui" id="inventoryKindOptGui">GUI</option>
+                    <option value="claw" id="inventoryKindOptClaw">CLAW</option>
+                    <option value="other" id="inventoryKindOptOther">OTHER</option>
+                  </select>
+                </label>
+                <label class="cfg-label">
+                  <span id="inventoryShowUninstalledLabel">显示未安装</span>
+                  <input id="inventoryShowUninstalledToggle" type="checkbox">
+                </label>
+              </div>
+              <p class="inventory-quick-title" id="inventoryQuickTitle">宿主速览</p>
+              <div class="inventory-software-rows" id="inventorySoftwareRows">
+                <div class="debug-empty" id="inventorySoftwareRowsEmpty">暂无软件资产</div>
+              </div>
             </div>
-            <div>
-              <div class="inventory-skill-tools">
+            <div class="inventory-workspace">
+              <div class="inventory-target-hero" id="inventoryTargetHero">
+                <div class="debug-empty" id="inventoryTargetHeroEmpty">等待选择宿主软件...</div>
+              </div>
+              <div class="inventory-repair-bar" id="inventoryRepairBar">
+                <div class="inventory-repair-top">
+                  <div class="inventory-repair-copy">
+                    <div class="inventory-repair-title" id="inventoryRepairTitle">当前目标修复</div>
+                    <div class="inventory-repair-note" id="inventoryRepairNote">等待最新 drift 状态...</div>
+                  </div>
+                  <button id="inventoryRepairTargetBtn" class="warn" type="button">修复当前目标</button>
+                </div>
+                <div class="inventory-repair-actions" id="inventoryRepairActions"></div>
+              </div>
+              <div class="inventory-workspace-actions">
+                <button id="inventorySaveBindingsBtn" class="success">保存 Skill 绑定</button>
                 <button id="inventorySelectAllBtn" type="button">全选兼容</button>
                 <button id="inventorySelectDiscoveredBtn" type="button">仅已发现</button>
                 <button id="inventoryClearSelectionBtn" type="button">清空选择</button>
               </div>
+              <p class="inventory-selection-note" id="inventorySelectionNote">按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 `ce:*` Skill 单独展开。</p>
               <div class="inventory-skill-list" id="inventorySkillList">
                 <div class="debug-empty" id="inventorySkillEmpty">暂无 Skill 数据</div>
               </div>
             </div>
-          </div>
-          <p class="inventory-quick-title" id="inventoryQuickTitle">软件速览</p>
-          <div class="inventory-filter-tools">
-            <label class="cfg-label">
-              <span id="inventoryKindFilterLabel">软件类型</span>
-              <select id="inventoryKindFilterSelect">
-                <option value="all" id="inventoryKindOptAll">全部</option>
-                <option value="cli" id="inventoryKindOptCli">CLI</option>
-                <option value="gui" id="inventoryKindOptGui">GUI</option>
-                <option value="claw" id="inventoryKindOptClaw">CLAW</option>
-                <option value="other" id="inventoryKindOptOther">OTHER</option>
-              </select>
-            </label>
-            <label class="cfg-label">
-              <span id="inventoryShowUninstalledLabel">显示未安装</span>
-              <input id="inventoryShowUninstalledToggle" type="checkbox">
-            </label>
-          </div>
-          <div class="inventory-software-rows" id="inventorySoftwareRows">
-            <div class="debug-empty" id="inventorySoftwareRowsEmpty">暂无软件资产</div>
           </div>
           <div class="skills-secondary-grid">
             <div class="skills-subpanel">
@@ -1801,7 +2062,9 @@
       inventoryDraftSkillIds: [],
       inventoryVisibleCompatibleSkillIds: [],
       inventoryVisibleDiscoveredSkillIds: [],
-      inventorySaving: false
+      inventorySaving: false,
+      inventoryTargetDetail: null,
+      inventoryRepairing: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -2025,8 +2288,10 @@
         guide_doc_install: "安装与配置手册",
         guide_doc_ops: "操作与同步手册",
         inventory_title: "Skills管理",
+        inventory_head_note: "按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。",
         inventory_refresh: "刷新资产",
         inventory_save_bindings: "保存部署选择",
+        inventory_repair_target: "修复当前目标",
         inventory_loading: "正在加载资产信息...",
         inventory_software_label: "选择宿主软件",
         inventory_scope_label: "部署范围",
@@ -2041,6 +2306,36 @@
         inventory_doctor: "健康检查",
         inventory_doctor_waiting: "等待最新状态...",
         inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_selection_note: "按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 ce:* Skill 单独展开。",
+        inventory_target_empty: "等待选择宿主软件...",
+        inventory_target_kicker: "当前 Deploy Target",
+        inventory_target_scope_host: "{host} · {scope}",
+        inventory_target_subtitle: "围绕当前宿主和范围管理 Source package。显示的是聚合包、Bundle 与可部署 Source，而不是逐条原子 Skill。",
+        inventory_target_metric_selected: "已选 Source",
+        inventory_target_metric_ready: "可部署",
+        inventory_target_metric_missing: "缺失",
+        inventory_target_metric_incompatible: "不兼容",
+        inventory_target_metric_available: "可选总数",
+        inventory_target_metric_repairable: "可修复动作",
+        inventory_target_chip_target: "Target",
+        inventory_target_chip_path: "Path",
+        inventory_target_chip_family: "Family",
+        inventory_target_chip_installed: "Installed",
+        inventory_repair_title: "当前目标修复",
+        inventory_repair_waiting: "等待最新 drift 状态...",
+        inventory_repair_ready: "当前目标无可执行修复动作。可直接保存部署选择，或继续切换 Source package。",
+        inventory_repair_hint: "可执行修复: {actions}",
+        inventory_repair_action_create_target_path: "创建缺失目录",
+        inventory_repair_action_drop_missing_sources: "移除缺失 Source",
+        inventory_repair_action_drop_incompatible_sources: "移除不兼容 Source",
+        inventory_repair_success: "目标修复完成: {actions}",
+        inventory_repair_noop: "当前目标没有需要修复的漂移项。",
+        inventory_repair_error: "修复当前目标失败: {msg}",
+        inventory_drift_ok: "正常",
+        inventory_drift_missing_source: "存在缺失 Source",
+        inventory_drift_incompatible_selection: "存在不兼容选择",
+        inventory_drift_missing_target_path: "目标目录缺失",
+        inventory_drift_target_uninstalled: "宿主未安装",
         inventory_source_empty: "暂无 Source / Bundle 数据",
         inventory_deploy_empty: "暂无 Deploy Target",
         inventory_kind_filter_label: "软件类型",
@@ -2062,7 +2357,7 @@
         inventory_summary_skills: "Source={total} 展开成员={members} 已发现={discovered}",
         inventory_summary_compatible: "可部署={total} 已选择={selected}",
         inventory_summary_bindings: "绑定(有效/无效)={valid}/{invalid}",
-        inventory_summary_deploy: "Deploy(ready/stale/unavailable)={ready}/{stale}/{unavailable}",
+        inventory_summary_deploy: "Deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
         inventory_summary_warnings: "告警={count}",
         inventory_meta_kind: "类型",
         inventory_meta_provider: "Provider",
@@ -2309,8 +2604,10 @@
         guide_doc_install: "Installation & Config Guide",
         guide_doc_ops: "Operations and Sync Manual",
         inventory_title: "Skills Management",
+        inventory_head_note: "Manage deployable skills as source packages, with unified host visibility, deployment selection, and drift repair.",
         inventory_refresh: "Refresh Inventory",
         inventory_save_bindings: "Save Deployment",
+        inventory_repair_target: "Repair Current Target",
         inventory_loading: "Loading inventory data...",
         inventory_software_label: "Select Host",
         inventory_scope_label: "Deploy Scope",
@@ -2325,6 +2622,36 @@
         inventory_doctor: "Doctor",
         inventory_doctor_waiting: "Waiting for latest status...",
         inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_selection_note: "Manage by source package. Compound Engineering appears as one bundle instead of expanding every ce:* skill.",
+        inventory_target_empty: "Select a host to inspect the current deploy target.",
+        inventory_target_kicker: "Current Deploy Target",
+        inventory_target_scope_host: "{host} · {scope}",
+        inventory_target_subtitle: "Manage source packages for the selected host and scope. This view stays package-first instead of exploding into every atomic skill.",
+        inventory_target_metric_selected: "Selected Sources",
+        inventory_target_metric_ready: "Deploy Ready",
+        inventory_target_metric_missing: "Missing",
+        inventory_target_metric_incompatible: "Incompatible",
+        inventory_target_metric_available: "Available",
+        inventory_target_metric_repairable: "Repair Actions",
+        inventory_target_chip_target: "Target",
+        inventory_target_chip_path: "Path",
+        inventory_target_chip_family: "Family",
+        inventory_target_chip_installed: "Installed",
+        inventory_repair_title: "Current Target Repair",
+        inventory_repair_waiting: "Waiting for the latest drift state...",
+        inventory_repair_ready: "No repair action is needed for this target. Save deployment selection or keep curating source packages.",
+        inventory_repair_hint: "Repair actions available: {actions}",
+        inventory_repair_action_create_target_path: "Create missing target path",
+        inventory_repair_action_drop_missing_sources: "Drop missing sources",
+        inventory_repair_action_drop_incompatible_sources: "Drop incompatible sources",
+        inventory_repair_success: "Target repaired: {actions}",
+        inventory_repair_noop: "No repairable drift was found for the current target.",
+        inventory_repair_error: "Failed to repair current target: {msg}",
+        inventory_drift_ok: "healthy",
+        inventory_drift_missing_source: "missing sources selected",
+        inventory_drift_incompatible_selection: "incompatible sources selected",
+        inventory_drift_missing_target_path: "target path missing",
+        inventory_drift_target_uninstalled: "host is not installed",
         inventory_source_empty: "No source or bundle data",
         inventory_deploy_empty: "No deploy target",
         inventory_kind_filter_label: "Software Kind",
@@ -2346,7 +2673,7 @@
         inventory_summary_skills: "sources={total} members={members} discovered={discovered}",
         inventory_summary_compatible: "deployable={total} selected={selected}",
         inventory_summary_bindings: "bindings(valid/invalid)={valid}/{invalid}",
-        inventory_summary_deploy: "deploy(ready/stale/unavailable)={ready}/{stale}/{unavailable}",
+        inventory_summary_deploy: "deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
         inventory_summary_warnings: "warnings={count}",
         inventory_meta_kind: "kind",
         inventory_meta_provider: "provider",
@@ -2505,8 +2832,13 @@
       $("thCheckedAt").textContent = t("th_checked_at");
       $("jobTitle").textContent = t("job_title");
       $("inventoryTitle").textContent = t("inventory_title");
+      $("inventoryHeadNote").textContent = t("inventory_head_note");
       $("inventoryRefreshBtn").textContent = t("inventory_refresh");
       $("inventorySaveBindingsBtn").textContent = t("inventory_save_bindings");
+      $("inventoryRepairTargetBtn").textContent = t("inventory_repair_target");
+      $("inventoryRepairTitle").textContent = t("inventory_repair_title");
+      $("inventoryRepairNote").textContent = t("inventory_repair_waiting");
+      $("inventorySelectionNote").textContent = t("inventory_selection_note");
       $("inventorySoftwareLabel").textContent = t("inventory_software_label");
       $("inventoryScopeLabel").textContent = t("inventory_scope_label");
       $("inventoryScopeOptGlobal").textContent = t("inventory_scope_global");
@@ -2519,6 +2851,10 @@
       $("inventoryDeployTitle").textContent = t("inventory_deploy_title");
       $("inventoryDoctorBtn").textContent = t("inventory_doctor");
       $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
+      const inventoryTargetHeroEmptyEl = $("inventoryTargetHeroEmpty");
+      if (inventoryTargetHeroEmptyEl) {
+        inventoryTargetHeroEmptyEl.textContent = t("inventory_target_empty");
+      }
       $("inventoryKindFilterLabel").textContent = t("inventory_kind_filter_label");
       $("inventoryKindOptAll").textContent = t("inventory_kind_all");
       $("inventoryKindOptCli").textContent = t("inventory_kind_cli");
@@ -2948,6 +3284,64 @@
       return `<span class="skills-status-badge ${cls}">${escapeHtml(label)}</span>`;
     }
 
+    function getSelectedInventoryTargetId() {
+      const softwareId = String(state.inventorySelectedSoftwareId || "").trim();
+      if (!softwareId) return "";
+      return `${softwareId}:${normalizeInventoryScope(state.inventorySelectedScope)}`;
+    }
+
+    function inventoryScopeLabel(scope) {
+      return normalizeInventoryScope(scope) === "workspace"
+        ? t("inventory_scope_workspace")
+        : t("inventory_scope_global");
+    }
+
+    function inventoryDriftLabel(driftStatus) {
+      const key = String(driftStatus || "ok").trim().toLowerCase() || "ok";
+      const mapping = {
+        ok: t("inventory_drift_ok"),
+        missing_source: t("inventory_drift_missing_source"),
+        incompatible_selection: t("inventory_drift_incompatible_selection"),
+        missing_target_path: t("inventory_drift_missing_target_path"),
+        target_uninstalled: t("inventory_drift_target_uninstalled"),
+      };
+      return mapping[key] || key.replace(/_/g, " ");
+    }
+
+    function inventoryRepairActionLabel(action) {
+      const key = String(action || "").trim().toLowerCase();
+      if (!key) return "-";
+      const mapping = {
+        create_target_path: t("inventory_repair_action_create_target_path"),
+        drop_missing_sources: t("inventory_repair_action_drop_missing_sources"),
+        drop_incompatible_sources: t("inventory_repair_action_drop_incompatible_sources"),
+      };
+      return mapping[key] || key.replace(/_/g, " ");
+    }
+
+    async function refreshSelectedDeployTargetDetail({ silent = true } = {}) {
+      const targetId = getSelectedInventoryTargetId();
+      if (!targetId) {
+        state.inventoryTargetDetail = null;
+        renderInventoryPanel();
+        return null;
+      }
+
+      try {
+        const detail = await api(`/api/skills/deploy-targets/${encodeURIComponent(targetId)}`);
+        state.inventoryTargetDetail = detail;
+        renderInventoryPanel();
+        return detail;
+      } catch (err) {
+        state.inventoryTargetDetail = null;
+        renderInventoryPanel();
+        if (!silent) {
+          throw err;
+        }
+        return null;
+      }
+    }
+
     function renderInventoryPanel() {
       const summaryEl = $("inventorySummary");
       const selectEl = $("inventorySoftwareSelect");
@@ -2960,7 +3354,11 @@
       const sourceRowsEl = $("inventorySourceRows");
       const deployRowsEl = $("inventoryDeployRows");
       const doctorSummaryEl = $("inventoryDoctorSummary");
+      const targetHeroEl = $("inventoryTargetHero");
+      const repairNoteEl = $("inventoryRepairNote");
+      const repairActionsEl = $("inventoryRepairActions");
       const saveBtn = $("inventorySaveBindingsBtn");
+      const repairBtn = $("inventoryRepairTargetBtn");
       const selectAllBtn = $("inventorySelectAllBtn");
       const selectDiscoveredBtn = $("inventorySelectDiscoveredBtn");
       const clearSelectionBtn = $("inventoryClearSelectionBtn");
@@ -2998,6 +3396,10 @@
       const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
       const deployRows = Array.isArray(overview.deploy_rows) ? overview.deploy_rows : [];
       const doctor = overview.doctor && typeof overview.doctor === "object" ? overview.doctor : {};
+      const selectedTargetId = getSelectedInventoryTargetId();
+      const detailTarget = state.inventoryTargetDetail && state.inventoryTargetDetail.deploy_target
+        ? state.inventoryTargetDetail.deploy_target
+        : null;
 
       sourceRowsEl.innerHTML = sourceRows.length
         ? sourceRows.map((item) => {
@@ -3034,9 +3436,14 @@ ${escapeHtml(t("inventory_skill_meta_id"))}: ${escapeHtml(sourceId)}
           const selectedCount = Number(item.selected_source_count ?? (Array.isArray(item.selected_source_ids) ? item.selected_source_ids.length : 0)) || 0;
           const availableCount = Number(item.available_source_count ?? (Array.isArray(item.available_source_ids) ? item.available_source_ids.length : 0)) || 0;
           const targetPath = String(item.target_path || "-").trim() || "-";
-          const drift = String(item.drift_status || "ok").trim() || "ok";
+          const drift = inventoryDriftLabel(item.drift_status || "ok");
+          const activeCls = targetId === selectedTargetId ? "active" : "";
           return `
-            <div class="inventory-deploy-item">
+            <button
+              type="button"
+              class="inventory-deploy-item ${activeCls}"
+              data-inventory-target-id="${escapeHtml(targetId)}"
+            >
               <div class="title">
                 <span>${escapeHtml(item.software_display_name || item.software_id || targetId)}</span>
                 ${renderSkillsStatusBadge(item.status || "idle")}
@@ -3050,7 +3457,7 @@ ${escapeHtml(t("inventory_deploy_meta_scope"))}: ${escapeHtml(item.scope || "-")
 ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
  | ${escapeHtml(t("inventory_deploy_meta_drift"))}: ${escapeHtml(drift)}
               </div>
-            </div>
+            </button>
           `;
         }).join("")
         : `<div class="debug-empty">${t("inventory_deploy_empty")}</div>`;
@@ -3071,12 +3478,17 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         summaryEl.textContent = noVisibleSoftwareText;
         selectEl.innerHTML = `<option value="">${escapeHtml(noVisibleSoftwareText)}</option>`;
         metaEl.textContent = "-";
+        targetHeroEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_target_empty"))}</div>`;
+        repairNoteEl.textContent = t("inventory_repair_waiting");
+        repairActionsEl.innerHTML = "";
         skillListEl.innerHTML = `<div class="debug-empty">${t("inventory_no_skills")}</div>`;
         softwareRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(noVisibleSoftwareText)}</div>`;
         state.inventoryDraftSkillIds = [];
         state.inventoryVisibleCompatibleSkillIds = [];
         state.inventoryVisibleDiscoveredSkillIds = [];
+        state.inventoryTargetDetail = null;
         saveBtn.disabled = true;
+        repairBtn.disabled = true;
         selectAllBtn.disabled = true;
         selectDiscoveredBtn.disabled = true;
         clearSelectionBtn.disabled = true;
@@ -3098,6 +3510,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
 
       const selectedSoftware = softwareRows.find((item) => item.id === state.inventorySelectedSoftwareId) || softwareRows[0];
       const selectedSoftwareId = String(selectedSoftware.id || "");
+      const currentTargetId = `${selectedSoftwareId}:${bindingScope}`;
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
       const compatibleSkillIds = new Set(
@@ -3116,6 +3529,12 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       state.inventoryDraftSkillIds = state.inventoryDraftSkillIds
         .map((item) => String(item || "").trim())
         .filter((item) => item && compatibleSet.has(item));
+      const selectedDeployRow = (
+        detailTarget
+        && String(detailTarget.target_id || "") === currentTargetId
+        ? detailTarget
+        : deployRows.find((item) => String(item.target_id || "") === currentTargetId)
+      ) || null;
 
       softwareRowsEl.innerHTML = softwareRows.map((item) => {
         const sid = String(item.id || "").trim();
@@ -3154,6 +3573,78 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       ];
       metaEl.textContent = softMetaLines.join("\n");
 
+      if (selectedDeployRow) {
+        const selectedCount = Number(selectedDeployRow.selected_source_count ?? (Array.isArray(selectedDeployRow.selected_source_ids) ? selectedDeployRow.selected_source_ids.length : 0)) || 0;
+        const readyCount = Number(selectedDeployRow.ready_source_count ?? (Array.isArray(selectedDeployRow.ready_source_ids) ? selectedDeployRow.ready_source_ids.length : 0)) || 0;
+        const missingCount = Array.isArray(selectedDeployRow.missing_source_ids) ? selectedDeployRow.missing_source_ids.length : 0;
+        const incompatibleCount = Array.isArray(selectedDeployRow.incompatible_source_ids) ? selectedDeployRow.incompatible_source_ids.length : 0;
+        const availableCount = Number(selectedDeployRow.available_source_count ?? (Array.isArray(selectedDeployRow.available_source_ids) ? selectedDeployRow.available_source_ids.length : 0)) || 0;
+        const repairActions = Array.isArray(selectedDeployRow.repair_actions)
+          ? selectedDeployRow.repair_actions.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        const heroTargetPath = String(selectedDeployRow.target_path || "-").trim() || "-";
+        targetHeroEl.innerHTML = `
+          <div class="inventory-target-top">
+            <div class="inventory-target-copy">
+              <div class="inventory-target-kicker">${escapeHtml(t("inventory_target_kicker"))}</div>
+              <h3 class="inventory-target-title">${escapeHtml(selectedSoftware.display_name || selectedSoftwareId)}</h3>
+              <p class="inventory-target-subtitle">${escapeHtml(t("inventory_target_scope_host", {
+                host: selectedSoftwareId,
+                scope: inventoryScopeLabel(bindingScope),
+              }))} · ${escapeHtml(t("inventory_target_subtitle"))}</p>
+            </div>
+            ${renderSkillsStatusBadge(selectedDeployRow.status || "idle")}
+          </div>
+          <div class="inventory-target-chip-row">
+            <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_target"))}<strong>${escapeHtml(currentTargetId)}</strong></span>
+            <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_family"))}<strong>${escapeHtml(selectedSoftware.software_family || "-")}</strong></span>
+            <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_installed"))}<strong>${escapeHtml(selectedSoftware.installed ? t("yes") : t("no"))}</strong></span>
+            <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_path"))}<strong>${escapeHtml(heroTargetPath)}</strong></span>
+            <span class="inventory-chip">${escapeHtml(t("inventory_deploy_meta_drift"))}<strong>${escapeHtml(inventoryDriftLabel(selectedDeployRow.drift_status || "ok"))}</strong></span>
+          </div>
+          <div class="inventory-target-metrics">
+            <div class="inventory-target-metric">
+              <div class="label">${escapeHtml(t("inventory_target_metric_selected"))}</div>
+              <div class="value">${escapeHtml(selectedCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">${escapeHtml(t("inventory_target_metric_ready"))}</div>
+              <div class="value">${escapeHtml(readyCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">${escapeHtml(t("inventory_target_metric_missing"))}</div>
+              <div class="value">${escapeHtml(missingCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">${escapeHtml(t("inventory_target_metric_incompatible"))}</div>
+              <div class="value">${escapeHtml(incompatibleCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">${escapeHtml(t("inventory_target_metric_available"))}</div>
+              <div class="value">${escapeHtml(availableCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">${escapeHtml(t("inventory_target_metric_repairable"))}</div>
+              <div class="value">${escapeHtml(repairActions.length)}</div>
+            </div>
+          </div>
+        `;
+        repairNoteEl.textContent = repairActions.length
+          ? t("inventory_repair_hint", {
+            actions: repairActions.map((action) => inventoryRepairActionLabel(action)).join(" / "),
+          })
+          : t("inventory_repair_ready");
+        repairActionsEl.innerHTML = repairActions.length
+          ? repairActions.map((action) => `<span class="inventory-action-pill">${escapeHtml(inventoryRepairActionLabel(action))}</span>`).join("")
+          : "";
+        repairBtn.disabled = !repairActions.length || state.inventoryRepairing;
+      } else {
+        targetHeroEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_target_empty"))}</div>`;
+        repairNoteEl.textContent = t("inventory_repair_waiting");
+        repairActionsEl.innerHTML = "";
+        repairBtn.disabled = true;
+      }
+
       if (!compatibleSkills.length) {
         skillListEl.innerHTML = `<div class="debug-empty">${t("inventory_no_compatible")}</div>`;
         saveBtn.disabled = true;
@@ -3165,6 +3656,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         skillListEl.innerHTML = compatibleSkills.map((item) => {
           const skillId = String(item.id || "");
           const checked = selectedSet.has(skillId) ? "checked" : "";
+          const selectedCls = selectedSet.has(skillId) ? "selected" : "";
           const discovered = item.discovered ? t("yes") : t("no");
           const sourceKind = item.skill_kind === "skill_bundle"
             ? t("inventory_skill_source_bundle")
@@ -3180,7 +3672,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             : [];
           const previewText = preview.length ? preview.join(", ") : sourcePath;
           return `
-            <label class="inventory-skill-item">
+            <label class="inventory-skill-item ${selectedCls}">
               <input
                 type="checkbox"
                 data-inventory-skill-id="${escapeHtml(skillId)}"
@@ -3195,7 +3687,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             </label>
           `;
         }).join("");
-        saveBtn.disabled = false;
+        saveBtn.disabled = state.inventorySaving;
         selectAllBtn.disabled = false;
         selectDiscoveredBtn.disabled = state.inventoryVisibleDiscoveredSkillIds.length === 0;
         clearSelectionBtn.disabled = state.inventoryDraftSkillIds.length === 0;
@@ -3228,6 +3720,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           ready: counts.deploy_ready_total || 0,
           stale: counts.deploy_stale_total || 0,
           unavailable: counts.deploy_unavailable_total || 0,
+          repairable: counts.deploy_repairable_total || 0,
         }),
       ];
       if (warnings.length) {
@@ -3241,7 +3734,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const options = force ? { method: "POST", body: JSON.stringify({}) } : {};
       const data = await api(endpoint, options);
       state.inventoryOverview = data.skills || data.inventory || data;
+      state.inventoryTargetDetail = null;
       renderInventoryPanel();
+      await refreshSelectedDeployTargetDetail();
     }
 
     function applyInventoryDraftSelection(mode) {
@@ -3287,14 +3782,64 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           body: JSON.stringify(payload),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventoryTargetDetail = result.deploy_target
+          ? { ok: true, generated_at: new Date().toISOString(), deploy_target: result.deploy_target }
+          : null;
         if (!result.skills) {
           await loadInventory({ force: false });
         } else {
           renderInventoryPanel();
+          await refreshSelectedDeployTargetDetail();
         }
       } finally {
         state.inventorySaving = false;
         $("inventorySaveBindingsBtn").disabled = false;
+      }
+    }
+
+    async function repairSelectedDeployTarget() {
+      const targetId = getSelectedInventoryTargetId();
+      if (!targetId) return;
+      const currentTarget = state.inventoryTargetDetail && state.inventoryTargetDetail.deploy_target
+        ? state.inventoryTargetDetail.deploy_target
+        : (
+          Array.isArray(state.inventoryOverview && state.inventoryOverview.deploy_rows)
+            ? state.inventoryOverview.deploy_rows.find((item) => String(item.target_id || "") === targetId)
+            : null
+        );
+      const repairActions = currentTarget && Array.isArray(currentTarget.repair_actions)
+        ? currentTarget.repair_actions.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      if (!repairActions.length) {
+        alert(t("inventory_repair_noop"));
+        return;
+      }
+      if (state.inventoryRepairing) return;
+
+      state.inventoryRepairing = true;
+      $("inventoryRepairTargetBtn").disabled = true;
+      try {
+        const result = await api(`/api/skills/deploy-targets/${encodeURIComponent(targetId)}/repair`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventoryTargetDetail = result.deploy_target
+          ? { ok: true, generated_at: new Date().toISOString(), deploy_target: result.deploy_target }
+          : null;
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+        const applied = Array.isArray(result.changes) ? result.changes : [];
+        if (applied.length) {
+          alert(t("inventory_repair_success", {
+            actions: applied.map((action) => inventoryRepairActionLabel(action)).join(" / "),
+          }));
+        } else {
+          alert(t("inventory_repair_noop"));
+        }
+      } finally {
+        state.inventoryRepairing = false;
+        $("inventoryRepairTargetBtn").disabled = false;
       }
     }
 
@@ -4504,6 +5049,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
       });
 
+      $("inventoryRepairTargetBtn").addEventListener("click", async () => {
+        try {
+          await repairSelectedDeployTarget();
+        } catch (err) {
+          alert(t("inventory_repair_error", { msg: err.message }));
+        }
+      });
+
       $("inventoryDoctorBtn").addEventListener("click", async () => {
         try {
           await runSkillsDoctor();
@@ -4512,13 +5065,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
       });
 
-      $("inventorySoftwareSelect").addEventListener("change", (evt) => {
+      $("inventorySoftwareSelect").addEventListener("change", async (evt) => {
         state.inventorySelectedSoftwareId = String(evt.target.value || "");
         syncInventoryDraftWithSelectedSoftware();
         renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
       });
 
-      $("inventorySoftwareRows").addEventListener("click", (evt) => {
+      $("inventorySoftwareRows").addEventListener("click", async (evt) => {
         const el = evt.target && typeof evt.target.closest === "function"
           ? evt.target.closest("[data-inventory-software-id]")
           : null;
@@ -4528,25 +5082,29 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         state.inventorySelectedSoftwareId = softwareId;
         syncInventoryDraftWithSelectedSoftware();
         renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
       });
 
-      $("inventoryScopeSelect").addEventListener("change", (evt) => {
+      $("inventoryScopeSelect").addEventListener("change", async (evt) => {
         state.inventorySelectedScope = normalizeInventoryScope(evt.target.value);
         persistPreferences();
         syncInventoryDraftWithSelectedSoftware();
         renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
       });
 
-      $("inventoryKindFilterSelect").addEventListener("change", (evt) => {
+      $("inventoryKindFilterSelect").addEventListener("change", async (evt) => {
         state.inventoryKindFilter = normalizeInventoryKindFilter(evt.target.value);
         persistPreferences();
         renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
       });
 
-      $("inventoryShowUninstalledToggle").addEventListener("change", (evt) => {
+      $("inventoryShowUninstalledToggle").addEventListener("change", async (evt) => {
         state.inventoryShowUninstalled = Boolean(evt.target.checked);
         persistPreferences();
         renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
       });
 
       $("inventorySelectAllBtn").addEventListener("click", () => {
@@ -4573,6 +5131,23 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           next.delete(skillId);
         }
         state.inventoryDraftSkillIds = [...next];
+        renderInventoryPanel();
+      });
+
+      $("inventoryDeployRows").addEventListener("click", async (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-target-id]")
+          : null;
+        if (!el) return;
+        const targetId = String(el.getAttribute("data-inventory-target-id") || "").trim();
+        if (!targetId) return;
+        const [softwareId, scope = "global"] = targetId.split(":");
+        state.inventorySelectedSoftwareId = softwareId;
+        state.inventorySelectedScope = normalizeInventoryScope(scope);
+        persistPreferences();
+        syncInventoryDraftWithSelectedSoftware();
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
       });
 
       $("aiCloseBtn").addEventListener("click", () => {

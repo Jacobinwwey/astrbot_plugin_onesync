@@ -133,6 +133,13 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
+        @self.app.get("/api/skills/deploy-targets/{target_id}")
+        async def skill_deploy_target_detail(target_id: str):
+            ret = self.plugin.webui_get_deploy_target_payload(target_id)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
         @self.app.post("/api/skills/import")
         async def skills_import(payload: dict[str, Any]):
             return await self.plugin.webui_import_skills(payload)
@@ -155,6 +162,13 @@ class OneSyncWebUIServer:
         @self.app.post("/api/skills/deploy-targets/{target_id}")
         async def skill_deploy_target_update(target_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_update_deploy_target(target_id, payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=400)
+            return ret
+
+        @self.app.post("/api/skills/deploy-targets/{target_id}/repair")
+        async def skill_deploy_target_repair(target_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_repair_deploy_target(target_id, payload)
             if not ret.get("ok"):
                 return JSONResponse(ret, status_code=400)
             return ret
