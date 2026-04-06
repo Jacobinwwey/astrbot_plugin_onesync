@@ -1689,6 +1689,7 @@
                     <div class="inventory-repair-note" id="inventoryRepairNote">等待最新 drift 状态...</div>
                   </div>
                   <div class="inventory-repair-buttons">
+                    <button id="inventoryReprojectTargetBtn" type="button">重建当前投影</button>
                     <button id="inventoryRepairAllBtn" type="button">修复全部漂移目标</button>
                     <button id="inventoryRepairTargetBtn" class="warn" type="button">修复当前目标</button>
                   </div>
@@ -2167,7 +2168,8 @@
       inventorySaving: false,
       inventoryTargetDetail: null,
       inventoryRepairing: false,
-      inventoryRepairAllRunning: false
+      inventoryRepairAllRunning: false,
+      inventoryReprojecting: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -2394,6 +2396,8 @@
         inventory_head_note: "按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。",
         inventory_refresh: "刷新资产",
         inventory_save_bindings: "保存部署选择",
+        inventory_reproject_target: "重建当前投影",
+        inventory_reproject_running: "重建中",
         inventory_repair_target: "修复当前目标",
         inventory_repair_all: "修复全部漂移目标",
         inventory_repair_all_running: "批量修复中",
@@ -2424,10 +2428,12 @@
         inventory_target_metric_incompatible: "不兼容",
         inventory_target_metric_available: "可选总数",
         inventory_target_metric_repairable: "可修复动作",
+        inventory_target_metric_projection_diff: "投影差异",
         inventory_target_chip_target: "Target",
         inventory_target_chip_path: "Path",
         inventory_target_chip_family: "Family",
         inventory_target_chip_installed: "Installed",
+        inventory_target_chip_projection: "Projection",
         inventory_repair_title: "当前目标修复",
         inventory_repair_waiting: "等待最新 drift 状态...",
         inventory_repair_ready: "当前目标无可执行修复动作。可直接保存部署选择，或继续切换 Source package。",
@@ -2452,6 +2458,13 @@
         inventory_target_drift_incompatible_sources: "不兼容 Source: {ids}",
         inventory_target_drift_path_missing: "目标目录缺失: {path}",
         inventory_target_drift_uninstalled: "宿主软件未安装，当前选择无法部署。",
+        inventory_target_projection_title: "Projection 明细",
+        inventory_target_projection_none: "当前 generated 投影文件与内存快照一致。",
+        inventory_target_projection_missing: "generated 文件缺失: {path}",
+        inventory_target_projection_changed: "投影字段不一致: {fields}",
+        inventory_target_projection_path: "投影文件路径: {path}",
+        inventory_reproject_success: "当前目标投影已重建，剩余差异 {count} 项。",
+        inventory_reproject_error: "重建当前投影失败: {msg}",
         inventory_source_empty: "暂无 Source / Bundle 数据",
         inventory_deploy_empty: "暂无 Deploy Target",
         inventory_kind_filter_label: "软件类型",
@@ -2738,6 +2751,8 @@
         inventory_head_note: "Manage deployable skills as source packages, with unified host visibility, deployment selection, and drift repair.",
         inventory_refresh: "Refresh Inventory",
         inventory_save_bindings: "Save Deployment",
+        inventory_reproject_target: "Rebuild Current Projection",
+        inventory_reproject_running: "Rebuilding",
         inventory_repair_target: "Repair Current Target",
         inventory_repair_all: "Repair All Drifted Targets",
         inventory_repair_all_running: "Repairing All",
@@ -2768,10 +2783,12 @@
         inventory_target_metric_incompatible: "Incompatible",
         inventory_target_metric_available: "Available",
         inventory_target_metric_repairable: "Repair Actions",
+        inventory_target_metric_projection_diff: "Projection Diff",
         inventory_target_chip_target: "Target",
         inventory_target_chip_path: "Path",
         inventory_target_chip_family: "Family",
         inventory_target_chip_installed: "Installed",
+        inventory_target_chip_projection: "Projection",
         inventory_repair_title: "Current Target Repair",
         inventory_repair_waiting: "Waiting for the latest drift state...",
         inventory_repair_ready: "No repair action is needed for this target. Save deployment selection or keep curating source packages.",
@@ -2796,6 +2813,13 @@
         inventory_target_drift_incompatible_sources: "Incompatible sources: {ids}",
         inventory_target_drift_path_missing: "Missing target path: {path}",
         inventory_target_drift_uninstalled: "The host software is not installed, so the current selection cannot be deployed.",
+        inventory_target_projection_title: "Projection Details",
+        inventory_target_projection_none: "The generated projection file matches the in-memory snapshot.",
+        inventory_target_projection_missing: "Generated file is missing: {path}",
+        inventory_target_projection_changed: "Projection fields differ: {fields}",
+        inventory_target_projection_path: "Projection file path: {path}",
+        inventory_reproject_success: "Current target projection rebuilt. Remaining diffs: {count}.",
+        inventory_reproject_error: "Failed to rebuild current projection: {msg}",
         inventory_source_empty: "No source or bundle data",
         inventory_deploy_empty: "No deploy target",
         inventory_kind_filter_label: "Software Kind",
@@ -2997,6 +3021,9 @@
         ? t("inventory_sync_all_running")
         : t("inventory_sync_all");
       $("inventorySaveBindingsBtn").textContent = t("inventory_save_bindings");
+      $("inventoryReprojectTargetBtn").textContent = state.inventoryReprojecting
+        ? t("inventory_reproject_running")
+        : t("inventory_reproject_target");
       $("inventoryRepairAllBtn").textContent = state.inventoryRepairAllRunning
         ? t("inventory_repair_all_running")
         : t("inventory_repair_all");
@@ -3518,6 +3545,34 @@
       return notes;
     }
 
+    function inventoryProjectionNotes(generatedProjection) {
+      if (!generatedProjection || typeof generatedProjection !== "object") {
+        return [];
+      }
+      const path = String(generatedProjection.path || "-").trim() || "-";
+      const diff = generatedProjection.diff && typeof generatedProjection.diff === "object"
+        ? generatedProjection.diff
+        : {};
+      const changedFields = Array.isArray(diff.changed_fields)
+        ? diff.changed_fields.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      if (!generatedProjection.exists) {
+        return [
+          t("inventory_target_projection_missing", { path }),
+        ];
+      }
+      if (changedFields.length) {
+        return [
+          t("inventory_target_projection_path", { path }),
+          t("inventory_target_projection_changed", { fields: changedFields.join(", ") }),
+        ];
+      }
+      return [
+        t("inventory_target_projection_path", { path }),
+        t("inventory_target_projection_none"),
+      ];
+    }
+
     async function refreshSelectedDeployTargetDetail({ silent = true } = {}) {
       const targetId = getSelectedInventoryTargetId();
       if (!targetId) {
@@ -3557,6 +3612,7 @@
       const repairNoteEl = $("inventoryRepairNote");
       const repairActionsEl = $("inventoryRepairActions");
       const saveBtn = $("inventorySaveBindingsBtn");
+      const reprojectBtn = $("inventoryReprojectTargetBtn");
       const repairAllBtn = $("inventoryRepairAllBtn");
       const repairBtn = $("inventoryRepairTargetBtn");
       const selectAllBtn = $("inventorySelectAllBtn");
@@ -3605,6 +3661,9 @@
       const selectedTargetId = getSelectedInventoryTargetId();
       const detailTarget = state.inventoryTargetDetail && state.inventoryTargetDetail.deploy_target
         ? state.inventoryTargetDetail.deploy_target
+        : null;
+      const detailProjection = state.inventoryTargetDetail && state.inventoryTargetDetail.generated_projection
+        ? state.inventoryTargetDetail.generated_projection
         : null;
 
       sourceRowsEl.innerHTML = sourceRows.length
@@ -3729,6 +3788,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       });
       $("inventorySyncAllBtn").disabled = state.inventorySyncAllRunning;
       repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
+      reprojectBtn.disabled = true;
 
       if (!softwareRows.length) {
         const noVisibleSoftwareText = skillCapableRows.length
@@ -3747,6 +3807,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         state.inventoryVisibleDiscoveredSkillIds = [];
         state.inventoryTargetDetail = null;
         saveBtn.disabled = true;
+        reprojectBtn.disabled = true;
         repairBtn.disabled = true;
         repairAllBtn.disabled = true;
         selectAllBtn.disabled = true;
@@ -3844,6 +3905,11 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           ? selectedDeployRow.repair_actions.map((item) => String(item || "").trim()).filter(Boolean)
           : [];
         const driftNotes = inventoryTargetDriftNotes(selectedDeployRow);
+        const projectionNotes = inventoryProjectionNotes(detailProjection);
+        const projectionDiffTotal = detailProjection && detailProjection.diff && typeof detailProjection.diff === "object"
+          ? Number(detailProjection.diff.field_diff_total) || 0
+          : 0;
+        const projectionExists = Boolean(detailProjection && detailProjection.exists);
         const heroTargetPath = String(selectedDeployRow.target_path || "-").trim() || "-";
         targetHeroEl.innerHTML = `
           <div class="inventory-target-top">
@@ -3862,6 +3928,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_family"))}<strong>${escapeHtml(selectedSoftware.software_family || "-")}</strong></span>
             <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_installed"))}<strong>${escapeHtml(selectedSoftware.installed ? t("yes") : t("no"))}</strong></span>
             <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_path"))}<strong>${escapeHtml(heroTargetPath)}</strong></span>
+            <span class="inventory-chip">${escapeHtml(t("inventory_target_chip_projection"))}<strong>${escapeHtml(projectionExists ? t("yes") : t("no"))}</strong></span>
             <span class="inventory-chip">${escapeHtml(t("inventory_deploy_meta_drift"))}<strong>${escapeHtml(inventoryDriftLabel(selectedDeployRow.drift_status || "ok"))}</strong></span>
           </div>
           <div class="inventory-target-metrics">
@@ -3889,6 +3956,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
               <div class="label">${escapeHtml(t("inventory_target_metric_repairable"))}</div>
               <div class="value">${escapeHtml(repairActions.length)}</div>
             </div>
+            <div class="inventory-target-metric">
+              <div class="label">${escapeHtml(t("inventory_target_metric_projection_diff"))}</div>
+              <div class="value">${escapeHtml(projectionDiffTotal)}</div>
+            </div>
           </div>
           <div class="inventory-target-drift">
             <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_drift_title"))}</div>
@@ -3896,6 +3967,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
               ${driftNotes.length
                 ? driftNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
                 : `<div class="inventory-target-drift-empty">${escapeHtml(t("inventory_target_drift_none"))}</div>`}
+            </div>
+          </div>
+          <div class="inventory-target-drift">
+            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_projection_title"))}</div>
+            <div class="inventory-target-drift-list">
+              ${projectionNotes.length
+                ? projectionNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">${escapeHtml(t("inventory_target_projection_none"))}</div>`}
             </div>
           </div>
         `;
@@ -3907,12 +3986,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         repairActionsEl.innerHTML = repairActions.length
           ? repairActions.map((action) => `<span class="inventory-action-pill">${escapeHtml(inventoryRepairActionLabel(action))}</span>`).join("")
           : "";
+        reprojectBtn.disabled = state.inventoryReprojecting;
         repairBtn.disabled = !repairActions.length || state.inventoryRepairing || state.inventoryRepairAllRunning;
         repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
       } else {
         targetHeroEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_target_empty"))}</div>`;
         repairNoteEl.textContent = t("inventory_repair_waiting");
         repairActionsEl.innerHTML = "";
+        reprojectBtn.disabled = true;
         repairBtn.disabled = true;
         repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
       }
@@ -4206,6 +4287,37 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
       } finally {
         state.inventoryRepairing = false;
+        renderInventoryPanel();
+      }
+    }
+
+    async function reprojectSelectedDeployTarget() {
+      const targetId = getSelectedInventoryTargetId();
+      if (!targetId) return;
+      if (state.inventoryReprojecting) return;
+
+      state.inventoryReprojecting = true;
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/deploy-targets/${encodeURIComponent(targetId)}/reproject`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventoryTargetDetail = result.deploy_target
+          ? {
+            ok: true,
+            generated_at: new Date().toISOString(),
+            deploy_target: result.deploy_target,
+            generated_projection: result.generated_projection || null,
+          }
+          : null;
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+        const diffTotal = Number(result.generated_projection && result.generated_projection.diff && result.generated_projection.diff.field_diff_total) || 0;
+        alert(t("inventory_reproject_success", { count: diffTotal }));
+      } finally {
+        state.inventoryReprojecting = false;
         renderInventoryPanel();
       }
     }
@@ -5478,6 +5590,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           await saveInventoryBindings();
         } catch (err) {
           alert(t("inventory_save_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryReprojectTargetBtn").addEventListener("click", async () => {
+        try {
+          await reprojectSelectedDeployTarget();
+        } catch (err) {
+          alert(t("inventory_reproject_error", { msg: err.message }));
         }
       });
 

@@ -188,6 +188,13 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=400)
             return ret
 
+        @self.app.post("/api/skills/deploy-targets/{target_id}/reproject")
+        async def skill_deploy_target_reproject(target_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_reproject_deploy_target(target_id, payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=400)
+            return ret
+
         @self.app.post("/api/skills/doctor")
         async def skills_doctor():
             return self.plugin.webui_doctor_skills()

@@ -44,10 +44,12 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - `GET /api/skills/overview`
   - `GET /api/skills/sources`
   - `GET /api/skills/sources/{source_id}`
+  - `GET /api/skills/deploy-targets/{target_id}`
   - `POST /api/skills/import`
   - `POST /api/skills/sources/{source_id}/sync`
   - `POST /api/skills/sources/{source_id}/deploy`
   - `POST /api/skills/deploy-targets/{target_id}`
+  - `POST /api/skills/deploy-targets/{target_id}/reproject`
   - `POST /api/skills/deploy-targets/repair-all`
   - `POST /api/skills/doctor`
 
@@ -78,6 +80,9 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - 每次刷新 inventory 时同步刷新 skills snapshot
   - 让 `manifest.json` 成为 deploy intent 的主存储
   - 将 manifest 反向投影到 `skill_bindings` 以维持 inventory 兼容
+  - `GET /api/skills/*` 的读取改为 cache-first，避免在只读访问时覆盖 `generated/*.json`
+  - Deploy Target detail 增加 `generated_projection.path / exists / payload / diff`
+  - 增加 target 级 `reproject`，用于显式重建单个 generated projection
   - 新增 `/api/skills/*` 对应的插件方法
   - `POST /api/skills/deploy-targets/{target_id}` 支持按 target 整体更新 selected sources
   - `POST /api/skills/deploy-targets/repair-all` 支持按当前 snapshot 批量修复 repairable targets
@@ -91,7 +96,7 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - `Save Skill Bindings` 更名为 `保存部署选择`
   - 新增 source/deploy 面板与 doctor 摘要
   - 保留已验证可用的软件筛选、scope 选择、兼容 source 快速勾选
-  - 当前 Deploy Target 面板补充 drift 明细，并增加批量修复入口
+  - 当前 Deploy Target 面板补充 drift 明细、projection diff 明细，并增加“重建当前投影”与批量修复入口
 
 ## Test Plan
 - `tests/test_inventory_core.py`
@@ -102,9 +107,11 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - 验证 overview 保留 inventory 兼容字段
 - `tests/test_webui_server.py`
   - 验证新增 `/api/skills/*` 路由
-  - 验证 deploy 和 doctor 路径的成功/失败状态码
+  - 验证 deploy / reproject / doctor 路径的成功/失败状态码
+- `tests/test_skills_projection_core.py`
+  - 验证 generated projection 缺失、无差异、有差异三种核心分支
 
 ## Assumptions
 - 当前阶段 source-first 仍建立在 inventory 派生之上，不单独引入新的写配置 UI。
 - `manifest.json` 已成为 deploy intent 主存储，`skill_bindings` 仅保留为兼容投影。
-- 真正的“manifest 直接编辑 + projection repair”属于下一个阶段，而不是这次变更的范围。
+- 本轮已补上“generated diff 可见 + target 级 reproject”，但更进一步的 manifest 直接编辑与跨 target 重部署仍属于后续阶段。

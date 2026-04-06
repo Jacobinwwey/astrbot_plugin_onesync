@@ -213,6 +213,23 @@ class _FakePlugin:
             "ok": True,
             "generated_at": self.skills_snapshot["generated_at"],
             "deploy_target": self.skills_snapshot["deploy_rows"][0],
+            "generated_projection": {
+                "path": "/tmp/generated/claude_code_global.json",
+                "exists": True,
+                "payload": {
+                    "target_id": "claude_code:global",
+                    "selected_source_ids": ["skill_cli"],
+                    "status": "ready",
+                    "drift_status": "ok",
+                },
+                "diff": {
+                    "ok": True,
+                    "missing_file": False,
+                    "field_diff_total": 0,
+                    "changed_fields": [],
+                    "fields": {},
+                },
+            },
             "warnings": [],
         }
 
@@ -242,6 +259,23 @@ class _FakePlugin:
             ],
             "failed_targets": [],
             "remaining_repairable_total": 0,
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_reproject_deploy_target(self, target_id: str, payload: dict) -> dict:
+        _ = payload
+        if target_id != "claude_code:global":
+            return {"ok": False, "message": "target not found"}
+        return {
+            "ok": True,
+            "deploy_target": self.skills_snapshot["deploy_rows"][0],
+            "generated_projection": {
+                "path": "/tmp/generated/claude_code_global.json",
+                "exists": True,
+                "payload": {"target_id": "claude_code:global"},
+                "diff": {"ok": True, "missing_file": False, "field_diff_total": 0, "changed_fields": [], "fields": {}},
+            },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
         }
@@ -351,6 +385,7 @@ class WebUIServerTests(unittest.TestCase):
         target_detail_resp = self.client.get("/api/skills/deploy-targets/claude_code:global")
         self.assertEqual(200, target_detail_resp.status_code)
         self.assertEqual("claude_code:global", target_detail_resp.json()["deploy_target"]["target_id"])
+        self.assertTrue(target_detail_resp.json()["generated_projection"]["exists"])
 
         missing_target_detail_resp = self.client.get("/api/skills/deploy-targets/missing:global")
         self.assertEqual(404, missing_target_detail_resp.status_code)
@@ -403,6 +438,14 @@ class WebUIServerTests(unittest.TestCase):
         self.assertTrue(repair_resp.json()["ok"])
         self.assertEqual(["drop_missing_sources"], repair_resp.json()["changes"])
 
+        reproject_resp = self.client.post(
+            "/api/skills/deploy-targets/claude_code:global/reproject",
+            json={},
+        )
+        self.assertEqual(200, reproject_resp.status_code)
+        self.assertTrue(reproject_resp.json()["ok"])
+        self.assertTrue(reproject_resp.json()["generated_projection"]["exists"])
+
         repair_all_resp = self.client.post(
             "/api/skills/deploy-targets/repair-all",
             json={},
@@ -425,6 +468,13 @@ class WebUIServerTests(unittest.TestCase):
         )
         self.assertEqual(400, bad_repair_resp.status_code)
         self.assertFalse(bad_repair_resp.json()["ok"])
+
+        bad_reproject_resp = self.client.post(
+            "/api/skills/deploy-targets/missing:global/reproject",
+            json={},
+        )
+        self.assertEqual(400, bad_reproject_resp.status_code)
+        self.assertFalse(bad_reproject_resp.json()["ok"])
 
 
 if __name__ == "__main__":

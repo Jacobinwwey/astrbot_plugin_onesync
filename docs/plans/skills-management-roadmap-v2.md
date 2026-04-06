@@ -12,6 +12,9 @@ status: active
 - 新增 `/api/skills/*`
 - `manifest.json` 可写，作为 deploy intent 主存储
 - 新增 `POST /api/skills/deploy-targets/{target_id}`
+- 新增 `GET /api/skills/deploy-targets/{target_id}`
+- 新增 target 级 `generated projection diff`
+- 新增 `POST /api/skills/deploy-targets/{target_id}/reproject`
 - 在插件数据目录落地：
   - `skills/manifest.json`
   - `skills/lock.json`
@@ -34,8 +37,12 @@ status: active
 - npm-backed source sync 与 sync-all
 - deploy target 当前目标 repair
 - deploy target repair-all 批量修复
+- deploy target generated projection diff
+- deploy target reproject
 - WebUI drift detail 面板
+- WebUI projection detail 面板
 - runtime state / projection doctor 诊断
+- skills/inventory GET cache-first 读取，避免只读访问覆盖 generated 状态
 
 ## 阶段 4：更广宿主生态
 - 扩更多 CLI / GUI / claw 家族

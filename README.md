@@ -13,7 +13,7 @@ OneSync 是一个面向 AstrBot 的通用可扩展软件更新器插件。
 - 支持内置 WebUI 管理端（无需改 AstrBot Dashboard 源码），提供“立即更新（当前筛选）/立即全部更新”并带确认弹窗。
 - WebUI 现已支持读取与修改插件配置（含 Human/Developer 双模式目标编辑与 `targets_json` 互相同步）。
 - 原生支持 `system_package` 策略：`apt_get/yum/dnf/pacman/zypper/choco/winget/brew`。
-- v1 新增“Skills管理”资产面板：支持 npx-based Skills 发现、CLI 资产自动发现、兼容性过滤和 Skill 绑定保存。
+- v1 新增“Skills管理”资产面板：支持 npx-based Skills 发现、CLI 资产自动发现、兼容性过滤、Deploy Target projection diff 和 Skill 绑定保存。
 
 ## 配置模式（重要）
 
@@ -73,7 +73,7 @@ WebUI 关键能力：
 - 软件列表默认只显示已安装且可调用 Skills 的软件；可在面板中切换显示未安装候选。
 - 统一管理面板支持绑定作用域切换（`global/workspace`）与快速选择（全选兼容 / 仅已发现 / 清空选择）。
 - 软件速览区支持按 `CLI/GUI/CLAW/OTHER` 过滤并点击卡片快速切换当前软件。
-- Deploy Targets 支持展示当前 drift 明细，并可执行“修复当前目标 / 批量修复全部漂移目标”。
+- Deploy Targets 支持展示当前 drift 明细、generated projection diff，并可执行“重建当前投影 / 修复当前目标 / 批量修复全部漂移目标”。
 - `健康检查` 现已额外覆盖 `manifest.json / lock.json / sources/*.json / generated/*.json` 与 `skill_bindings` 投影一致性。
 - 两个操作均有确认弹窗，防止误触。
 - 内置 Debug 日志面板：支持多标签视图（运行/目标/调度/系统）、实时滚动、级别筛选、关键字过滤与一键清空。
@@ -98,6 +98,13 @@ WebUI 与 API：
 - `GET /api/inventory/bindings`：只读绑定明细（含 `binding_map` 与 `binding_map_by_scope`）。
 - `POST /api/inventory/scan`：触发重新扫描并刷新 inventory 快照。
 - `POST /api/inventory/bindings`：保存绑定；会执行软件-技能兼容性校验。
+- `GET /api/skills/overview`：读取当前 source-first overview 快照，包含 `manifest / lock / source_rows / deploy_rows / doctor`。
+- `GET /api/skills/deploy-targets/{target_id}`：读取单个 Deploy Target 明细，附带 `generated_projection.path / exists / payload / diff`。
+- `POST /api/skills/import`：显式刷新 inventory + skills 快照，并重建 `manifest / lock / sources / generated`。
+- `POST /api/skills/deploy-targets/{target_id}`：保存当前 target 的 selected sources。
+- `POST /api/skills/deploy-targets/{target_id}/reproject`：重建单个 target 的 generated projection，用于消除缓存与落盘状态漂移。
+- `POST /api/skills/deploy-targets/repair-all`：按当前 snapshot 批量修复 repairable targets。
+- `POST /api/skills/doctor`：运行 runtime/projection 健康检查。
 
 说明：
 
@@ -105,6 +112,7 @@ WebUI 与 API：
 - 默认模式使用 `npx skills ls --json`（项目级）与 `npx skills ls -g --json`（全局级）构建 Skills 资产。
 - npx 模式下会优先按“可统一维护的技能包”聚合展示，而不是逐条展开所有 skill。比如 `ce:*` 会折叠成 `Compound Engineering`，并提示统一维护命令。
 - `filesystem/hybrid` 模式下，仍支持从 `skill_roots` 扫描 `SKILL.md` 并与手工 `skill_catalog` 合并去重。
+- `GET /api/skills/*` 当前采用 cache-first 读取，不会在每次页面访问时强制重写 `generated/*.json`；如需刷新真相源，请显式调用 `POST /api/skills/import` 或 target 级 `reproject`。
 
 ### Stitch MCP 基线脚本（前端校正）
 

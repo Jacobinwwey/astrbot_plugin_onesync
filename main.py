@@ -22,6 +22,10 @@ from .inventory_core import (
     normalize_software_catalog_payload,
     replace_bindings_for_scope,
 )
+from .skills_projection_core import (
+    build_generated_target_diff,
+    read_generated_target_payload,
+)
 from .skills_runtime_health import build_skills_runtime_health
 from .skills_core import (
     build_skills_overview,
@@ -1124,12 +1128,21 @@ class OneSyncPlugin(Star):
         return snapshot
 
     def webui_get_inventory_payload(self) -> dict[str, Any]:
+        snapshot = self._inventory_state().get("last_snapshot", {})
+        if isinstance(snapshot, dict) and snapshot:
+            return snapshot
         return self._refresh_inventory_snapshot()
 
     def webui_get_skills_payload(self) -> dict[str, Any]:
-        self._refresh_inventory_snapshot(sync_skills=True)
         skills_state = self._skills_state()
-        return skills_state.get("last_overview", {})
+        snapshot = skills_state.get("last_overview", {})
+        if not isinstance(snapshot, dict) or not snapshot:
+            self._refresh_inventory_snapshot(sync_skills=True)
+            snapshot = skills_state.get("last_overview", {})
+        if isinstance(snapshot, dict) and snapshot:
+            self._augment_skills_runtime_health(snapshot)
+            skills_state["last_overview"] = snapshot
+        return snapshot if isinstance(snapshot, dict) else {}
 
     def webui_get_skill_sources_payload(self) -> dict[str, Any]:
         snapshot = self.webui_get_skills_payload()
@@ -1198,6 +1211,10 @@ class OneSyncPlugin(Star):
         }
         selected_source_ids = _to_str_list(deploy_target.get("selected_source_ids", []))
         available_source_ids = _to_str_list(deploy_target.get("available_source_ids", []))
+        target_file_id = _normalize_inventory_id(normalized_target_id, default="")
+        generated_projection_path = self.skills_generated_dir / f"{target_file_id}.json" if target_file_id else self.skills_generated_dir / ".json"
+        generated_projection_payload = read_generated_target_payload(generated_projection_path)
+        generated_projection_diff = build_generated_target_diff(deploy_target, generated_projection_payload)
 
         return {
             "ok": True,
@@ -1213,6 +1230,12 @@ class OneSyncPlugin(Star):
                 for source_id in available_source_ids
                 if source_id in source_index
             ],
+            "generated_projection": {
+                "path": str(generated_projection_path),
+                "exists": generated_projection_payload is not None,
+                "payload": generated_projection_payload or {},
+                "diff": generated_projection_diff,
+            },
             "warnings": snapshot.get("warnings", []),
         }
 
@@ -1730,6 +1753,34 @@ class OneSyncPlugin(Star):
                 for target_id in repaired_target_ids
                 if target_id in deploy_target_index
             ],
+        }
+
+    def webui_reproject_deploy_target(self, target_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        normalized_target_id = str(target_id or "").strip()
+        if not normalized_target_id:
+            return {"ok": False, "message": "target_id is required"}
+        if payload is not None and not isinstance(payload, dict):
+            return {"ok": False, "message": "invalid payload, expected object"}
+
+        target_payload = self.webui_get_deploy_target_payload(normalized_target_id)
+        if not target_payload.get("ok"):
+            return target_payload
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        updated_skills_snapshot = self._skills_state().get("last_overview", {})
+        refreshed_target_payload = self.webui_get_deploy_target_payload(normalized_target_id)
+        self._push_debug_log(
+            "info",
+            f"deploy target reprojected: target={normalized_target_id}",
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "inventory": inventory_snapshot,
+            "skills": updated_skills_snapshot,
+            "deploy_target": refreshed_target_payload.get("deploy_target"),
+            "generated_projection": refreshed_target_payload.get("generated_projection", {}),
+            "warnings": refreshed_target_payload.get("warnings", []),
         }
 
     def webui_deploy_skill_source(self, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:
