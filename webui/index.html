@@ -6,56 +6,66 @@
   <title>OneSync WebUI</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --bg-soft: #16243a;
-      --panel: #17263d;
-      --panel-soft: #1e324f;
-      --border: #3f5575;
-      --text: #eef5ff;
-      --muted: #b6c7e1;
-      --accent: #38bdf8;
-      --accent-2: #22c55e;
-      --warn: #f59e0b;
-      --danger: #f87171;
-      --input: #233957;
-      --hover: #2b4466;
+      --bg: #0c182a;
+      --bg-soft: #132843;
+      --panel: #12253d;
+      --panel-soft: #183151;
+      --panel-strong: #0e1f35;
+      --chip-bg: #102642;
+      --border: #345271;
+      --text: #eef4ff;
+      --muted: #abc0dc;
+      --accent: #58a8ff;
+      --accent-2: #35c995;
+      --warn: #f4b251;
+      --danger: #f67f7f;
+      --input: #1b3452;
+      --hover: #274a70;
+      --shadow-lg: 0 24px 56px rgba(5, 15, 30, 0.38);
       --mono: "JetBrains Mono", "Fira Code", monospace;
       --sans: "Fira Sans", "Noto Sans SC", "Segoe UI", sans-serif;
+      --display: "Space Grotesk", "Fira Sans", "Noto Sans SC", sans-serif;
       --row-pad-y: 8px;
       --row-pad-x: 10px;
       --font-size: 13px;
     }
 
     [data-theme="light"] {
-      --bg: #f3f7fc;
-      --bg-soft: #eef4fb;
-      --panel: #ffffff;
-      --panel-soft: #f8fbff;
-      --border: #d5e1f0;
+      --bg: #eef2f8;
+      --bg-soft: #e7ecf5;
+      --panel: #f8fafc;
+      --panel-soft: #ffffff;
+      --panel-strong: #edf2f7;
+      --chip-bg: #f1f4fa;
+      --border: #d4dbe7;
       --text: #0f172a;
-      --muted: #475569;
-      --accent: #2563eb;
-      --accent-2: #16a34a;
-      --warn: #b45309;
+      --muted: #64748b;
+      --accent: #2559c7;
+      --accent-2: #0f8e63;
+      --warn: #b26410;
       --danger: #b91c1c;
-      --input: #ffffff;
-      --hover: #f1f6fd;
+      --input: #f9fbfe;
+      --hover: #e8eef9;
+      --shadow-lg: 0 14px 30px rgba(15, 23, 42, 0.08);
     }
 
     [data-theme="ocean"] {
-      --bg: #10293a;
-      --bg-soft: #16384f;
-      --panel: #1a3f58;
-      --panel-soft: #21506f;
-      --border: #4e7390;
+      --bg: #0d2a3a;
+      --bg-soft: #144257;
+      --panel: #18485f;
+      --panel-soft: #1d5771;
+      --panel-strong: #14394d;
+      --chip-bg: #1a5069;
+      --border: #557d97;
       --text: #effbff;
       --muted: #bfdbe9;
       --accent: #67e8f9;
       --accent-2: #34d399;
       --warn: #fbbf24;
       --danger: #fb7185;
-      --input: #265b79;
-      --hover: #2d6788;
+      --input: #245b77;
+      --hover: #2e6e90;
+      --shadow-lg: 0 20px 42px rgba(7, 33, 46, 0.34);
     }
 
     [data-density="comfortable"] {
@@ -83,19 +93,111 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background: linear-gradient(150deg, var(--bg), var(--bg-soft));
+      background:
+        radial-gradient(840px 420px at 98% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 56%),
+        linear-gradient(165deg, var(--bg), var(--bg-soft));
       color: var(--text);
       font-family: var(--sans);
+      padding: 12px;
+    }
+
+    .ops-layout {
+      display: block;
+      max-width: 1580px;
+      margin: 0 auto;
+    }
+
+    .ops-sidebar {
+      display: none !important;
+    }
+
+    .ops-brand {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      background: color-mix(in srgb, var(--panel-soft) 88%, transparent);
+    }
+
+    .ops-brand-logo {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--border));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .ops-brand-title {
+      margin: 0;
+      font-family: var(--display);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .ops-brand-sub {
+      margin: 1px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .ops-nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .ops-nav-item {
+      border-radius: 9px;
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      background: transparent;
+      color: var(--text);
+      padding: 7px 9px;
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .ops-nav-item.active {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      background: color-mix(in srgb, var(--accent) 13%, transparent);
+      font-weight: 700;
+    }
+
+    .ops-spacer {
+      flex: 1;
+    }
+
+    .ops-deploy-btn {
+      width: 100%;
+      border-radius: 9px;
+      border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--border));
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .ops-main {
+      min-width: 0;
     }
 
     .container {
-      width: min(1400px, 100% - 24px);
-      margin: 16px auto 20px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: linear-gradient(150deg, var(--panel), var(--panel-soft));
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
-      padding: 12px;
+      width: 100%;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
     }
 
     .topbar {
@@ -105,13 +207,19 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: 10px;
+      padding: 8px 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel-soft) 96%, transparent);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
     }
 
     .title {
       margin: 0;
-      font-size: 18px;
+      font-family: var(--display);
+      font-size: 20px;
       font-weight: 700;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.015em;
     }
 
     .title-sub {
@@ -130,10 +238,10 @@
     .top-actions .hint {
       color: var(--muted);
       font-size: 12px;
-      border: 1px dashed var(--border);
+      border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
       border-radius: 8px;
       padding: 5px 8px;
-      background: color-mix(in srgb, var(--panel) 74%, transparent);
+      background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
     }
 
     .kbd {
@@ -147,19 +255,75 @@
     }
 
     .chip-row {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
       gap: 8px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     .chip {
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      padding: 4px 10px;
-      font-size: 12px;
+      border-radius: 9px;
+      border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+      padding: 8px 10px 9px;
       color: var(--text);
-      background: rgba(255, 255, 255, 0.02);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--chip-bg) 72%, var(--panel-soft)), var(--panel-soft));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .chip-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .chip-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .chip-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+      font-size: 11px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
+    }
+
+    .chip-value {
+      font-family: var(--display);
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: 0.02em;
+      color: var(--text);
+    }
+
+    .chip-chip_up_to_date .chip-icon {
+      color: #166534;
+      background: rgba(34, 197, 94, 0.14);
+      border-color: rgba(34, 197, 94, 0.32);
+    }
+
+    .chip-chip_outdated .chip-icon {
+      color: #92400e;
+      background: rgba(245, 158, 11, 0.16);
+      border-color: rgba(245, 158, 11, 0.34);
+    }
+
+    .chip-chip_disabled .chip-icon {
+      color: #9f1239;
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.28);
     }
 
     .controls {
@@ -167,6 +331,10 @@
       grid-template-columns: 1fr 180px 140px 140px;
       gap: 8px;
       margin-bottom: 10px;
+      padding: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--panel-soft) 96%, transparent);
     }
 
     .quick-actions {
@@ -175,10 +343,10 @@
       gap: 8px;
       flex-wrap: wrap;
       margin-bottom: 10px;
-      padding: 8px;
-      border: 1px dashed var(--border);
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.02);
+      padding: 9px;
+      border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--panel-soft) 96%, transparent);
     }
 
     .quick-actions .hint {
@@ -190,7 +358,7 @@
     select,
     button {
       border-radius: 9px;
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
       background: var(--input);
       color: var(--text);
       padding: 7px 10px;
@@ -205,7 +373,7 @@
     input:focus,
     select:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
     }
 
     button {
@@ -218,18 +386,18 @@
     }
 
     button.primary {
-      background: color-mix(in srgb, var(--accent) 20%, var(--input));
-      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+      background: color-mix(in srgb, var(--accent) 22%, var(--input));
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
     }
 
     button.success {
-      background: color-mix(in srgb, var(--accent-2) 20%, var(--input));
-      border-color: color-mix(in srgb, var(--accent-2) 50%, var(--border));
+      background: color-mix(in srgb, var(--accent-2) 22%, var(--input));
+      border-color: color-mix(in srgb, var(--accent-2) 56%, var(--border));
     }
 
     button.warn {
       background: color-mix(in srgb, var(--warn) 18%, var(--input));
-      border-color: color-mix(in srgb, var(--warn) 48%, var(--border));
+      border-color: color-mix(in srgb, var(--warn) 56%, var(--border));
     }
 
     button:disabled {
@@ -238,11 +406,12 @@
     }
 
     .table-wrap {
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
       border-radius: 10px;
       overflow: auto;
-      max-height: 64vh;
-      background: var(--panel);
+      max-height: 52vh;
+      background: color-mix(in srgb, var(--panel-soft) 96%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
     }
 
     table {
@@ -258,22 +427,23 @@
       top: 0;
       z-index: 1;
       text-align: left;
-      font-size: calc(var(--font-size) - 1px);
-      letter-spacing: 0.02em;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       color: var(--muted);
       background: var(--panel-soft);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
       padding: var(--row-pad-y) var(--row-pad-x);
     }
 
     tbody td {
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
       padding: var(--row-pad-y) var(--row-pad-x);
       vertical-align: middle;
     }
 
     tbody tr:hover {
-      background: rgba(56, 189, 248, 0.09);
+      background: color-mix(in srgb, var(--accent) 13%, transparent);
     }
 
     .mono {
@@ -313,10 +483,10 @@
 
     .job-panel {
       margin-top: 10px;
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
       border-radius: 10px;
       padding: 8px 10px;
-      background: rgba(255, 255, 255, 0.02);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 92%, transparent), color-mix(in srgb, var(--panel-strong) 40%, transparent));
     }
 
     .job-title {
@@ -335,10 +505,10 @@
 
     .debug-panel {
       margin-top: 10px;
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
       border-radius: 10px;
       padding: 8px;
-      background: rgba(255, 255, 255, 0.02);
+      background: #081126;
     }
 
     .debug-head {
@@ -352,8 +522,10 @@
 
     .debug-title {
       margin: 0;
-      font-size: 13px;
-      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8ba2cc;
     }
 
     .debug-tabs {
@@ -368,15 +540,15 @@
       border-radius: 999px;
       padding: 5px 10px;
       font-size: 12px;
-      border: 1px solid var(--border);
-      background: color-mix(in srgb, var(--panel) 70%, var(--input) 30%);
-      color: var(--text);
+      border: 1px solid #1f3357;
+      background: #0f1d38;
+      color: #d3e2ff;
       cursor: pointer;
     }
 
     .debug-tab.active {
-      border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
-      background: color-mix(in srgb, var(--accent) 24%, var(--input) 76%);
+      border-color: #2f67d8;
+      background: #164194;
       font-weight: 700;
     }
 
@@ -392,11 +564,12 @@
     }
 
     .debug-log-wrap {
-      border: 1px solid var(--border);
+      border: 1px solid #1f3357;
       border-radius: 8px;
-      background: color-mix(in srgb, var(--panel) 80%, #000 20%);
+      background: linear-gradient(180deg, #050b19, #020711);
       max-height: 320px;
       overflow: auto;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
     }
 
     .debug-log-list {
@@ -407,7 +580,7 @@
     }
 
     .debug-empty {
-      color: var(--muted);
+      color: #8ba2cc;
       padding: 8px 6px;
     }
 
@@ -423,7 +596,7 @@
     }
 
     .debug-ts {
-      color: var(--muted);
+      color: #8ba2cc;
       margin-right: 6px;
     }
 
@@ -433,7 +606,7 @@
     }
 
     .debug-source {
-      color: color-mix(in srgb, var(--text) 70%, var(--muted) 30%);
+      color: #a8bbdf;
       margin-right: 6px;
     }
 
@@ -466,10 +639,10 @@
     .modal-panel {
       width: min(1120px, 100%);
       max-height: 92vh;
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
       border-radius: 14px;
-      background: linear-gradient(160deg, var(--panel), var(--panel-soft));
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+      background: linear-gradient(160deg, var(--panel-strong), var(--panel-soft));
+      box-shadow: 0 24px 50px rgba(0, 0, 0, 0.34);
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -511,10 +684,10 @@
 
     .cfg-block {
       margin-bottom: 10px;
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
       border-radius: 10px;
       padding: 8px;
-      background: rgba(255, 255, 255, 0.02);
+      background: color-mix(in srgb, var(--panel-strong) 62%, transparent);
     }
 
     .cfg-title {
@@ -581,7 +754,7 @@
     }
 
     .cfg-target-card {
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
       border-radius: 10px;
       padding: 8px;
       background: color-mix(in srgb, var(--panel) 80%, var(--input) 20%);
@@ -654,10 +827,10 @@
     }
 
     .guide-panel {
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
       border-radius: 10px;
       padding: 10px;
-      background: rgba(255, 255, 255, 0.02);
+      background: color-mix(in srgb, var(--panel-strong) 62%, transparent);
       margin-bottom: 10px;
     }
 
@@ -710,7 +883,302 @@
       color: var(--text);
     }
 
+    .inventory-panel {
+      margin-top: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel-strong) 66%, transparent);
+      padding: 10px;
+    }
+
+    .inventory-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-controls {
+      display: grid;
+      gap: 8px;
+    }
+
+    .inventory-skill-tools {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .inventory-filter-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 10px 0 8px;
+    }
+
+    .inventory-title {
+      margin: 0;
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .inventory-summary {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .inventory-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 10px;
+    }
+
+    .inventory-soft-meta {
+      margin-top: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      white-space: pre-wrap;
+      min-height: 104px;
+    }
+
+    .inventory-skill-list {
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 8px;
+      padding: 8px;
+      max-height: 260px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+    }
+
+    .inventory-skill-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 8px;
+      padding: 8px;
+      background: linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 65%, transparent));
+      font-size: 12px;
+      line-height: 1.45;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .inventory-skill-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+      transform: translateY(-1px);
+    }
+
+    .inventory-skill-item .meta {
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .inventory-quick-title {
+      margin: 10px 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .inventory-software-rows {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 8px;
+    }
+
+    .skills-secondary-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .skills-subpanel {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 10px;
+      background: linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 70%, transparent), color-mix(in srgb, var(--panel) 70%, transparent));
+    }
+
+    .skills-subhead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-doctor-note {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .inventory-source-rows,
+    .inventory-deploy-rows {
+      display: grid;
+      gap: 8px;
+    }
+
+    .inventory-source-item,
+    .inventory-deploy-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
+    }
+
+    .inventory-source-item .title,
+    .inventory-deploy-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .inventory-source-item .meta,
+    .inventory-deploy-item .meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .skills-status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 72px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.45;
+    }
+
+    .skills-status-ready {
+      background: color-mix(in srgb, #22c55e 18%, transparent);
+      color: #166534;
+      border-color: color-mix(in srgb, #22c55e 36%, transparent);
+    }
+
+    .skills-status-missing,
+    .skills-status-stale {
+      background: color-mix(in srgb, #f97316 14%, transparent);
+      color: #9a3412;
+      border-color: color-mix(in srgb, #f97316 34%, transparent);
+    }
+
+    .skills-status-idle {
+      background: color-mix(in srgb, #64748b 16%, transparent);
+      color: #334155;
+      border-color: color-mix(in srgb, #64748b 34%, transparent);
+    }
+
+    .skills-status-unavailable {
+      background: color-mix(in srgb, #ef4444 14%, transparent);
+      color: #991b1b;
+      border-color: color-mix(in srgb, #ef4444 32%, transparent);
+    }
+
+    .inventory-software-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 8px;
+      background: linear-gradient(165deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 66%, transparent));
+      text-align: left;
+      cursor: pointer;
+      color: var(--text);
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .inventory-software-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+      transform: translateY(-1px);
+    }
+
+    .inventory-software-item.active {
+      border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+
+    .inventory-software-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .inventory-kind-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 1px 8px;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+      text-transform: uppercase;
+      line-height: 1.5;
+    }
+
+    .inventory-kind-cli {
+      background: color-mix(in srgb, #0ea5e9 16%, transparent);
+      color: #0369a1;
+      border-color: color-mix(in srgb, #0ea5e9 36%, transparent);
+    }
+
+    .inventory-kind-gui {
+      background: color-mix(in srgb, #22c55e 16%, transparent);
+      color: #166534;
+      border-color: color-mix(in srgb, #22c55e 36%, transparent);
+    }
+
+    .inventory-kind-claw {
+      background: color-mix(in srgb, #f97316 14%, transparent);
+      color: #9a3412;
+      border-color: color-mix(in srgb, #f97316 36%, transparent);
+    }
+
+    .inventory-kind-other {
+      background: color-mix(in srgb, #64748b 16%, transparent);
+      color: #334155;
+      border-color: color-mix(in srgb, #64748b 36%, transparent);
+    }
+
+    .inventory-software-item .meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
     @media (max-width: 980px) {
+      body {
+        padding: 8px;
+      }
       .controls {
         grid-template-columns: 1fr 1fr;
       }
@@ -721,106 +1189,216 @@
       .cfg-row {
         grid-template-columns: 1fr;
       }
+      .inventory-grid {
+        grid-template-columns: 1fr;
+      }
+      .skills-secondary-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
-<body data-theme="slate" data-density="compact">
-  <div class="container">
-    <div class="topbar">
-      <div>
-        <h1 class="title" id="mainTitle">OneSync 运维控制台</h1>
-        <p class="title-sub" id="lastRefresh">最后刷新: -</p>
-      </div>
-      <div class="top-actions">
-        <button id="refreshBtn">刷新</button>
-        <button id="themeBtn">切换主题</button>
-        <button id="openAiAssistantBtn" class="primary">AI 配置助手</button>
-        <button id="openGuideBtn">使用指引</button>
-        <select id="langSelect">
-          <option value="zh" selected>中文</option>
-          <option value="en">English</option>
-        </select>
-        <select id="densitySelect">
-          <option value="comfortable">舒适</option>
-          <option value="compact" selected>紧凑</option>
-          <option value="ultra-compact">极限紧凑</option>
-        </select>
-        <span class="hint" id="globalShortcutsHint">快捷键: Alt+A AI助手 / Alt+H 使用指引 / Esc 关闭弹窗</span>
-      </div>
-    </div>
-
-    <div class="chip-row" id="chipRow"></div>
-
-    <div class="quick-actions">
-      <button id="runFilteredBtn" class="success">立即更新（当前筛选）</button>
-      <button id="runAllBtn" class="warn">立即全部更新（全部纳管）</button>
-      <span class="hint" id="quickHint">按钮会二次确认，避免误触。当前运行中时会自动禁用。</span>
-    </div>
-
-    <div class="controls">
-      <input id="searchInput" type="text" placeholder="搜索软件 / 版本 / 策略">
-      <select id="statusFilter">
-        <option value="all" id="statusOptAll">全部状态</option>
-        <option value="up_to_date" id="statusOptUtd">已最新</option>
-        <option value="outdated" id="statusOptOutdated">可更新</option>
-        <option value="unknown" id="statusOptUnknown">待检查</option>
-        <option value="disabled" id="statusOptDisabled">已停用</option>
-      </select>
-      <button id="clearFilterBtn">清空筛选</button>
-      <button id="openConfigBtn" class="primary">打开插件配置</button>
-    </div>
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th id="thSoftware">软件</th>
-            <th id="thCurrent">当前版本</th>
-            <th id="thLatest">最新版本</th>
-            <th id="thStatus">状态</th>
-            <th id="thStrategy">策略</th>
-            <th id="thEnabled">启用</th>
-            <th id="thCheckedAt">最近检查</th>
-          </tr>
-        </thead>
-        <tbody id="rowsBody"></tbody>
-      </table>
-    </div>
-
-    <div class="job-panel">
-      <p class="job-title" id="jobTitle">最近执行任务</p>
-      <p class="job-body" id="jobInfo">暂无任务</p>
-    </div>
-
-    <div class="debug-panel">
-      <div class="debug-head">
-        <p class="debug-title" id="debugTitle">Debug 日志（实时）</p>
-        <div class="debug-tabs" id="debugTabs">
-          <button class="debug-tab active" data-group="all" id="tabAll">全部</button>
-          <button class="debug-tab" data-group="run" id="tabRun">运行日志</button>
-          <button class="debug-tab" data-group="target" id="tabTarget">目标日志</button>
-          <button class="debug-tab" data-group="scheduler" id="tabScheduler">调度日志</button>
-          <button class="debug-tab" data-group="system" id="tabSystem">系统日志</button>
+<body data-theme="light" data-density="compact">
+  <div class="ops-layout">
+    <aside class="ops-sidebar">
+      <div class="ops-brand">
+        <div class="ops-brand-logo">✦</div>
+        <div>
+          <p class="ops-brand-title" id="opsBrandTitle">OneSync Ops</p>
+          <p class="ops-brand-sub" id="opsBrandSub">Node Alpha · Stable</p>
         </div>
-        <div class="debug-tools">
-          <select id="debugLevelFilter">
-            <option value="all" selected id="dbgLevelAll">全部级别</option>
-            <option value="info">INFO</option>
-            <option value="warn">WARN</option>
-            <option value="error">ERROR</option>
-            <option value="debug">DEBUG</option>
+      </div>
+
+      <nav class="ops-nav">
+        <button class="ops-nav-item active" type="button" id="opsNavDashboard">Dashboard</button>
+        <button class="ops-nav-item" type="button" id="opsNavAssets">Software Assets</button>
+        <button class="ops-nav-item" type="button" id="opsNavInventory">Inventory</button>
+        <button class="ops-nav-item" type="button" id="opsNavDebug">Debug Log</button>
+        <button class="ops-nav-item" type="button" id="opsNavNodes">Nodes</button>
+      </nav>
+
+      <div class="ops-spacer"></div>
+      <button class="ops-deploy-btn" type="button" id="opsDeployBtn">Deploy Update</button>
+    </aside>
+
+    <main class="ops-main">
+      <div class="container">
+        <div class="topbar">
+          <div>
+            <h1 class="title" id="mainTitle">OneSync 运维控制台</h1>
+            <p class="title-sub" id="lastRefresh">最后刷新: -</p>
+          </div>
+          <div class="top-actions">
+            <button id="refreshBtn">刷新</button>
+            <button id="themeBtn">切换主题</button>
+            <button id="openAiAssistantBtn" class="primary">AI 配置助手</button>
+            <button id="openGuideBtn">使用指引</button>
+            <select id="langSelect">
+              <option value="zh" selected>中文</option>
+              <option value="en">English</option>
+            </select>
+            <select id="densitySelect">
+              <option value="comfortable">舒适</option>
+              <option value="compact" selected>紧凑</option>
+              <option value="ultra-compact">极限紧凑</option>
+            </select>
+            <span class="hint" id="globalShortcutsHint">快捷键: Alt+A AI助手 / Alt+H 使用指引 / Esc 关闭弹窗</span>
+          </div>
+        </div>
+
+        <div class="chip-row" id="chipRow"></div>
+
+        <div class="quick-actions">
+          <button id="runFilteredBtn" class="success">立即更新（当前筛选）</button>
+          <button id="runAllBtn" class="warn">立即全部更新（全部纳管）</button>
+          <span class="hint" id="quickHint">按钮会二次确认，避免误触。当前运行中时会自动禁用。</span>
+        </div>
+
+        <div class="controls">
+          <input id="searchInput" type="text" placeholder="搜索软件 / 版本 / 策略">
+          <select id="statusFilter">
+            <option value="all" id="statusOptAll">全部状态</option>
+            <option value="up_to_date" id="statusOptUtd">已最新</option>
+            <option value="outdated" id="statusOptOutdated">可更新</option>
+            <option value="unknown" id="statusOptUnknown">待检查</option>
+            <option value="disabled" id="statusOptDisabled">已停用</option>
           </select>
-          <input id="debugKeywordInput" type="text" placeholder="筛选关键字（target/source/message）">
-          <button id="debugToggleScrollBtn" class="primary">自动滚动: 开</button>
-          <button id="debugClearBtn">清空日志</button>
+          <button id="clearFilterBtn">清空筛选</button>
+          <button id="openConfigBtn" class="primary">打开插件配置</button>
+        </div>
+
+        <div class="table-wrap" id="sectionAssets">
+          <table>
+            <thead>
+              <tr>
+                <th id="thSoftware">软件</th>
+                <th id="thCurrent">当前版本</th>
+                <th id="thLatest">最新版本</th>
+                <th id="thStatus">状态</th>
+                <th id="thStrategy">策略</th>
+                <th id="thEnabled">启用</th>
+                <th id="thCheckedAt">最近检查</th>
+              </tr>
+            </thead>
+            <tbody id="rowsBody"></tbody>
+          </table>
+        </div>
+
+        <div class="job-panel">
+          <p class="job-title" id="jobTitle">最近执行任务</p>
+          <p class="job-body" id="jobInfo">暂无任务</p>
+        </div>
+
+        <div class="inventory-panel" id="sectionInventory">
+          <div class="inventory-head">
+            <p class="inventory-title" id="inventoryTitle">Skills管理</p>
+            <div class="modal-actions">
+              <button id="inventoryRefreshBtn">刷新资产</button>
+              <button id="inventorySaveBindingsBtn" class="success">保存 Skill 绑定</button>
+            </div>
+          </div>
+          <p class="inventory-summary" id="inventorySummary">正在加载资产信息...</p>
+          <div class="inventory-grid">
+            <div>
+              <div class="inventory-controls">
+                <label class="cfg-label">
+                  <span id="inventorySoftwareLabel">选择软件</span>
+                  <select id="inventorySoftwareSelect"></select>
+                </label>
+                <label class="cfg-label">
+                  <span id="inventoryScopeLabel">绑定范围</span>
+                  <select id="inventoryScopeSelect">
+                    <option value="global" id="inventoryScopeOptGlobal">全局</option>
+                    <option value="workspace" id="inventoryScopeOptWorkspace">工作区</option>
+                  </select>
+                </label>
+              </div>
+              <div class="inventory-soft-meta" id="inventorySoftwareMeta">-</div>
+            </div>
+            <div>
+              <div class="inventory-skill-tools">
+                <button id="inventorySelectAllBtn" type="button">全选兼容</button>
+                <button id="inventorySelectDiscoveredBtn" type="button">仅已发现</button>
+                <button id="inventoryClearSelectionBtn" type="button">清空选择</button>
+              </div>
+              <div class="inventory-skill-list" id="inventorySkillList">
+                <div class="debug-empty" id="inventorySkillEmpty">暂无 Skill 数据</div>
+              </div>
+            </div>
+          </div>
+          <p class="inventory-quick-title" id="inventoryQuickTitle">软件速览</p>
+          <div class="inventory-filter-tools">
+            <label class="cfg-label">
+              <span id="inventoryKindFilterLabel">软件类型</span>
+              <select id="inventoryKindFilterSelect">
+                <option value="all" id="inventoryKindOptAll">全部</option>
+                <option value="cli" id="inventoryKindOptCli">CLI</option>
+                <option value="gui" id="inventoryKindOptGui">GUI</option>
+                <option value="claw" id="inventoryKindOptClaw">CLAW</option>
+                <option value="other" id="inventoryKindOptOther">OTHER</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryShowUninstalledLabel">显示未安装</span>
+              <input id="inventoryShowUninstalledToggle" type="checkbox">
+            </label>
+          </div>
+          <div class="inventory-software-rows" id="inventorySoftwareRows">
+            <div class="debug-empty" id="inventorySoftwareRowsEmpty">暂无软件资产</div>
+          </div>
+          <div class="skills-secondary-grid">
+            <div class="skills-subpanel">
+              <div class="skills-subhead">
+                <p class="inventory-quick-title" id="inventorySourcesTitle">Source / Bundle 视图</p>
+                <button id="inventoryDoctorBtn" type="button">健康检查</button>
+              </div>
+              <p class="inventory-doctor-note" id="inventoryDoctorSummary">等待最新状态...</p>
+              <div class="inventory-source-rows" id="inventorySourceRows">
+                <div class="debug-empty" id="inventorySourceRowsEmpty">暂无 Source 数据</div>
+              </div>
+            </div>
+            <div class="skills-subpanel">
+              <div class="skills-subhead">
+                <p class="inventory-quick-title" id="inventoryDeployTitle">Deploy Targets</p>
+              </div>
+              <div class="inventory-deploy-rows" id="inventoryDeployRows">
+                <div class="debug-empty" id="inventoryDeployRowsEmpty">暂无 Deploy Target</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="debug-panel" id="sectionDebug">
+          <div class="debug-head">
+            <p class="debug-title" id="debugTitle">Debug 日志（实时）</p>
+            <div class="debug-tabs" id="debugTabs">
+              <button class="debug-tab active" data-group="all" id="tabAll">全部</button>
+              <button class="debug-tab" data-group="run" id="tabRun">运行日志</button>
+              <button class="debug-tab" data-group="target" id="tabTarget">目标日志</button>
+              <button class="debug-tab" data-group="scheduler" id="tabScheduler">调度日志</button>
+              <button class="debug-tab" data-group="system" id="tabSystem">系统日志</button>
+            </div>
+            <div class="debug-tools">
+              <select id="debugLevelFilter">
+                <option value="all" selected id="dbgLevelAll">全部级别</option>
+                <option value="info">INFO</option>
+                <option value="warn">WARN</option>
+                <option value="error">ERROR</option>
+                <option value="debug">DEBUG</option>
+              </select>
+              <input id="debugKeywordInput" type="text" placeholder="筛选关键字（target/source/message）">
+              <button id="debugToggleScrollBtn" class="primary">自动滚动: 开</button>
+              <button id="debugClearBtn">清空日志</button>
+            </div>
+          </div>
+          <div class="debug-log-wrap" id="debugLogWrap">
+            <div class="debug-log-list" id="debugLogList">
+              <div class="debug-empty">暂无调试日志</div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="debug-log-wrap" id="debugLogWrap">
-        <div class="debug-log-list" id="debugLogList">
-          <div class="debug-empty">暂无调试日志</div>
-        </div>
-      </div>
-    </div>
+    </main>
   </div>
 
   <div class="modal-backdrop hidden" id="configModal">
@@ -1199,7 +1777,7 @@
       latestJob: null,
       pollingTimer: null,
       lang: "zh",
-      themes: ["slate", "light", "ocean"],
+      themes: ["light", "slate", "ocean"],
       themeIndex: 0,
       density: "compact",
       debugLogs: [],
@@ -1214,7 +1792,16 @@
       configMeta: null,
       configSaving: false,
       guideTab: "user",
-      aiAutogenAfterLoad: false
+      aiAutogenAfterLoad: false,
+      inventoryOverview: null,
+      inventorySelectedSoftwareId: "",
+      inventorySelectedScope: "global",
+      inventoryKindFilter: "all",
+      inventoryShowUninstalled: false,
+      inventoryDraftSkillIds: [],
+      inventoryVisibleCompatibleSkillIds: [],
+      inventoryVisibleDiscoveredSkillIds: [],
+      inventorySaving: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1275,6 +1862,11 @@
         chip_outdated: "可更新 {n}",
         chip_unknown: "待检查 {n}",
         chip_disabled: "已停用 {n}",
+        chip_label_total: "总资产",
+        chip_label_up_to_date: "已最新",
+        chip_label_outdated: "可更新",
+        chip_label_unknown: "待检查",
+        chip_label_disabled: "已停用",
         confirm_run_filtered: "确认立即更新当前筛选出的 {n} 个软件？\n\n{targets}",
         confirm_run_all: "确认立即更新全部纳管软件（{n} 个）？\n\n{targets}",
         alert_no_filtered: "当前筛选结果中没有可更新（启用）的软件目标。",
@@ -1338,6 +1930,14 @@
         cfg_no_targets: "当前没有目标，点击“添加目标”开始配置。",
         open_ai_assistant: "AI 配置助手",
         open_guide: "使用指引",
+        ops_brand_title: "OneSync Ops",
+        ops_brand_sub: "Node Alpha · Stable",
+        ops_nav_dashboard: "总览面板",
+        ops_nav_assets: "软件资产",
+        ops_nav_inventory: "资产映射",
+        ops_nav_debug: "调试日志",
+        ops_nav_nodes: "节点",
+        ops_deploy: "部署更新",
         global_shortcuts_hint: "快捷键: Alt+A 打开 AI 助手 / Alt+H 打开使用指引 / Esc 关闭弹窗",
         ai_modal_title: "OneSync AI 配置助手",
         ai_generate: "生成 Prompt",
@@ -1424,6 +2024,72 @@
         guide_doc_readme: "README",
         guide_doc_install: "安装与配置手册",
         guide_doc_ops: "操作与同步手册",
+        inventory_title: "Skills管理",
+        inventory_refresh: "刷新资产",
+        inventory_save_bindings: "保存部署选择",
+        inventory_loading: "正在加载资产信息...",
+        inventory_software_label: "选择宿主软件",
+        inventory_scope_label: "部署范围",
+        inventory_scope_global: "全局",
+        inventory_scope_workspace: "工作区",
+        inventory_select_all: "全选兼容 Source",
+        inventory_select_discovered: "仅已发现 Source",
+        inventory_select_clear: "清空部署",
+        inventory_quick_title: "宿主速览",
+        inventory_sources_title: "Source / Bundle 视图",
+        inventory_deploy_title: "Deploy Targets",
+        inventory_doctor: "健康检查",
+        inventory_doctor_waiting: "等待最新状态...",
+        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_source_empty: "暂无 Source / Bundle 数据",
+        inventory_deploy_empty: "暂无 Deploy Target",
+        inventory_kind_filter_label: "软件类型",
+        inventory_kind_all: "全部",
+        inventory_kind_cli: "CLI",
+        inventory_kind_gui: "GUI",
+        inventory_kind_claw: "CLAW",
+        inventory_kind_other: "OTHER",
+        inventory_show_uninstalled: "显示未安装",
+        inventory_quick_empty: "暂无软件资产",
+        inventory_quick_bindings: "绑定数",
+        inventory_no_software: "未发现可管理的软件资产。请检查 CLI 自动发现配置，或点击“刷新资产”重试。",
+        inventory_no_installed: "默认仅显示已安装软件。打开“显示未安装”后可查看候选软件。",
+        inventory_no_software_option: "(暂无软件资产)",
+        inventory_no_skills: "暂无 Skill 数据",
+        inventory_no_compatible: "当前软件暂无可兼容 Skill。",
+        inventory_summary_scope: "作用域={scope}",
+        inventory_summary_software: "软件={total} 已安装={installed} 已纳管={managed}",
+        inventory_summary_skills: "Source={total} 展开成员={members} 已发现={discovered}",
+        inventory_summary_compatible: "可部署={total} 已选择={selected}",
+        inventory_summary_bindings: "绑定(有效/无效)={valid}/{invalid}",
+        inventory_summary_deploy: "Deploy(ready/stale/unavailable)={ready}/{stale}/{unavailable}",
+        inventory_summary_warnings: "告警={count}",
+        inventory_meta_kind: "类型",
+        inventory_meta_provider: "Provider",
+        inventory_meta_family: "软件族",
+        inventory_meta_installed: "已安装",
+        inventory_meta_managed: "已纳管",
+        inventory_meta_linked_target: "关联目标",
+        inventory_meta_version_pair: "当前/最新",
+        inventory_skill_meta_id: "ID",
+        inventory_skill_meta_discovered: "已发现",
+        inventory_skill_meta_source: "来源",
+        inventory_skill_meta_members: "数量",
+        inventory_skill_meta_scope: "范围",
+        inventory_skill_meta_manage: "维护",
+        inventory_skill_meta_deployed: "部署目标",
+        inventory_skill_source_auto: "自动发现",
+        inventory_skill_source_manual: "手工配置",
+        inventory_skill_source_bundle: "npx 聚合包",
+        inventory_save_error: "保存 Skill 绑定失败: {msg}",
+        inventory_scan_error: "刷新资产失败: {msg}",
+        inventory_doctor_error: "健康检查失败: {msg}",
+        inventory_deploy_meta_scope: "范围",
+        inventory_deploy_meta_status: "状态",
+        inventory_deploy_meta_selected: "已选",
+        inventory_deploy_meta_available: "可用",
+        inventory_deploy_meta_path: "目标路径",
+        inventory_deploy_meta_drift: "漂移",
       },
       en: {
         app_title: "OneSync Operations Console",
@@ -1480,6 +2146,11 @@
         chip_outdated: "Outdated {n}",
         chip_unknown: "Unknown {n}",
         chip_disabled: "Disabled {n}",
+        chip_label_total: "Total Assets",
+        chip_label_up_to_date: "Up-to-date",
+        chip_label_outdated: "Outdated",
+        chip_label_unknown: "Unknown",
+        chip_label_disabled: "Disabled",
         confirm_run_filtered: "Run update now for {n} filtered software targets?\n\n{targets}",
         confirm_run_all: "Run update now for all managed targets ({n})?\n\n{targets}",
         alert_no_filtered: "No enabled targets in current filtered result.",
@@ -1543,6 +2214,14 @@
         cfg_no_targets: "No target configured yet. Click \"Add Target\" to start.",
         open_ai_assistant: "AI Assistant",
         open_guide: "Guide",
+        ops_brand_title: "OneSync Ops",
+        ops_brand_sub: "Node Alpha · Stable",
+        ops_nav_dashboard: "Dashboard",
+        ops_nav_assets: "Software Assets",
+        ops_nav_inventory: "Inventory",
+        ops_nav_debug: "Debug Log",
+        ops_nav_nodes: "Nodes",
+        ops_deploy: "Deploy Update",
         global_shortcuts_hint: "Shortcuts: Alt+A open AI Assistant / Alt+H open Guide / Esc close modal",
         ai_modal_title: "OneSync AI Config Assistant",
         ai_generate: "Generate Prompt",
@@ -1629,6 +2308,72 @@
         guide_doc_readme: "README",
         guide_doc_install: "Installation & Config Guide",
         guide_doc_ops: "Operations and Sync Manual",
+        inventory_title: "Skills Management",
+        inventory_refresh: "Refresh Inventory",
+        inventory_save_bindings: "Save Deployment",
+        inventory_loading: "Loading inventory data...",
+        inventory_software_label: "Select Host",
+        inventory_scope_label: "Deploy Scope",
+        inventory_scope_global: "Global",
+        inventory_scope_workspace: "Workspace",
+        inventory_select_all: "Select All Compatible Sources",
+        inventory_select_discovered: "Select Discovered Sources",
+        inventory_select_clear: "Clear Deployment",
+        inventory_quick_title: "Host Snapshot",
+        inventory_sources_title: "Source / Bundle View",
+        inventory_deploy_title: "Deploy Targets",
+        inventory_doctor: "Doctor",
+        inventory_doctor_waiting: "Waiting for latest status...",
+        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable}",
+        inventory_source_empty: "No source or bundle data",
+        inventory_deploy_empty: "No deploy target",
+        inventory_kind_filter_label: "Software Kind",
+        inventory_kind_all: "All",
+        inventory_kind_cli: "CLI",
+        inventory_kind_gui: "GUI",
+        inventory_kind_claw: "CLAW",
+        inventory_kind_other: "OTHER",
+        inventory_show_uninstalled: "Show Uninstalled",
+        inventory_quick_empty: "No software assets",
+        inventory_quick_bindings: "bindings",
+        inventory_no_software: "No manageable software assets were found. Check CLI auto-discovery settings or click \"Refresh Inventory\" to rescan.",
+        inventory_no_installed: "Installed software is shown by default. Enable \"Show Uninstalled\" to inspect candidates.",
+        inventory_no_software_option: "(No software assets)",
+        inventory_no_skills: "No skill data",
+        inventory_no_compatible: "No compatible skills for this software.",
+        inventory_summary_scope: "scope={scope}",
+        inventory_summary_software: "software={total} installed={installed} managed={managed}",
+        inventory_summary_skills: "sources={total} members={members} discovered={discovered}",
+        inventory_summary_compatible: "deployable={total} selected={selected}",
+        inventory_summary_bindings: "bindings(valid/invalid)={valid}/{invalid}",
+        inventory_summary_deploy: "deploy(ready/stale/unavailable)={ready}/{stale}/{unavailable}",
+        inventory_summary_warnings: "warnings={count}",
+        inventory_meta_kind: "kind",
+        inventory_meta_provider: "provider",
+        inventory_meta_family: "family",
+        inventory_meta_installed: "installed",
+        inventory_meta_managed: "managed",
+        inventory_meta_linked_target: "linked_target",
+        inventory_meta_version_pair: "current/latest",
+        inventory_skill_meta_id: "id",
+        inventory_skill_meta_discovered: "discovered",
+        inventory_skill_meta_source: "source",
+        inventory_skill_meta_members: "members",
+        inventory_skill_meta_scope: "scope",
+        inventory_skill_meta_manage: "manage",
+        inventory_skill_meta_deployed: "deploy",
+        inventory_skill_source_auto: "auto",
+        inventory_skill_source_manual: "manual",
+        inventory_skill_source_bundle: "npx bundle",
+        inventory_doctor_error: "Doctor check failed: {msg}",
+        inventory_deploy_meta_scope: "scope",
+        inventory_deploy_meta_status: "status",
+        inventory_deploy_meta_selected: "selected",
+        inventory_deploy_meta_available: "available",
+        inventory_deploy_meta_path: "target_path",
+        inventory_deploy_meta_drift: "drift",
+        inventory_save_error: "Failed to save skill bindings: {msg}",
+        inventory_scan_error: "Failed to refresh inventory: {msg}",
       },
     };
 
@@ -1658,6 +2403,25 @@
       return mapping[status] || t("status_unknown");
     }
 
+    function normalizeInventoryScope(value) {
+      const scope = String(value || "global").trim().toLowerCase();
+      return scope === "workspace" ? "workspace" : "global";
+    }
+
+    function normalizeInventoryKindFilter(value) {
+      const kind = String(value || "all").trim().toLowerCase();
+      return ["cli", "gui", "claw", "other"].includes(kind) ? kind : "all";
+    }
+
+    function isSkillCapableSoftware(item) {
+      if (!item || typeof item !== "object") return false;
+      if (Object.prototype.hasOwnProperty.call(item, "skill_capable")) {
+        return Boolean(item.skill_capable);
+      }
+      const kind = String(item.software_kind || "other").trim().toLowerCase();
+      return ["cli", "gui", "claw"].includes(kind);
+    }
+
     function applyPreferences() {
       try {
         const raw = localStorage.getItem("onesync:webui:prefs");
@@ -1675,6 +2439,15 @@
         if (typeof parsed.aiAutogenAfterLoad === "boolean") {
           state.aiAutogenAfterLoad = parsed.aiAutogenAfterLoad;
         }
+        if (typeof parsed.inventoryScope === "string") {
+          state.inventorySelectedScope = normalizeInventoryScope(parsed.inventoryScope);
+        }
+        if (typeof parsed.inventoryKindFilter === "string") {
+          state.inventoryKindFilter = normalizeInventoryKindFilter(parsed.inventoryKindFilter);
+        }
+        if (typeof parsed.inventoryShowUninstalled === "boolean") {
+          state.inventoryShowUninstalled = parsed.inventoryShowUninstalled;
+        }
       } catch (_err) {}
       document.body.dataset.theme = state.themes[state.themeIndex];
       document.body.dataset.density = state.density;
@@ -1687,7 +2460,10 @@
         theme: state.themes[state.themeIndex],
         density: state.density,
         lang: state.lang,
-        aiAutogenAfterLoad: Boolean(state.aiAutogenAfterLoad)
+        aiAutogenAfterLoad: Boolean(state.aiAutogenAfterLoad),
+        inventoryScope: normalizeInventoryScope(state.inventorySelectedScope),
+        inventoryKindFilter: normalizeInventoryKindFilter(state.inventoryKindFilter),
+        inventoryShowUninstalled: Boolean(state.inventoryShowUninstalled)
       };
       try {
         localStorage.setItem("onesync:webui:prefs", JSON.stringify(payload));
@@ -1696,6 +2472,14 @@
 
     function applyI18nTexts() {
       $("mainTitle").textContent = t("app_title");
+      $("opsBrandTitle").textContent = t("ops_brand_title");
+      $("opsBrandSub").textContent = t("ops_brand_sub");
+      $("opsNavDashboard").textContent = t("ops_nav_dashboard");
+      $("opsNavAssets").textContent = t("ops_nav_assets");
+      $("opsNavInventory").textContent = t("ops_nav_inventory");
+      $("opsNavDebug").textContent = t("ops_nav_debug");
+      $("opsNavNodes").textContent = t("ops_nav_nodes");
+      $("opsDeployBtn").textContent = t("ops_deploy");
       $("refreshBtn").textContent = t("refresh");
       $("themeBtn").textContent = t("switch_theme");
       $("openAiAssistantBtn").textContent = t("open_ai_assistant");
@@ -1720,6 +2504,28 @@
       $("thEnabled").textContent = t("th_enabled");
       $("thCheckedAt").textContent = t("th_checked_at");
       $("jobTitle").textContent = t("job_title");
+      $("inventoryTitle").textContent = t("inventory_title");
+      $("inventoryRefreshBtn").textContent = t("inventory_refresh");
+      $("inventorySaveBindingsBtn").textContent = t("inventory_save_bindings");
+      $("inventorySoftwareLabel").textContent = t("inventory_software_label");
+      $("inventoryScopeLabel").textContent = t("inventory_scope_label");
+      $("inventoryScopeOptGlobal").textContent = t("inventory_scope_global");
+      $("inventoryScopeOptWorkspace").textContent = t("inventory_scope_workspace");
+      $("inventorySelectAllBtn").textContent = t("inventory_select_all");
+      $("inventorySelectDiscoveredBtn").textContent = t("inventory_select_discovered");
+      $("inventoryClearSelectionBtn").textContent = t("inventory_select_clear");
+      $("inventoryQuickTitle").textContent = t("inventory_quick_title");
+      $("inventorySourcesTitle").textContent = t("inventory_sources_title");
+      $("inventoryDeployTitle").textContent = t("inventory_deploy_title");
+      $("inventoryDoctorBtn").textContent = t("inventory_doctor");
+      $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
+      $("inventoryKindFilterLabel").textContent = t("inventory_kind_filter_label");
+      $("inventoryKindOptAll").textContent = t("inventory_kind_all");
+      $("inventoryKindOptCli").textContent = t("inventory_kind_cli");
+      $("inventoryKindOptGui").textContent = t("inventory_kind_gui");
+      $("inventoryKindOptClaw").textContent = t("inventory_kind_claw");
+      $("inventoryKindOptOther").textContent = t("inventory_kind_other");
+      $("inventoryShowUninstalledLabel").textContent = t("inventory_show_uninstalled");
       $("debugTitle").textContent = t("debug_title");
       $("tabAll").textContent = t("tab_all");
       $("tabRun").textContent = t("tab_run");
@@ -1838,6 +2644,14 @@
       syncGuideTabs();
 
       syncDebugAutoScrollBtn();
+      if (!state.inventoryOverview) {
+        $("inventorySummary").textContent = t("inventory_loading");
+        $("inventorySkillList").innerHTML = `<div class="debug-empty">${t("inventory_no_skills")}</div>`;
+        $("inventorySoftwareRows").innerHTML = `<div class="debug-empty">${t("inventory_quick_empty")}</div>`;
+        $("inventorySourceRows").innerHTML = `<div class="debug-empty">${t("inventory_source_empty")}</div>`;
+        $("inventoryDeployRows").innerHTML = `<div class="debug-empty">${t("inventory_deploy_empty")}</div>`;
+        $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
+      }
       $("lastRefresh").textContent = t("last_refresh", { time: new Date().toLocaleString() });
       buildChips(
         {
@@ -1852,6 +2666,7 @@
       renderRows();
       renderJob();
       renderDebugLogs();
+      renderInventoryPanel();
     }
 
     async function api(path, options = {}) {
@@ -1904,13 +2719,21 @@
 
     function buildChips(counts, total) {
       const chips = [
-        t("chip_total", { n: total }),
-        t("chip_up_to_date", { n: counts.up_to_date || 0 }),
-        t("chip_outdated", { n: counts.outdated || 0 }),
-        t("chip_unknown", { n: counts.unknown || 0 }),
-        t("chip_disabled", { n: counts.disabled || 0 }),
+        { key: "chip_total", label: t("chip_label_total"), value: total || 0, icon: "◈" },
+        { key: "chip_up_to_date", label: t("chip_label_up_to_date"), value: counts.up_to_date || 0, icon: "✓" },
+        { key: "chip_outdated", label: t("chip_label_outdated"), value: counts.outdated || 0, icon: "↻" },
+        { key: "chip_unknown", label: t("chip_label_unknown"), value: counts.unknown || 0, icon: "?" },
+        { key: "chip_disabled", label: t("chip_label_disabled"), value: counts.disabled || 0, icon: "⦸" },
       ];
-      $("chipRow").innerHTML = chips.map((item) => `<span class="chip">${item}</span>`).join("");
+      $("chipRow").innerHTML = chips.map((item) => `
+        <article class="chip chip-${item.key}">
+          <div class="chip-head">
+            <span class="chip-label">${escapeHtml(item.label)}</span>
+            <span class="chip-icon">${escapeHtml(item.icon)}</span>
+          </div>
+          <div class="chip-value">${Number(item.value || 0).toLocaleString()}</div>
+        </article>
+      `).join("");
     }
 
     function applyFilters() {
@@ -2095,6 +2918,405 @@
         state.latestJob = data.job;
         renderJob();
       }
+    }
+
+    function syncInventoryDraftWithSelectedSoftware() {
+      const overview = state.inventoryOverview || {};
+      const softwareId = state.inventorySelectedSoftwareId;
+      const scope = normalizeInventoryScope(state.inventorySelectedScope);
+      const byScope = overview.binding_map_by_scope && typeof overview.binding_map_by_scope === "object"
+        ? overview.binding_map_by_scope
+        : {};
+      const scopedMap = byScope[scope] && typeof byScope[scope] === "object"
+        ? byScope[scope]
+        : {};
+      const fallbackMap = overview.binding_map && typeof overview.binding_map === "object"
+        ? overview.binding_map
+        : {};
+      const current = Array.isArray(scopedMap[softwareId])
+        ? scopedMap[softwareId]
+        : (Array.isArray(fallbackMap[softwareId]) ? fallbackMap[softwareId] : []);
+      state.inventoryDraftSkillIds = [...new Set(current.map((x) => String(x || "").trim()).filter(Boolean))];
+    }
+
+    function renderSkillsStatusBadge(status) {
+      const key = String(status || "idle").trim().toLowerCase() || "idle";
+      const cls = ["ready", "missing", "idle", "stale", "unavailable"].includes(key)
+        ? `skills-status-${key}`
+        : "skills-status-idle";
+      const label = key.replace(/_/g, " ").toUpperCase();
+      return `<span class="skills-status-badge ${cls}">${escapeHtml(label)}</span>`;
+    }
+
+    function renderInventoryPanel() {
+      const summaryEl = $("inventorySummary");
+      const selectEl = $("inventorySoftwareSelect");
+      const scopeEl = $("inventoryScopeSelect");
+      const kindFilterEl = $("inventoryKindFilterSelect");
+      const showUninstalledEl = $("inventoryShowUninstalledToggle");
+      const metaEl = $("inventorySoftwareMeta");
+      const skillListEl = $("inventorySkillList");
+      const softwareRowsEl = $("inventorySoftwareRows");
+      const sourceRowsEl = $("inventorySourceRows");
+      const deployRowsEl = $("inventoryDeployRows");
+      const doctorSummaryEl = $("inventoryDoctorSummary");
+      const saveBtn = $("inventorySaveBindingsBtn");
+      const selectAllBtn = $("inventorySelectAllBtn");
+      const selectDiscoveredBtn = $("inventorySelectDiscoveredBtn");
+      const clearSelectionBtn = $("inventoryClearSelectionBtn");
+      const bindingScope = normalizeInventoryScope(scopeEl ? scopeEl.value : state.inventorySelectedScope);
+      const kindFilter = normalizeInventoryKindFilter(kindFilterEl ? kindFilterEl.value : state.inventoryKindFilter);
+      const showUninstalled = Boolean(showUninstalledEl ? showUninstalledEl.checked : state.inventoryShowUninstalled);
+      state.inventorySelectedScope = bindingScope;
+      state.inventoryKindFilter = kindFilter;
+      state.inventoryShowUninstalled = showUninstalled;
+      if (scopeEl && scopeEl.value !== bindingScope) {
+        scopeEl.value = bindingScope;
+      }
+      if (kindFilterEl && kindFilterEl.value !== kindFilter) {
+        kindFilterEl.value = kindFilter;
+      }
+      if (showUninstalledEl && showUninstalledEl.checked !== showUninstalled) {
+        showUninstalledEl.checked = showUninstalled;
+      }
+
+      const overview = state.inventoryOverview || {};
+      const allSoftwareRows = Array.isArray(overview.software_rows) ? overview.software_rows : [];
+      const skillCapableRows = allSoftwareRows.filter((item) => isSkillCapableSoftware(item));
+      const kindFilteredRows = kindFilter === "all"
+        ? skillCapableRows
+        : skillCapableRows.filter((item) => String(item.software_kind || "other").trim().toLowerCase() === kindFilter);
+      const softwareRows = showUninstalled
+        ? kindFilteredRows
+        : kindFilteredRows.filter((item) => Boolean(item.installed));
+      const skillRows = Array.isArray(overview.skill_rows) ? overview.skill_rows : [];
+      const compatibility = overview.compatibility && typeof overview.compatibility === "object"
+        ? overview.compatibility
+        : {};
+      const counts = overview.counts || {};
+      const warnings = Array.isArray(overview.warnings) ? overview.warnings : [];
+      const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
+      const deployRows = Array.isArray(overview.deploy_rows) ? overview.deploy_rows : [];
+      const doctor = overview.doctor && typeof overview.doctor === "object" ? overview.doctor : {};
+
+      sourceRowsEl.innerHTML = sourceRows.length
+        ? sourceRows.map((item) => {
+          const sourceId = String(item.source_id || item.id || "").trim();
+          const memberCount = Number(item.member_count) || 1;
+          const deployedCount = Number(item.deployed_target_count) || 0;
+          const preview = Array.isArray(item.member_skill_preview)
+            ? item.member_skill_preview.map((entry) => String(entry || "").trim()).filter(Boolean)
+            : [];
+          const previewText = preview.length ? preview.join(", ") : (item.source_path || "-");
+          const managementHint = String(item.management_hint || "").trim();
+          return `
+            <div class="inventory-source-item">
+              <div class="title">
+                <span>${escapeHtml(item.display_name || sourceId)}</span>
+                ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
+              </div>
+              <div class="meta">
+${escapeHtml(t("inventory_skill_meta_id"))}: ${escapeHtml(sourceId)}
+ | ${escapeHtml(t("inventory_skill_meta_members"))}: ${escapeHtml(memberCount)}
+ | ${escapeHtml(t("inventory_skill_meta_scope"))}: ${escapeHtml(item.source_scope || "-")}
+ | ${escapeHtml(t("inventory_skill_meta_deployed"))}: ${escapeHtml(deployedCount)}
+              </div>
+              <div class="meta">${escapeHtml(previewText)}</div>
+              ${managementHint ? `<div class="meta">${escapeHtml(t("inventory_skill_meta_manage"))}: ${escapeHtml(managementHint)}</div>` : ""}
+            </div>
+          `;
+        }).join("")
+        : `<div class="debug-empty">${t("inventory_source_empty")}</div>`;
+
+      deployRowsEl.innerHTML = deployRows.length
+        ? deployRows.map((item) => {
+          const targetId = String(item.target_id || "").trim();
+          const selectedCount = Number(item.selected_source_count ?? (Array.isArray(item.selected_source_ids) ? item.selected_source_ids.length : 0)) || 0;
+          const availableCount = Number(item.available_source_count ?? (Array.isArray(item.available_source_ids) ? item.available_source_ids.length : 0)) || 0;
+          const targetPath = String(item.target_path || "-").trim() || "-";
+          const drift = String(item.drift_status || "ok").trim() || "ok";
+          return `
+            <div class="inventory-deploy-item">
+              <div class="title">
+                <span>${escapeHtml(item.software_display_name || item.software_id || targetId)}</span>
+                ${renderSkillsStatusBadge(item.status || "idle")}
+              </div>
+              <div class="meta">
+${escapeHtml(t("inventory_deploy_meta_scope"))}: ${escapeHtml(item.scope || "-")}
+ | ${escapeHtml(t("inventory_deploy_meta_selected"))}: ${escapeHtml(selectedCount)}
+ | ${escapeHtml(t("inventory_deploy_meta_available"))}: ${escapeHtml(availableCount)}
+              </div>
+              <div class="meta">
+${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
+ | ${escapeHtml(t("inventory_deploy_meta_drift"))}: ${escapeHtml(drift)}
+              </div>
+            </div>
+          `;
+        }).join("")
+        : `<div class="debug-empty">${t("inventory_deploy_empty")}</div>`;
+
+      doctorSummaryEl.textContent = t("inventory_doctor_summary", {
+        ready: doctor.source_health && doctor.source_health.ready || 0,
+        missing: doctor.source_health && doctor.source_health.missing || 0,
+        deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
+        deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
+        deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
+        deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
+      });
+
+      if (!softwareRows.length) {
+        const noVisibleSoftwareText = skillCapableRows.length
+          ? (showUninstalled ? t("no_rows") : t("inventory_no_installed"))
+          : t("inventory_no_software");
+        summaryEl.textContent = noVisibleSoftwareText;
+        selectEl.innerHTML = `<option value="">${escapeHtml(noVisibleSoftwareText)}</option>`;
+        metaEl.textContent = "-";
+        skillListEl.innerHTML = `<div class="debug-empty">${t("inventory_no_skills")}</div>`;
+        softwareRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(noVisibleSoftwareText)}</div>`;
+        state.inventoryDraftSkillIds = [];
+        state.inventoryVisibleCompatibleSkillIds = [];
+        state.inventoryVisibleDiscoveredSkillIds = [];
+        saveBtn.disabled = true;
+        selectAllBtn.disabled = true;
+        selectDiscoveredBtn.disabled = true;
+        clearSelectionBtn.disabled = true;
+        return;
+      }
+
+      if (!state.inventorySelectedSoftwareId
+        || !softwareRows.some((item) => item.id === state.inventorySelectedSoftwareId)) {
+        state.inventorySelectedSoftwareId = String(softwareRows[0].id || "");
+        syncInventoryDraftWithSelectedSoftware();
+      }
+
+      selectEl.innerHTML = softwareRows.map((item) => {
+        const sid = String(item.id || "");
+        const selected = sid === state.inventorySelectedSoftwareId ? "selected" : "";
+        const label = `${item.display_name || sid} (${sid})`;
+        return `<option value="${escapeHtml(sid)}" ${selected}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      const selectedSoftware = softwareRows.find((item) => item.id === state.inventorySelectedSoftwareId) || softwareRows[0];
+      const selectedSoftwareId = String(selectedSoftware.id || "");
+      const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
+      const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
+      const compatibleSkillIds = new Set(
+        Array.isArray(compatibility[selectedSoftwareId]) ? compatibility[selectedSoftwareId] : [],
+      );
+      const compatibleSkills = skillRows.filter((item) => compatibleSkillIds.has(String(item.id || "")));
+      state.inventoryVisibleCompatibleSkillIds = compatibleSkills
+        .map((item) => String(item.id || "").trim())
+        .filter(Boolean);
+      state.inventoryVisibleDiscoveredSkillIds = compatibleSkills
+        .filter((item) => Boolean(item.discovered))
+        .map((item) => String(item.id || "").trim())
+        .filter(Boolean);
+
+      const compatibleSet = new Set(state.inventoryVisibleCompatibleSkillIds);
+      state.inventoryDraftSkillIds = state.inventoryDraftSkillIds
+        .map((item) => String(item || "").trim())
+        .filter((item) => item && compatibleSet.has(item));
+
+      softwareRowsEl.innerHTML = softwareRows.map((item) => {
+        const sid = String(item.id || "").trim();
+        const selectedCls = sid === selectedSoftwareId ? "active" : "";
+        const kind = String(item.software_kind || "other").trim().toLowerCase() || "other";
+        const kindClass = ["cli", "gui", "claw"].includes(kind) ? kind : "other";
+        const kindLabel = kind.toUpperCase();
+        const bindings = Number(item.binding_count) || 0;
+        return `
+          <button
+            type="button"
+            class="inventory-software-item ${selectedCls}"
+            data-inventory-software-id="${escapeHtml(sid)}"
+          >
+            <div class="title">
+              <span>${escapeHtml(item.display_name || sid)}</span>
+              <span class="inventory-kind-badge inventory-kind-${escapeHtml(kindClass)}">${escapeHtml(kindLabel)}</span>
+            </div>
+            <div class="meta">
+${escapeHtml(t("inventory_meta_installed"))}: ${item.installed ? escapeHtml(t("yes")) : escapeHtml(t("no"))}
+${escapeHtml(t("inventory_meta_managed"))}: ${item.managed ? escapeHtml(t("yes")) : escapeHtml(t("no"))}
+${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
+            </div>
+          </button>
+        `;
+      }).join("");
+
+      const softMetaLines = [
+        `${t("inventory_meta_kind")}: ${selectedSoftware.software_kind || "-"}`,
+        `${t("inventory_meta_provider")}: ${selectedSoftware.provider_key || "-"}`,
+        `${t("inventory_meta_family")}: ${selectedSoftware.software_family || "-"}`,
+        `${t("inventory_meta_installed")}: ${selectedSoftware.installed ? t("yes") : t("no")}`,
+        `${t("inventory_meta_managed")}: ${selectedSoftware.managed ? t("yes") : t("no")}`,
+        `${t("inventory_meta_linked_target")}: ${selectedSoftware.linked_target_name || "-"}`,
+        `${t("inventory_meta_version_pair")}: ${selectedSoftware.current_version || "-"} / ${selectedSoftware.latest_version || "-"}`,
+      ];
+      metaEl.textContent = softMetaLines.join("\n");
+
+      if (!compatibleSkills.length) {
+        skillListEl.innerHTML = `<div class="debug-empty">${t("inventory_no_compatible")}</div>`;
+        saveBtn.disabled = true;
+        selectAllBtn.disabled = true;
+        selectDiscoveredBtn.disabled = true;
+        clearSelectionBtn.disabled = true;
+      } else {
+        const selectedSet = new Set(state.inventoryDraftSkillIds);
+        skillListEl.innerHTML = compatibleSkills.map((item) => {
+          const skillId = String(item.id || "");
+          const checked = selectedSet.has(skillId) ? "checked" : "";
+          const discovered = item.discovered ? t("yes") : t("no");
+          const sourceKind = item.skill_kind === "skill_bundle"
+            ? t("inventory_skill_source_bundle")
+            : item.auto_discovered
+            ? t("inventory_skill_source_auto")
+            : t("inventory_skill_source_manual");
+          const sourcePath = item.source_path || "-";
+          const memberCount = Number(item.member_count) || 1;
+          const scope = String(item.source_scope || "-");
+          const managementHint = String(item.management_hint || "").trim();
+          const preview = Array.isArray(item.member_skill_preview)
+            ? item.member_skill_preview.map((entry) => String(entry || "").trim()).filter(Boolean)
+            : [];
+          const previewText = preview.length ? preview.join(", ") : sourcePath;
+          return `
+            <label class="inventory-skill-item">
+              <input
+                type="checkbox"
+                data-inventory-skill-id="${escapeHtml(skillId)}"
+                ${checked}
+              >
+              <strong>${escapeHtml(item.display_name || skillId)}</strong>
+              <div class="meta">
+                ${t("inventory_skill_meta_id")}=${escapeHtml(skillId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
+              </div>
+              <div class="meta">${escapeHtml(previewText)}</div>
+              ${managementHint ? `<div class="meta">${t("inventory_skill_meta_manage")}=${escapeHtml(managementHint)}</div>` : ""}
+            </label>
+          `;
+        }).join("");
+        saveBtn.disabled = false;
+        selectAllBtn.disabled = false;
+        selectDiscoveredBtn.disabled = state.inventoryVisibleDiscoveredSkillIds.length === 0;
+        clearSelectionBtn.disabled = state.inventoryDraftSkillIds.length === 0;
+      }
+
+      const scopeLabel = bindingScope === "workspace"
+        ? t("inventory_scope_workspace")
+        : t("inventory_scope_global");
+      const summaryLines = [
+        t("inventory_summary_scope", { scope: scopeLabel }),
+        t("inventory_summary_software", {
+          total: softwareRows.length,
+          installed: filteredInstalled,
+          managed: filteredManaged,
+        }),
+        t("inventory_summary_skills", {
+          total: counts.skills_total || 0,
+          members: counts.skills_members_total || counts.skills_total || 0,
+          discovered: counts.skills_discovered || 0,
+        }),
+        t("inventory_summary_compatible", {
+          total: state.inventoryVisibleCompatibleSkillIds.length,
+          selected: state.inventoryDraftSkillIds.length,
+        }),
+        t("inventory_summary_bindings", {
+          valid: counts.bindings_valid || 0,
+          invalid: counts.bindings_invalid || 0,
+        }),
+        t("inventory_summary_deploy", {
+          ready: counts.deploy_ready_total || 0,
+          stale: counts.deploy_stale_total || 0,
+          unavailable: counts.deploy_unavailable_total || 0,
+        }),
+      ];
+      if (warnings.length) {
+        summaryLines.push(t("inventory_summary_warnings", { count: warnings.length }));
+      }
+      summaryEl.textContent = summaryLines.join(" | ");
+    }
+
+    async function loadInventory({ force = false } = {}) {
+      const endpoint = force ? "/api/skills/import" : "/api/skills/overview";
+      const options = force ? { method: "POST", body: JSON.stringify({}) } : {};
+      const data = await api(endpoint, options);
+      state.inventoryOverview = data.skills || data.inventory || data;
+      renderInventoryPanel();
+    }
+
+    function applyInventoryDraftSelection(mode) {
+      const compatibleIds = [...new Set(
+        (state.inventoryVisibleCompatibleSkillIds || [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+      )];
+      if (!compatibleIds.length) {
+        state.inventoryDraftSkillIds = [];
+        renderInventoryPanel();
+        return;
+      }
+      if (mode === "all") {
+        state.inventoryDraftSkillIds = compatibleIds;
+      } else if (mode === "discovered") {
+        const discoveredSet = new Set(
+          (state.inventoryVisibleDiscoveredSkillIds || [])
+            .map((item) => String(item || "").trim())
+            .filter(Boolean),
+        );
+        state.inventoryDraftSkillIds = compatibleIds.filter((item) => discoveredSet.has(item));
+      } else {
+        state.inventoryDraftSkillIds = [];
+      }
+      renderInventoryPanel();
+    }
+
+    async function saveInventoryBindings() {
+      const softwareId = String(state.inventorySelectedSoftwareId || "").trim();
+      if (!softwareId) return;
+      if (state.inventorySaving) return;
+      state.inventorySaving = true;
+      $("inventorySaveBindingsBtn").disabled = true;
+      try {
+        const payload = {
+          software_id: softwareId,
+          skill_ids: state.inventoryDraftSkillIds,
+          scope: normalizeInventoryScope(state.inventorySelectedScope),
+        };
+        const result = await api("/api/inventory/bindings", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        if (!result.skills) {
+          await loadInventory({ force: false });
+        } else {
+          renderInventoryPanel();
+        }
+      } finally {
+        state.inventorySaving = false;
+        $("inventorySaveBindingsBtn").disabled = false;
+      }
+    }
+
+    async function runSkillsDoctor() {
+      const result = await api("/api/skills/doctor", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const doctor = result.doctor || {};
+      const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+      const message = [
+        t("inventory_doctor_summary", {
+          ready: doctor.source_health && doctor.source_health.ready || 0,
+          missing: doctor.source_health && doctor.source_health.missing || 0,
+          deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
+          deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
+          deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
+          deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
+        }),
+        warnings.length ? warnings.join("\n") : "OK",
+      ].join("\n");
+      $("inventoryDoctorSummary").textContent = message;
     }
 
     function boolToSelect(value) {
@@ -3145,6 +4367,22 @@
       await submitRun("all", targets);
     }
 
+    function activateOpsNav(activeId) {
+      const ids = ["opsNavDashboard", "opsNavAssets", "opsNavInventory", "opsNavDebug"];
+      ids.forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        el.classList.toggle("active", id === activeId);
+      });
+    }
+
+    function scrollToSection(sectionId, navId) {
+      const section = $(sectionId);
+      if (!section) return;
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      activateOpsNav(navId);
+    }
+
     function bindEvents() {
       $("searchInput").addEventListener("input", (evt) => {
         state.keyword = evt.target.value || "";
@@ -3170,6 +4408,7 @@
       $("refreshBtn").addEventListener("click", async () => {
         await loadOverview();
         await loadLatestJob();
+        await loadInventory({ force: true });
         state.debugSinceId = 0;
         await loadDebugLogs({ reset: true });
       });
@@ -3219,6 +4458,121 @@
 
       $("openGuideBtn").addEventListener("click", () => {
         openGuideModal("user");
+      });
+
+      $("opsNavDashboard").addEventListener("click", () => {
+        scrollToSection("chipRow", "opsNavDashboard");
+      });
+
+      $("opsNavAssets").addEventListener("click", () => {
+        scrollToSection("sectionAssets", "opsNavAssets");
+      });
+
+      $("opsNavInventory").addEventListener("click", () => {
+        scrollToSection("sectionInventory", "opsNavInventory");
+      });
+
+      $("opsNavDebug").addEventListener("click", () => {
+        scrollToSection("sectionDebug", "opsNavDebug");
+      });
+
+      $("opsNavNodes").addEventListener("click", () => {
+        openGuideModal("developer");
+      });
+
+      $("opsDeployBtn").addEventListener("click", async () => {
+        try {
+          await onRunAll();
+        } catch (err) {
+          alert(t("err_run_all", { msg: err.message }));
+        }
+      });
+
+      $("inventoryRefreshBtn").addEventListener("click", async () => {
+        try {
+          await loadInventory({ force: true });
+        } catch (err) {
+          alert(t("inventory_scan_error", { msg: err.message }));
+        }
+      });
+
+      $("inventorySaveBindingsBtn").addEventListener("click", async () => {
+        try {
+          await saveInventoryBindings();
+        } catch (err) {
+          alert(t("inventory_save_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryDoctorBtn").addEventListener("click", async () => {
+        try {
+          await runSkillsDoctor();
+        } catch (err) {
+          alert(t("inventory_doctor_error", { msg: err.message }));
+        }
+      });
+
+      $("inventorySoftwareSelect").addEventListener("change", (evt) => {
+        state.inventorySelectedSoftwareId = String(evt.target.value || "");
+        syncInventoryDraftWithSelectedSoftware();
+        renderInventoryPanel();
+      });
+
+      $("inventorySoftwareRows").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-software-id]")
+          : null;
+        if (!el) return;
+        const softwareId = String(el.getAttribute("data-inventory-software-id") || "").trim();
+        if (!softwareId) return;
+        state.inventorySelectedSoftwareId = softwareId;
+        syncInventoryDraftWithSelectedSoftware();
+        renderInventoryPanel();
+      });
+
+      $("inventoryScopeSelect").addEventListener("change", (evt) => {
+        state.inventorySelectedScope = normalizeInventoryScope(evt.target.value);
+        persistPreferences();
+        syncInventoryDraftWithSelectedSoftware();
+        renderInventoryPanel();
+      });
+
+      $("inventoryKindFilterSelect").addEventListener("change", (evt) => {
+        state.inventoryKindFilter = normalizeInventoryKindFilter(evt.target.value);
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryShowUninstalledToggle").addEventListener("change", (evt) => {
+        state.inventoryShowUninstalled = Boolean(evt.target.checked);
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventorySelectAllBtn").addEventListener("click", () => {
+        applyInventoryDraftSelection("all");
+      });
+
+      $("inventorySelectDiscoveredBtn").addEventListener("click", () => {
+        applyInventoryDraftSelection("discovered");
+      });
+
+      $("inventoryClearSelectionBtn").addEventListener("click", () => {
+        applyInventoryDraftSelection("clear");
+      });
+
+      $("inventorySkillList").addEventListener("change", (evt) => {
+        const el = evt.target;
+        if (!el || el.type !== "checkbox") return;
+        const skillId = String(el.getAttribute("data-inventory-skill-id") || "").trim();
+        if (!skillId) return;
+        const next = new Set(state.inventoryDraftSkillIds);
+        if (el.checked) {
+          next.add(skillId);
+        } else {
+          next.delete(skillId);
+        }
+        state.inventoryDraftSkillIds = [...next];
       });
 
       $("aiCloseBtn").addEventListener("click", () => {
@@ -3421,6 +4775,7 @@
         await ensureAuth();
         await loadOverview();
         await loadLatestJob();
+        await loadInventory({ force: false });
         await loadDebugLogs({ reset: true });
         startDebugPolling();
       } catch (err) {

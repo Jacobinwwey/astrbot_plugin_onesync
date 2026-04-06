@@ -335,5 +335,89 @@
       "target_config_mode": "developer"
     },
     "default": "{\n  \"zeroclaw\": {\n    \"enabled\": true,\n    \"strategy\": \"cargo_path_git\",\n    \"check_interval_hours\": 12,\n    \"repo_path\": \"/path/to/zeroclaw\",\n    \"binary_path\": \"/path/to/.cargo/bin/zeroclaw\",\n    \"branch\": \"\",\n    \"auto_add_safe_directory\": true,\n    \"upstream_repo\": \"https://github.com/zeroclaw-labs/zeroclaw.git\",\n    \"mirror_prefixes\": [\n      \"\",\n      \"https://edgeone.gh-proxy.com/\",\n      \"https://hk.gh-proxy.com/\",\n      \"https://gh-proxy.com/\",\n      \"https://gh.llkk.cc/\",\n      \"https://ghfast.top/\"\n    ],\n    \"remote_candidates\": [],\n    \"append_default_mirror_prefixes\": true,\n    \"probe_remotes\": true,\n    \"probe_timeout_s\": 15,\n    \"probe_parallelism\": 4,\n    \"probe_cache_ttl_minutes\": 30,\n    \"build_commands\": [\n      \"cargo install --path {repo_path}\"\n    ],\n    \"verify_cmd\": \"{binary_path} --version\",\n    \"check_timeout_s\": 120,\n    \"update_timeout_s\": 1800,\n    \"verify_timeout_s\": 120,\n    \"current_version_pattern\": \"(\\\\d+\\\\.\\\\d+\\\\.\\\\d+(?:[-+][0-9A-Za-z.\\\\-]+)?)\"\n  }\n}"
+  },
+  "software_catalog": {
+    "description": "软件资产目录（统一管理）",
+    "type": "text",
+    "editor_mode": true,
+    "editor_language": "json",
+    "hint": "JSON 数组。用于声明受管软件资产（cli/gui/claw）及其本地探测信息和 skill 根目录。",
+    "default": "[]"
+  },
+  "skill_catalog": {
+    "description": "Skill 资产目录（统一管理）",
+    "type": "text",
+    "editor_mode": true,
+    "editor_language": "json",
+    "hint": "JSON 数组。用于声明可管理的 skills、来源路径和兼容软件类型。",
+    "default": "[]"
+  },
+  "skill_bindings": {
+    "description": "软件与 Skill 绑定关系（统一管理）",
+    "type": "text",
+    "editor_mode": true,
+    "editor_language": "json",
+    "hint": "JSON 数组。每项包含 software_id、skill_id、scope(global/workspace)。",
+    "default": "[]"
+  },
+  "skill_management_mode": {
+    "description": "Skills 管理模式",
+    "type": "string",
+    "hint": "可选 npx / filesystem / hybrid。推荐 npx（基于 npx skills ls）。",
+    "default": "npx"
+  },
+  "npx_skills_command": {
+    "description": "npx Skills 命令",
+    "type": "string",
+    "hint": "默认 npx，可改为 pnpm dlx 或其他兼容命令前缀。",
+    "default": "npx"
+  },
+  "npx_skills_timeout_s": {
+    "description": "npx Skills 探测超时（秒）",
+    "type": "int",
+    "default": 12
+  },
+  "npx_skills_include_project": {
+    "description": "npx Skills 包含项目级",
+    "type": "bool",
+    "default": true
+  },
+  "npx_skills_include_global": {
+    "description": "npx Skills 包含全局级",
+    "type": "bool",
+    "default": true
+  },
+  "npx_skills_workdir": {
+    "description": "npx Skills 工作目录",
+    "type": "string",
+    "hint": "为空时使用插件运行目录。项目级 skills 将基于此目录解析。",
+    "default": ""
+  },
+  "auto_discover_cli": {
+    "description": "自动发现 PATH 中 CLI 软件",
+    "type": "bool",
+    "default": true
+  },
+  "auto_discover_cli_max": {
+    "description": "自动发现 CLI 数量上限",
+    "type": "int",
+    "default": 120
+  },
+  "auto_cli_only_known": {
+    "description": "仅发现已知可调用 Skills 的软件",
+    "type": "bool",
+    "default": true
+  },
+  "auto_cli_include_commands": {
+    "description": "额外包含 CLI 命令",
+    "type": "list",
+    "hint": "命令名列表。即使默认未扫描到也会优先尝试。",
+    "default": []
+  },
+  "auto_cli_exclude_commands": {
+    "description": "排除 CLI 命令",
+    "type": "list",
+    "hint": "命令名列表。会从自动发现结果中过滤。",
+    "default": []
   }
 }

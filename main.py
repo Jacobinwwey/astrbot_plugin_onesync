@@ -15,6 +15,14 @@ from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
+from .inventory_core import (
+    build_inventory_snapshot,
+    normalize_skill_bindings_payload,
+    normalize_skill_catalog_payload,
+    normalize_software_catalog_payload,
+    replace_bindings_for_scope,
+)
+from .skills_core import build_skills_overview
 from .updater_core import (
     CheckResult,
     CommandRunner,
@@ -213,6 +221,13 @@ def _short_text(text: str, max_len: int = 180) -> str:
     return content[: max_len - 3] + "..."
 
 
+def _normalize_inventory_id(value: Any, default: str = "") -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9_]+", "_", text)
+    text = text.strip("_")
+    return text or default
+
+
 def _is_env_assignment_token(token: str) -> bool:
     return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*=.*$", str(token or "")))
 
@@ -261,8 +276,13 @@ class OneSyncPlugin(Star):
         self.plugin_data_dir = Path(get_astrbot_data_path()) / "plugin_data" / PLUGIN_NAME
         self.state_path = self.plugin_data_dir / "state.json"
         self.events_path = self.plugin_data_dir / "events.jsonl"
+        self.skills_state_dir = self.plugin_data_dir / "skills"
+        self.skills_manifest_path = self.skills_state_dir / "manifest.json"
+        self.skills_lock_path = self.skills_state_dir / "lock.json"
+        self.skills_sources_dir = self.skills_state_dir / "sources"
+        self.skills_generated_dir = self.skills_state_dir / "generated"
 
-        self.state: dict[str, Any] = {"targets": {}, "env": {}}
+        self.state: dict[str, Any] = {"targets": {}, "env": {}, "inventory": {}, "skills": {}}
         self._run_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
         self._web_job_lock = asyncio.Lock()
@@ -282,6 +302,7 @@ class OneSyncPlugin(Star):
         self._load_state()
         self._bootstrap_human_targets_if_needed()
         self._refresh_software_overview()
+        self._refresh_inventory_snapshot()
         self._push_debug_log(
             "info",
             "plugin initialize start",
@@ -798,6 +819,449 @@ class OneSyncPlugin(Star):
             "latest_job": self.webui_get_latest_job(),
         }
 
+    def _target_rows_for_inventory(self) -> dict[str, dict[str, Any]]:
+        targets = self._load_targets()
+        rows: dict[str, dict[str, Any]] = {}
+        for name, cfg in targets.items():
+            st = self._target_state(name)
+            current = str(st.get("current_version", "-") or "-")
+            latest = str(st.get("latest_version", "-") or "-")
+            enabled = _to_bool(cfg.get("enabled", True), True)
+            rows[name] = {
+                "target_name": name,
+                "enabled": enabled,
+                "current_version": current,
+                "latest_version": latest,
+                "status": self._overview_status(current, latest, enabled),
+                "last_checked_at": str(st.get("last_checked_at", "-") or "-"),
+            }
+        return rows
+
+    def _inventory_runtime_options(self) -> dict[str, Any]:
+        mode = str(self.config.get("skill_management_mode", "npx")).strip().lower()
+        if mode not in {"npx", "filesystem", "hybrid"}:
+            mode = "npx"
+        include_commands = _to_str_list(self.config.get("auto_cli_include_commands", []))
+        exclude_commands = _to_str_list(self.config.get("auto_cli_exclude_commands", []))
+        return {
+            "skill_management_mode": mode,
+            "npx_command": str(self.config.get("npx_skills_command", "npx") or "npx").strip() or "npx",
+            "npx_timeout_s": _to_int(self.config.get("npx_skills_timeout_s", 12), 12, 1),
+            "npx_include_project": _to_bool(self.config.get("npx_skills_include_project", True), True),
+            "npx_include_global": _to_bool(self.config.get("npx_skills_include_global", True), True),
+            "npx_workdir": str(self.config.get("npx_skills_workdir", "") or "").strip(),
+            "auto_discover_cli": _to_bool(self.config.get("auto_discover_cli", True), True),
+            "auto_discover_cli_max": _to_int(self.config.get("auto_discover_cli_max", 120), 120, 20),
+            "auto_cli_only_known": _to_bool(self.config.get("auto_cli_only_known", True), True),
+            "auto_cli_include_commands": include_commands,
+            "auto_cli_exclude_commands": exclude_commands,
+        }
+
+    def _inventory_catalogs(
+        self,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+        try:
+            software_catalog = normalize_software_catalog_payload(
+                self.config.get("software_catalog", []),
+                fallback_defaults=True,
+            )
+        except Exception as exc:
+            logger.error("[onesync] invalid software_catalog, fallback to defaults: %s", exc)
+            software_catalog = normalize_software_catalog_payload([], fallback_defaults=True)
+
+        try:
+            skill_catalog = normalize_skill_catalog_payload(self.config.get("skill_catalog", []))
+        except Exception as exc:
+            logger.error("[onesync] invalid skill_catalog, fallback to empty: %s", exc)
+            skill_catalog = []
+
+        try:
+            skill_bindings = normalize_skill_bindings_payload(self.config.get("skill_bindings", []))
+        except Exception as exc:
+            logger.error("[onesync] invalid skill_bindings, fallback to empty: %s", exc)
+            skill_bindings = []
+
+        return software_catalog, skill_catalog, skill_bindings, self._inventory_runtime_options()
+
+    def _build_inventory_snapshot(self) -> dict[str, Any]:
+        software_catalog, skill_catalog, skill_bindings, inventory_options = self._inventory_catalogs()
+        target_rows = self._target_rows_for_inventory()
+        return build_inventory_snapshot(
+            software_catalog=software_catalog,
+            skill_catalog=skill_catalog,
+            skill_bindings=skill_bindings,
+            target_rows=target_rows,
+            inventory_options=inventory_options,
+        )
+
+    def _build_skills_snapshot(self, inventory_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+        snapshot = inventory_snapshot if isinstance(inventory_snapshot, dict) else self._build_inventory_snapshot()
+        return build_skills_overview(snapshot)
+
+    def _write_json_file(self, path: Path, payload: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        tmp.replace(path)
+
+    def _persist_skills_state_files(self, skills_snapshot: dict[str, Any]) -> None:
+        manifest = skills_snapshot.get("manifest", {})
+        lock = skills_snapshot.get("lock", {})
+        self.skills_state_dir.mkdir(parents=True, exist_ok=True)
+        self.skills_sources_dir.mkdir(parents=True, exist_ok=True)
+        self.skills_generated_dir.mkdir(parents=True, exist_ok=True)
+
+        self._write_json_file(self.skills_manifest_path, manifest)
+        self._write_json_file(self.skills_lock_path, lock)
+
+        for existing in self.skills_sources_dir.glob("*.json"):
+            try:
+                existing.unlink()
+            except Exception:
+                continue
+        for existing in self.skills_generated_dir.glob("*.json"):
+            try:
+                existing.unlink()
+            except Exception:
+                continue
+
+        for item in skills_snapshot.get("source_rows", []):
+            if not isinstance(item, dict):
+                continue
+            source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            self._write_json_file(self.skills_sources_dir / f"{source_id}.json", item)
+
+        for item in skills_snapshot.get("deploy_rows", []):
+            if not isinstance(item, dict):
+                continue
+            target_id = _normalize_inventory_id(item.get("target_id", ""), default="")
+            if not target_id:
+                continue
+            self._write_json_file(self.skills_generated_dir / f"{target_id}.json", item)
+
+    def _refresh_skills_snapshot(self, inventory_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+        try:
+            skills_snapshot = self._build_skills_snapshot(inventory_snapshot)
+        except Exception as exc:
+            logger.error("[onesync] skills snapshot build failed: %s", exc)
+            skills_snapshot = {
+                "ok": False,
+                "generated_at": _now_iso(),
+                "manifest": {},
+                "lock": {},
+                "software_hosts": [],
+                "source_rows": [],
+                "deploy_rows": [],
+                "doctor": {"ok": False, "warning_count": 1, "warnings": [str(exc)]},
+                "counts": {},
+                "warnings": [str(exc)],
+                "software_rows": [],
+                "skill_rows": [],
+                "binding_rows": [],
+                "binding_map": {},
+                "binding_map_by_scope": {},
+                "compatibility": {},
+            }
+
+        skills_state = self._skills_state()
+        skills_state["last_overview"] = skills_snapshot
+        skills_state["last_synced_at"] = skills_snapshot.get("generated_at", _now_iso())
+        try:
+            self._persist_skills_state_files(skills_snapshot)
+        except Exception as exc:
+            logger.error("[onesync] persist skills state files failed: %s", exc)
+            warnings = skills_snapshot.setdefault("warnings", [])
+            if isinstance(warnings, list):
+                warnings.append(f"persist skills files failed: {exc}")
+        return skills_snapshot
+
+    def _refresh_inventory_snapshot(self, *, sync_skills: bool = True) -> dict[str, Any]:
+        try:
+            snapshot = self._build_inventory_snapshot()
+        except Exception as exc:
+            logger.error("[onesync] inventory snapshot build failed: %s", exc)
+            snapshot = {
+                "ok": False,
+                "generated_at": _now_iso(),
+                "software_rows": [],
+                "skill_rows": [],
+                "binding_rows": [],
+                "binding_map": {},
+                "binding_map_by_scope": {},
+                "compatibility": {},
+                "counts": {},
+                "warnings": [str(exc)],
+            }
+        inventory_state = self._inventory_state()
+        inventory_state["last_snapshot"] = snapshot
+        inventory_state["last_scanned_at"] = snapshot.get("generated_at", _now_iso())
+        if sync_skills:
+            self._refresh_skills_snapshot(inventory_snapshot=snapshot)
+        return snapshot
+
+    def webui_get_inventory_payload(self) -> dict[str, Any]:
+        return self._refresh_inventory_snapshot()
+
+    def webui_get_skills_payload(self) -> dict[str, Any]:
+        self._refresh_inventory_snapshot(sync_skills=True)
+        skills_state = self._skills_state()
+        return skills_state.get("last_overview", {})
+
+    def webui_get_skill_sources_payload(self) -> dict[str, Any]:
+        snapshot = self.webui_get_skills_payload()
+        return {
+            "ok": bool(snapshot.get("ok", True)),
+            "generated_at": snapshot.get("generated_at"),
+            "counts": snapshot.get("counts", {}),
+            "items": snapshot.get("source_rows", []),
+            "warnings": snapshot.get("warnings", []),
+        }
+
+    def webui_get_skill_source_payload(self, source_id: str) -> dict[str, Any]:
+        normalized_source_id = _normalize_inventory_id(source_id, default="")
+        if not normalized_source_id:
+            return {"ok": False, "message": "source_id is required"}
+        snapshot = self.webui_get_skills_payload()
+        source_rows = snapshot.get("source_rows", [])
+        source = next(
+            (
+                item for item in source_rows
+                if isinstance(item, dict) and str(item.get("source_id", "")) == normalized_source_id
+            ),
+            None,
+        )
+        if not source:
+            return {"ok": False, "message": f"source_id not found: {normalized_source_id}"}
+        related_targets = [
+            item
+            for item in snapshot.get("deploy_rows", [])
+            if isinstance(item, dict)
+            and (
+                normalized_source_id in _to_str_list(item.get("selected_source_ids", []))
+                or normalized_source_id in _to_str_list(item.get("available_source_ids", []))
+            )
+        ]
+        return {
+            "ok": True,
+            "generated_at": snapshot.get("generated_at"),
+            "source": source,
+            "deploy_rows": related_targets,
+            "warnings": snapshot.get("warnings", []),
+        }
+
+    async def webui_scan_inventory(self) -> dict[str, Any]:
+        snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        await self._save_state()
+        self._push_debug_log(
+            "info",
+            (
+                "inventory scan completed: "
+                f"software={snapshot.get('counts', {}).get('software_total', 0)} "
+                f"skills={snapshot.get('counts', {}).get('skills_total', 0)}"
+            ),
+            source="webui",
+        )
+        return snapshot
+
+    async def webui_import_skills(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        await self._save_state()
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        self._push_debug_log(
+            "info",
+            (
+                "skills import completed: "
+                f"sources={skills_snapshot.get('counts', {}).get('source_total', 0)} "
+                f"deploy_targets={skills_snapshot.get('counts', {}).get('deploy_target_total', 0)}"
+            ),
+            source="webui",
+        )
+        source_ids = [
+            str(item.get("source_id", "")).strip()
+            for item in skills_snapshot.get("source_rows", [])
+            if isinstance(item, dict)
+        ]
+        return {
+            "ok": True,
+            "inventory": inventory_snapshot,
+            "skills": skills_snapshot,
+            "imported_source_ids": [item for item in source_ids if item],
+        }
+
+    def webui_sync_skill_source(self, source_id: str) -> dict[str, Any]:
+        snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        _ = snapshot
+        return self.webui_get_skill_source_payload(source_id)
+
+    def webui_deploy_skill_source(self, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized_source_id = _normalize_inventory_id(source_id, default="")
+        if not normalized_source_id:
+            return {"ok": False, "message": "source_id is required"}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        scope = _normalize_inventory_id(payload.get("scope", "global"), default="global")
+        if scope not in {"global", "workspace"}:
+            scope = "global"
+
+        requested_software_ids = [
+            _normalize_inventory_id(item, default="")
+            for item in _to_str_list(payload.get("software_ids", []))
+        ]
+        target_ids = _to_str_list(payload.get("target_ids", []))
+        for target_id in target_ids:
+            software_text, _, scope_text = str(target_id).partition(":")
+            software_id = _normalize_inventory_id(software_text, default="")
+            if not software_id:
+                continue
+            requested_software_ids.append(software_id)
+            if scope_text.strip():
+                parsed_scope = _normalize_inventory_id(scope_text, default="global")
+                if parsed_scope in {"global", "workspace"}:
+                    scope = parsed_scope
+        requested_software_ids = _dedupe_keep_order([item for item in requested_software_ids if item])
+        if not requested_software_ids:
+            return {"ok": False, "message": "software_ids or target_ids is required"}
+
+        snapshot = self._build_inventory_snapshot()
+        compatibility = snapshot.get("compatibility", {})
+        current_bindings = normalize_skill_bindings_payload(self.config.get("skill_bindings", []))
+        next_bindings = list(current_bindings)
+
+        for software_id in requested_software_ids:
+            compatible_ids = set(_to_str_list(compatibility.get(software_id, [])))
+            if normalized_source_id not in compatible_ids:
+                return {
+                    "ok": False,
+                    "message": f"source {normalized_source_id} is incompatible with software {software_id}",
+                }
+            exists = any(
+                str(item.get("software_id", "")) == software_id
+                and str(item.get("skill_id", "")) == normalized_source_id
+                and str(item.get("scope", "global")) == scope
+                for item in next_bindings
+                if isinstance(item, dict)
+            )
+            if exists:
+                continue
+            next_bindings.append(
+                {
+                    "software_id": software_id,
+                    "skill_id": normalized_source_id,
+                    "scope": scope,
+                    "enabled": True,
+                    "settings": {},
+                },
+            )
+
+        self.config["skill_bindings"] = normalize_skill_bindings_payload(next_bindings)
+        self._persist_plugin_config()
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        self._push_debug_log(
+            "info",
+            (
+                "skill source deployed: "
+                f"source={normalized_source_id} scope={scope} targets={','.join(requested_software_ids)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "inventory": inventory_snapshot,
+            "skills": skills_snapshot,
+            "source": self.webui_get_skill_source_payload(normalized_source_id).get("source"),
+        }
+
+    def webui_doctor_skills(self) -> dict[str, Any]:
+        snapshot = self.webui_get_skills_payload()
+        return {
+            "ok": bool(snapshot.get("ok", True)),
+            "generated_at": snapshot.get("generated_at"),
+            "doctor": snapshot.get("doctor", {}),
+            "warnings": snapshot.get("warnings", []),
+            "counts": snapshot.get("counts", {}),
+        }
+
+    def webui_update_inventory_bindings(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {"ok": False, "message": "invalid payload, expected object"}
+
+        current_bindings = normalize_skill_bindings_payload(self.config.get("skill_bindings", []))
+        incoming_bindings = payload.get("bindings")
+
+        if incoming_bindings is not None:
+            try:
+                next_bindings = normalize_skill_bindings_payload(incoming_bindings)
+            except Exception as exc:
+                return {"ok": False, "message": f"invalid bindings payload: {exc}"}
+        else:
+            software_id = _normalize_inventory_id(payload.get("software_id", ""))
+            if not software_id:
+                return {"ok": False, "message": "software_id is required"}
+            scope = _normalize_inventory_id(payload.get("scope", "global"), default="global")
+            if scope not in {"global", "workspace"}:
+                scope = "global"
+
+            requested_skill_ids = [
+                _normalize_inventory_id(item)
+                for item in _to_str_list(payload.get("skill_ids", []))
+            ]
+            requested_skill_ids = _dedupe_keep_order([sid for sid in requested_skill_ids if sid])
+
+            snapshot = self._build_inventory_snapshot()
+            compatibility = snapshot.get("compatibility", {})
+            software_rows = snapshot.get("software_rows", [])
+            software_exists = any(
+                str(item.get("id", "")) == software_id
+                for item in software_rows
+                if isinstance(item, dict)
+            )
+            if not software_exists:
+                return {"ok": False, "message": f"software_id not found: {software_id}"}
+
+            compatible_ids = set(compatibility.get(software_id, []))
+            incompatible = [sid for sid in requested_skill_ids if sid not in compatible_ids]
+            if incompatible:
+                return {
+                    "ok": False,
+                    "message": (
+                        "some skill_ids are incompatible with software "
+                        f"{software_id}: {', '.join(incompatible)}"
+                    ),
+                }
+
+            next_bindings = replace_bindings_for_scope(
+                current_bindings,
+                software_id=software_id,
+                skill_ids=requested_skill_ids,
+                scope=scope,
+            )
+
+        self.config["skill_bindings"] = next_bindings
+        self._persist_plugin_config()
+        snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        self._push_debug_log(
+            "info",
+            (
+                "inventory bindings updated: "
+                f"bindings={len(next_bindings)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "skill_bindings": next_bindings,
+            "inventory": snapshot,
+            "skills": skills_snapshot,
+        }
+
     @staticmethod
     def _normalize_targets_payload(raw: Any) -> dict[str, dict[str, Any]]:
         if isinstance(raw, dict):
@@ -832,6 +1296,21 @@ class OneSyncPlugin(Star):
         mode = str(self.config.get("target_config_mode", "human")).strip().lower()
         if mode not in {"human", "developer"}:
             mode = "human"
+        try:
+            software_catalog = normalize_software_catalog_payload(
+                self.config.get("software_catalog", []),
+                fallback_defaults=False,
+            )
+        except Exception:
+            software_catalog = []
+        try:
+            skill_catalog = normalize_skill_catalog_payload(self.config.get("skill_catalog", []))
+        except Exception:
+            skill_catalog = []
+        try:
+            skill_bindings = normalize_skill_bindings_payload(self.config.get("skill_bindings", []))
+        except Exception:
+            skill_bindings = []
 
         raw_targets_json = self.config.get("targets_json", "")
         if isinstance(raw_targets_json, dict):
@@ -861,6 +1340,7 @@ class OneSyncPlugin(Star):
         web_cfg = self.config.get("web_admin", {})
         if not isinstance(web_cfg, dict):
             web_cfg = {}
+        inventory_opts = self._inventory_runtime_options()
 
         config_payload = {
             "enabled": _to_bool(self.config.get("enabled", True), True),
@@ -886,6 +1366,20 @@ class OneSyncPlugin(Star):
                 "password": str(web_cfg.get("password", "") or ""),
             },
             "web_admin_url": str(self.config.get("web_admin_url", "") or ""),
+            "software_catalog": software_catalog,
+            "skill_catalog": skill_catalog,
+            "skill_bindings": skill_bindings,
+            "skill_management_mode": str(inventory_opts.get("skill_management_mode", "npx")),
+            "npx_skills_command": str(inventory_opts.get("npx_command", "npx")),
+            "npx_skills_timeout_s": _to_int(inventory_opts.get("npx_timeout_s", 12), 12, 1),
+            "npx_skills_include_project": _to_bool(inventory_opts.get("npx_include_project", True), True),
+            "npx_skills_include_global": _to_bool(inventory_opts.get("npx_include_global", True), True),
+            "npx_skills_workdir": str(inventory_opts.get("npx_workdir", "")),
+            "auto_discover_cli": _to_bool(inventory_opts.get("auto_discover_cli", True), True),
+            "auto_discover_cli_max": _to_int(inventory_opts.get("auto_discover_cli_max", 120), 120, 20),
+            "auto_cli_only_known": _to_bool(inventory_opts.get("auto_cli_only_known", True), True),
+            "auto_cli_include_commands": _to_str_list(inventory_opts.get("auto_cli_include_commands", [])),
+            "auto_cli_exclude_commands": _to_str_list(inventory_opts.get("auto_cli_exclude_commands", [])),
         }
 
         return {
@@ -895,6 +1389,9 @@ class OneSyncPlugin(Star):
                 "target_config_modes": ["human", "developer"],
                 "strategies": ["cargo_path_git", "command", "system_package"],
                 "system_package_managers": sorted(SYSTEM_PACKAGE_REQUIRED_COMMANDS.keys()),
+                "software_kinds": ["cli", "gui", "claw", "other"],
+                "binding_scopes": ["global", "workspace"],
+                "skill_management_modes": ["npx", "filesystem", "hybrid"],
             },
         }
 
@@ -996,6 +1493,53 @@ class OneSyncPlugin(Star):
                     human_entries.append(self._target_cfg_to_human_template_entry(name, cfg))
                 self.config["human_targets"] = human_entries
 
+            if "software_catalog" in incoming:
+                software_catalog = normalize_software_catalog_payload(
+                    incoming.get("software_catalog"),
+                    fallback_defaults=False,
+                )
+                self.config["software_catalog"] = software_catalog
+            if "skill_catalog" in incoming:
+                skill_catalog = normalize_skill_catalog_payload(incoming.get("skill_catalog"))
+                self.config["skill_catalog"] = skill_catalog
+            if "skill_bindings" in incoming:
+                skill_bindings = normalize_skill_bindings_payload(incoming.get("skill_bindings"))
+                self.config["skill_bindings"] = skill_bindings
+
+            if "skill_management_mode" in incoming:
+                inventory_mode = str(incoming.get("skill_management_mode", "npx")).strip().lower()
+                if inventory_mode not in {"npx", "filesystem", "hybrid"}:
+                    return {"ok": False, "message": "skill_management_mode must be one of: npx/filesystem/hybrid"}
+                self.config["skill_management_mode"] = inventory_mode
+
+            if "npx_skills_command" in incoming:
+                self.config["npx_skills_command"] = str(incoming.get("npx_skills_command", "npx") or "npx").strip() or "npx"
+            if "npx_skills_timeout_s" in incoming:
+                self.config["npx_skills_timeout_s"] = _to_int(incoming.get("npx_skills_timeout_s", 12), 12, 1)
+            if "npx_skills_include_project" in incoming:
+                self.config["npx_skills_include_project"] = _to_bool(
+                    incoming.get("npx_skills_include_project", True),
+                    True,
+                )
+            if "npx_skills_include_global" in incoming:
+                self.config["npx_skills_include_global"] = _to_bool(
+                    incoming.get("npx_skills_include_global", True),
+                    True,
+                )
+            if "npx_skills_workdir" in incoming:
+                self.config["npx_skills_workdir"] = str(incoming.get("npx_skills_workdir", "") or "").strip()
+
+            if "auto_discover_cli" in incoming:
+                self.config["auto_discover_cli"] = _to_bool(incoming.get("auto_discover_cli", True), True)
+            if "auto_discover_cli_max" in incoming:
+                self.config["auto_discover_cli_max"] = _to_int(incoming.get("auto_discover_cli_max", 120), 120, 20)
+            if "auto_cli_only_known" in incoming:
+                self.config["auto_cli_only_known"] = _to_bool(incoming.get("auto_cli_only_known", True), True)
+            if "auto_cli_include_commands" in incoming:
+                self.config["auto_cli_include_commands"] = _to_str_list(incoming.get("auto_cli_include_commands", []))
+            if "auto_cli_exclude_commands" in incoming:
+                self.config["auto_cli_exclude_commands"] = _to_str_list(incoming.get("auto_cli_exclude_commands", []))
+
             if mode == "human":
                 self._bootstrap_human_targets_if_needed()
                 raw_entries = self.config.get("human_targets", [])
@@ -1023,6 +1567,7 @@ class OneSyncPlugin(Star):
                 self.config["human_targets"] = human_entries
 
             self._refresh_software_overview()
+            self._refresh_inventory_snapshot()
             self._persist_plugin_config()
             self._push_debug_log(
                 "info",
@@ -1252,7 +1797,7 @@ class OneSyncPlugin(Star):
 
     def _load_state(self) -> None:
         if not self.state_path.exists():
-            self.state = {"targets": {}, "env": {}}
+            self.state = {"targets": {}, "env": {}, "inventory": {}, "skills": {}}
             return
         try:
             raw = self.state_path.read_text(encoding="utf-8")
@@ -1265,10 +1810,16 @@ class OneSyncPlugin(Star):
             env_state = parsed.get("env", {})
             if not isinstance(env_state, dict):
                 env_state = {}
-            self.state = {"targets": targets, "env": env_state}
+            inventory_state = parsed.get("inventory", {})
+            if not isinstance(inventory_state, dict):
+                inventory_state = {}
+            skills_state = parsed.get("skills", {})
+            if not isinstance(skills_state, dict):
+                skills_state = {}
+            self.state = {"targets": targets, "env": env_state, "inventory": inventory_state, "skills": skills_state}
         except Exception as exc:
             logger.error("[onesync] failed to load state, reset: %s", exc)
-            self.state = {"targets": {}, "env": {}}
+            self.state = {"targets": {}, "env": {}, "inventory": {}, "skills": {}}
 
     async def _save_state(self) -> None:
         async with self._state_lock:
@@ -1292,6 +1843,20 @@ class OneSyncPlugin(Star):
             env_state = {}
             self.state["env"] = env_state
         return env_state
+
+    def _inventory_state(self) -> dict[str, Any]:
+        inventory_state = self.state.setdefault("inventory", {})
+        if not isinstance(inventory_state, dict):
+            inventory_state = {}
+            self.state["inventory"] = inventory_state
+        return inventory_state
+
+    def _skills_state(self) -> dict[str, Any]:
+        skills_state = self.state.setdefault("skills", {})
+        if not isinstance(skills_state, dict):
+            skills_state = {}
+            self.state["skills"] = skills_state
+        return skills_state
 
     async def _record_event(self, payload: dict[str, Any]) -> None:
         line = json.dumps(payload, ensure_ascii=False)
