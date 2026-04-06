@@ -27,6 +27,7 @@ from .skills_core import (
     manifest_to_binding_rows,
     normalize_saved_skills_manifest,
 )
+from .source_sync_core import build_source_sync_record
 from .updater_core import (
     CheckResult,
     CommandRunner,
@@ -1211,9 +1212,120 @@ class OneSyncPlugin(Star):
         }
 
     def webui_sync_skill_source(self, source_id: str) -> dict[str, Any]:
-        snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        _ = snapshot
-        return self.webui_get_skill_source_payload(source_id)
+        normalized_source_id = _normalize_inventory_id(source_id, default="")
+        if not normalized_source_id:
+            return {"ok": False, "message": "source_id is required"}
+
+        skills_snapshot = self.webui_get_skills_payload()
+        source_rows = skills_snapshot.get("source_rows", [])
+        source = next(
+            (
+                item for item in source_rows
+                if isinstance(item, dict) and str(item.get("source_id", "")) == normalized_source_id
+            ),
+            None,
+        )
+        if not isinstance(source, dict):
+            return {"ok": False, "message": f"source_id not found: {normalized_source_id}"}
+
+        sync_record = build_source_sync_record(source)
+        manifest = self._update_saved_manifest_source_metadata(
+            source_id=normalized_source_id,
+            source_payload=source,
+            sync_payload=sync_record,
+        )
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        source_payload = self.webui_get_skill_source_payload(normalized_source_id)
+        message = str(sync_record.get("sync_message") or "").strip() or f"source sync finished: {normalized_source_id}"
+        level = "info" if str(sync_record.get("sync_status") or "") == "ok" else "warn"
+        self._push_debug_log(
+            level,
+            (
+                "skill source sync: "
+                f"source={normalized_source_id} status={sync_record.get('sync_status') or 'unknown'} "
+                f"message={message}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "generated_at": source_payload.get("generated_at", refreshed_skills_snapshot.get("generated_at")),
+            "manifest": manifest,
+            "inventory": inventory_snapshot,
+            "skills": refreshed_skills_snapshot,
+            "source": source_payload.get("source", source),
+            "deploy_rows": source_payload.get("deploy_rows", []),
+            "warnings": source_payload.get("warnings", []),
+            "sync": sync_record,
+        }
+
+    def _update_saved_manifest_source_metadata(
+        self,
+        *,
+        source_id: str,
+        source_payload: dict[str, Any] | None = None,
+        sync_payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_source_id = _normalize_inventory_id(source_id, default="")
+        if not normalized_source_id:
+            return {}
+
+        source_row = source_payload if isinstance(source_payload, dict) else {}
+        sync_row = sync_payload if isinstance(sync_payload, dict) else {}
+        manifest = self._load_saved_skills_manifest()
+        sources = manifest.get("sources", [])
+        if not isinstance(sources, list):
+            sources = []
+
+        merged_fields = {
+            "source_id": normalized_source_id,
+            "display_name": str(source_row.get("display_name") or normalized_source_id),
+            "source_kind": str(source_row.get("source_kind") or source_row.get("skill_kind") or "skill"),
+            "provider_key": str(source_row.get("provider_key") or "generic"),
+            "enabled": _to_bool(source_row.get("enabled", True), True),
+            "discovered": _to_bool(source_row.get("discovered", False), False),
+            "auto_discovered": _to_bool(source_row.get("auto_discovered", False), False),
+            "source_scope": str(source_row.get("source_scope") or "global"),
+            "source_path": str(source_row.get("source_path") or ""),
+            "member_count": _to_int(source_row.get("member_count", 1), 1, 1),
+            "member_skill_preview": _to_str_list(source_row.get("member_skill_preview", [])),
+            "member_skill_overflow": _to_int(source_row.get("member_skill_overflow", 0), 0, 0),
+            "management_hint": str(source_row.get("management_hint") or ""),
+            "source_exists": _to_bool(source_row.get("source_exists", False), False),
+            "last_seen_at": str(source_row.get("last_seen_at") or ""),
+            "source_age_days": source_row.get("source_age_days"),
+            "freshness_status": str(source_row.get("freshness_status") or "missing"),
+            "registry_package_name": str(source_row.get("registry_package_name") or ""),
+            "registry_package_manager": str(source_row.get("registry_package_manager") or ""),
+            "compatible_software_ids": _to_str_list(source_row.get("compatible_software_ids", [])),
+            "compatible_software_families": _to_str_list(source_row.get("compatible_software_families", [])),
+            "tags": _to_str_list(source_row.get("tags", [])),
+            "sync_status": str(sync_row.get("sync_status") or ""),
+            "sync_checked_at": str(sync_row.get("sync_checked_at") or ""),
+            "sync_kind": str(sync_row.get("sync_kind") or ""),
+            "sync_message": str(sync_row.get("sync_message") or ""),
+            "registry_latest_version": str(sync_row.get("registry_latest_version") or ""),
+            "registry_published_at": str(sync_row.get("registry_published_at") or ""),
+            "registry_homepage": str(sync_row.get("registry_homepage") or ""),
+            "registry_description": str(sync_row.get("registry_description") or ""),
+        }
+
+        updated = False
+        for item in sources:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("source_id", "")).strip() != normalized_source_id:
+                continue
+            item.update({key: value for key, value in merged_fields.items() if value is not None})
+            updated = True
+            break
+
+        if not updated:
+            sources.append(merged_fields)
+
+        manifest["sources"] = sources
+        return self._save_skills_manifest(manifest)
 
     def _update_saved_manifest_target_selection(
         self,

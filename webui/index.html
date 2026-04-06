@@ -1312,6 +1312,21 @@
       justify-content: flex-end;
     }
 
+    .inventory-source-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .inventory-source-sync-btn {
+      min-width: 0;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 999px;
+    }
+
     .inventory-source-item .meta,
     .inventory-deploy-item .meta {
       color: var(--muted);
@@ -2096,6 +2111,7 @@
       inventoryDraftSkillIds: [],
       inventoryVisibleCompatibleSkillIds: [],
       inventoryVisibleDiscoveredSkillIds: [],
+      inventorySyncingSourceIds: [],
       inventorySaving: false,
       inventoryTargetDetail: null,
       inventoryRepairing: false
@@ -2413,10 +2429,17 @@
         inventory_skill_meta_age: "年龄",
         inventory_skill_meta_last_seen: "最近发现",
         inventory_skill_meta_registry: "Registry",
+        inventory_skill_meta_latest_version: "最新包版本",
+        inventory_skill_meta_sync_status: "同步状态",
+        inventory_skill_meta_sync_checked: "同步时间",
         inventory_skill_source_auto: "自动发现",
         inventory_skill_source_manual: "手工配置",
         inventory_skill_source_bundle: "npx 聚合包",
+        inventory_source_sync: "同步源",
+        inventory_source_syncing: "同步中",
+        inventory_sync_pending: "未同步",
         inventory_save_error: "保存部署选择失败: {msg}",
+        inventory_sync_error: "同步 Source 失败: {msg}",
         inventory_scan_error: "刷新资产失败: {msg}",
         inventory_doctor_error: "健康检查失败: {msg}",
         inventory_deploy_meta_scope: "范围",
@@ -2735,9 +2758,15 @@
         inventory_skill_meta_age: "age",
         inventory_skill_meta_last_seen: "last_seen",
         inventory_skill_meta_registry: "registry",
+        inventory_skill_meta_latest_version: "latest_version",
+        inventory_skill_meta_sync_status: "sync_status",
+        inventory_skill_meta_sync_checked: "sync_checked_at",
         inventory_skill_source_auto: "auto",
         inventory_skill_source_manual: "manual",
         inventory_skill_source_bundle: "npx bundle",
+        inventory_source_sync: "Sync Source",
+        inventory_source_syncing: "Syncing",
+        inventory_sync_pending: "unsynced",
         inventory_doctor_error: "Doctor check failed: {msg}",
         inventory_deploy_meta_scope: "scope",
         inventory_deploy_meta_status: "status",
@@ -2746,6 +2775,7 @@
         inventory_deploy_meta_path: "target_path",
         inventory_deploy_meta_drift: "drift",
         inventory_save_error: "Failed to save deployment selection: {msg}",
+        inventory_sync_error: "Failed to sync source: {msg}",
         inventory_scan_error: "Failed to refresh inventory: {msg}",
       },
     };
@@ -3465,6 +3495,11 @@
           const lastSeen = String(item.last_seen_at || "-").trim() || "-";
           const registryPackageName = String(item.registry_package_name || "").trim();
           const registryPackageManager = String(item.registry_package_manager || "").trim();
+          const registryLatestVersion = String(item.registry_latest_version || "-").trim() || "-";
+          const syncStatus = String(item.sync_status || t("inventory_sync_pending")).trim() || t("inventory_sync_pending");
+          const syncCheckedAt = String(item.sync_checked_at || "-").trim() || "-";
+          const syncMessage = String(item.sync_message || "").trim();
+          const syncing = Array.isArray(state.inventorySyncingSourceIds) && state.inventorySyncingSourceIds.includes(sourceId);
           const preview = Array.isArray(item.member_skill_preview)
             ? item.member_skill_preview.map((entry) => String(entry || "").trim()).filter(Boolean)
             : [];
@@ -3474,9 +3509,19 @@
             <div class="inventory-source-item">
               <div class="title">
                 <span>${escapeHtml(item.display_name || sourceId)}</span>
-                <span class="inventory-source-badges">
-                  ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
-                  ${renderSkillsStatusBadge(freshnessStatus)}
+                <span class="inventory-source-actions">
+                  <span class="inventory-source-badges">
+                    ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
+                    ${renderSkillsStatusBadge(freshnessStatus)}
+                  </span>
+                  ${registryPackageName ? `
+                    <button
+                      type="button"
+                      class="inventory-source-sync-btn"
+                      data-source-sync-id="${escapeHtml(sourceId)}"
+                      ${syncing ? "disabled" : ""}
+                    >${escapeHtml(syncing ? t("inventory_source_syncing") : t("inventory_source_sync"))}</button>
+                  ` : ""}
                 </span>
               </div>
               <div class="meta">
@@ -3490,9 +3535,17 @@ ${escapeHtml(t("inventory_skill_meta_freshness"))}: ${escapeHtml(freshnessStatus
  | ${escapeHtml(t("inventory_skill_meta_age"))}: ${escapeHtml(sourceAge)}
  | ${escapeHtml(t("inventory_skill_meta_last_seen"))}: ${escapeHtml(lastSeen)}
               </div>
+              ${registryPackageName ? `
+                <div class="meta">
+${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
+ | ${escapeHtml(t("inventory_skill_meta_latest_version"))}: ${escapeHtml(registryLatestVersion)}
+ | ${escapeHtml(t("inventory_skill_meta_sync_checked"))}: ${escapeHtml(syncCheckedAt)}
+                </div>
+              ` : ""}
               <div class="meta">${escapeHtml(previewText)}</div>
               ${managementHint ? `<div class="meta">${escapeHtml(t("inventory_skill_meta_manage"))}: ${escapeHtml(managementHint)}</div>` : ""}
               ${registryPackageName ? `<div class="meta">${escapeHtml(t("inventory_skill_meta_registry"))}: ${escapeHtml(registryPackageName)}${registryPackageManager ? ` (${escapeHtml(registryPackageManager)})` : ""}</div>` : ""}
+              ${syncMessage ? `<div class="meta">${escapeHtml(syncMessage)}</div>` : ""}
             </div>
           `;
         }).join("")
@@ -3736,6 +3789,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const lastSeen = String(item.last_seen_at || "-").trim() || "-";
           const registryPackageName = String(item.registry_package_name || "").trim();
           const registryPackageManager = String(item.registry_package_manager || "").trim();
+          const registryLatestVersion = String(item.registry_latest_version || "-").trim() || "-";
+          const syncStatus = String(item.sync_status || t("inventory_sync_pending")).trim() || t("inventory_sync_pending");
+          const syncCheckedAt = String(item.sync_checked_at || "-").trim() || "-";
+          const syncMessage = String(item.sync_message || "").trim();
           const sourceKind = item.skill_kind === "skill_bundle"
             ? t("inventory_skill_source_bundle")
             : item.auto_discovered
@@ -3774,6 +3831,8 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
               <div class="meta">${escapeHtml(previewText)}</div>
               ${managementHint ? `<div class="meta">${t("inventory_skill_meta_manage")}=${escapeHtml(managementHint)}</div>` : ""}
               ${registryPackageName ? `<div class="meta">${t("inventory_skill_meta_registry")}=${escapeHtml(registryPackageName)}${registryPackageManager ? ` (${escapeHtml(registryPackageManager)})` : ""}</div>` : ""}
+              ${registryPackageName ? `<div class="meta">${t("inventory_skill_meta_sync_status")}=${escapeHtml(syncStatus)} | ${t("inventory_skill_meta_latest_version")}=${escapeHtml(registryLatestVersion)} | ${t("inventory_skill_meta_sync_checked")}=${escapeHtml(syncCheckedAt)}</div>` : ""}
+              ${syncMessage ? `<div class="meta">${escapeHtml(syncMessage)}</div>` : ""}
             </label>
           `;
         }).join("");
@@ -3837,6 +3896,42 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       state.inventoryTargetDetail = null;
       renderInventoryPanel();
       await refreshSelectedDeployTargetDetail();
+    }
+
+    async function syncInventorySource(sourceId) {
+      const normalizedSourceId = String(sourceId || "").trim();
+      if (!normalizedSourceId) {
+        return;
+      }
+      const currentSyncing = new Set(
+        Array.isArray(state.inventorySyncingSourceIds)
+          ? state.inventorySyncingSourceIds.map((item) => String(item || "").trim()).filter(Boolean)
+          : [],
+      );
+      if (currentSyncing.has(normalizedSourceId)) {
+        return;
+      }
+      currentSyncing.add(normalizedSourceId);
+      state.inventorySyncingSourceIds = [...currentSyncing];
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/sources/${encodeURIComponent(normalizedSourceId)}/sync`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+      } finally {
+        const nextSyncing = new Set(
+          (state.inventorySyncingSourceIds || [])
+            .map((item) => String(item || "").trim())
+            .filter(Boolean),
+        );
+        nextSyncing.delete(normalizedSourceId);
+        state.inventorySyncingSourceIds = [...nextSyncing];
+        renderInventoryPanel();
+      }
     }
 
     function applyInventoryDraftSelection(mode) {
@@ -5187,6 +5282,20 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         syncInventoryDraftWithSelectedSoftware();
         renderInventoryPanel();
         await refreshSelectedDeployTargetDetail();
+      });
+
+      $("inventorySourceRows").addEventListener("click", async (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-source-sync-id]")
+          : null;
+        if (!el) return;
+        const sourceId = String(el.getAttribute("data-source-sync-id") || "").trim();
+        if (!sourceId) return;
+        try {
+          await syncInventorySource(sourceId);
+        } catch (err) {
+          alert(t("inventory_sync_error", { msg: err.message }));
+        }
       });
 
       $("inventoryScopeSelect").addEventListener("change", async (evt) => {

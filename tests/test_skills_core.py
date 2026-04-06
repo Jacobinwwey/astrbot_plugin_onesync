@@ -206,6 +206,36 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["doctor"]["source_freshness"]["fresh"])
         self.assertEqual(1, overview["doctor"]["source_freshness"]["missing"])
 
+    def test_build_skills_overview_merges_saved_source_sync_metadata(self) -> None:
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_bundle_compound_engineering_global",
+                    "display_name": "Compound Engineering",
+                    "sync_status": "ok",
+                    "sync_checked_at": "2026-04-06T08:05:00+00:00",
+                    "sync_message": "fetched npm registry metadata for @every-env/compound-plugin",
+                    "registry_latest_version": "2.62.1",
+                    "registry_published_at": "2026-04-01T11:58:00.000Z",
+                    "registry_homepage": "https://github.com/every-env/compound-plugin",
+                    "registry_description": "Compound plugin bundle",
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_manifest=saved_manifest)
+        compound = next(
+            item
+            for item in overview["source_rows"]
+            if item["source_id"] == "npx_bundle_compound_engineering_global"
+        )
+        self.assertEqual("ok", compound["sync_status"])
+        self.assertEqual("2.62.1", compound["registry_latest_version"])
+        self.assertEqual("2026-04-06T08:05:00+00:00", compound["sync_checked_at"])
+        self.assertEqual("https://github.com/every-env/compound-plugin", compound["registry_homepage"])
+
     def test_build_skills_lock_marks_missing_target_path_and_repair_actions(self) -> None:
         snapshot = copy.deepcopy(self.inventory_snapshot)
         missing_root = Path(self._tempdir.name) / "missing-codex-skills"
