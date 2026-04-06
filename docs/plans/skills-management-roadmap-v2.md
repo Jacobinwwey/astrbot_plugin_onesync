@@ -10,6 +10,8 @@ status: active
 - 保留 `inventory_core.py`
 - 引入 `skills_core.py`
 - 新增 `/api/skills/*`
+- `manifest.json` 可写，作为 deploy intent 主存储
+- 新增 `POST /api/skills/deploy-targets/{target_id}`
 - 在插件数据目录落地：
   - `skills/manifest.json`
   - `skills/lock.json`

@@ -8,7 +8,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from skills_core import build_skills_lock, build_skills_manifest, build_skills_overview
+from skills_core import (
+    build_skills_lock,
+    build_skills_manifest,
+    build_skills_overview,
+    manifest_to_binding_rows,
+)
 
 
 class SkillsCoreTests(unittest.TestCase):
@@ -157,6 +162,61 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["counts"]["deploy_unavailable_total"])
         self.assertFalse(overview["doctor"]["ok"])
         self.assertGreaterEqual(overview["doctor"]["warning_count"], 2)
+
+    def test_saved_manifest_preserves_missing_sources_and_selected_targets(self) -> None:
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [
+                {
+                    "source_id": "retired_bundle",
+                    "display_name": "Retired Bundle",
+                    "source_kind": "skill_bundle",
+                    "provider_key": "legacy",
+                    "source_path": "/tmp/retired",
+                    "member_count": 3,
+                    "member_skill_preview": ["a", "b"],
+                    "selected_source_ids": [],
+                },
+            ],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": ["retired_bundle", "npx_bundle_compound_engineering_global"],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_manifest=saved_manifest)
+        manifest = overview["manifest"]
+        source_ids = {item["source_id"] for item in manifest["sources"]}
+        self.assertIn("retired_bundle", source_ids)
+
+        codex_global = next(item for item in manifest["deploy_targets"] if item["target_id"] == "codex:global")
+        self.assertEqual(
+            ["retired_bundle", "npx_bundle_compound_engineering_global"],
+            codex_global["selected_source_ids"],
+        )
+
+        lock_target = next(item for item in overview["deploy_rows"] if item["target_id"] == "codex:global")
+        self.assertEqual("stale", lock_target["status"])
+        self.assertEqual("missing_source", lock_target["drift_status"])
+        self.assertIn("retired_bundle", lock_target["missing_source_ids"])
+
+    def test_manifest_to_binding_rows_projects_selected_sources(self) -> None:
+        manifest = build_skills_manifest(self.inventory_snapshot)
+        for item in manifest["deploy_targets"]:
+            if item["target_id"] == "codex:global":
+                item["selected_source_ids"] = ["npx_bundle_compound_engineering_global", "npx_global_find_skills"]
+            else:
+                item["selected_source_ids"] = []
+
+        rows = manifest_to_binding_rows(manifest)
+        keys = {(row["software_id"], row["skill_id"], row["scope"]) for row in rows}
+        self.assertIn(("codex", "npx_bundle_compound_engineering_global", "global"), keys)
+        self.assertIn(("codex", "npx_global_find_skills", "global"), keys)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - `POST /api/skills/import`
   - `POST /api/skills/sources/{source_id}/sync`
   - `POST /api/skills/sources/{source_id}/deploy`
+  - `POST /api/skills/deploy-targets/{target_id}`
   - `POST /api/skills/doctor`
 
 ### 3. 前端视图升级
@@ -69,12 +70,15 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
 - 新增 `skills_core.py`
   - 将 inventory 快照转为 `manifest + lock + overview`
   - 计算 source 健康、deploy 健康、漂移状态
+  - 合并已保存 manifest 与最新 inventory，保留 deploy intent
 - 更新 `main.py`
   - 增加 `skills` 运行态 state
   - 增加 skills 持久化目录与 JSON 文件写入
   - 每次刷新 inventory 时同步刷新 skills snapshot
+  - 让 `manifest.json` 成为 deploy intent 的主存储
+  - 将 manifest 反向投影到 `skill_bindings` 以维持 inventory 兼容
   - 新增 `/api/skills/*` 对应的插件方法
-  - `POST /api/skills/sources/{source_id}/deploy` 使用现有 `skill_bindings` 作为 deploy 兼容层
+  - `POST /api/skills/deploy-targets/{target_id}` 支持按 target 整体更新 selected sources
 - 更新 `webui_server.py`
   - 暴露新的 `/api/skills/*` 路由
 
@@ -98,5 +102,5 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
 
 ## Assumptions
 - 当前阶段 source-first 仍建立在 inventory 派生之上，不单独引入新的写配置 UI。
-- `skill_bindings` 在过渡期继续作为 deploy intent 的兼容持久层。
+- `manifest.json` 已成为 deploy intent 主存储，`skill_bindings` 仅保留为兼容投影。
 - 真正的“manifest 直接编辑 + projection repair”属于下一个阶段，而不是这次变更的范围。

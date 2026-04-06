@@ -36,6 +36,7 @@ OneSync 已经具备稳定的软件更新能力，但缺少“宿主软件 + ski
 
 ### R3. 建立 source-first 状态模型
 - R3.1 系统必须产出 `manifest` 和 `lock` 两类状态。
+- R3.1a `manifest` 必须可写，并保留用户选定的 deploy intent。
 - R3.2 系统必须区分：
   - source 是否已发现
   - deploy target 是否 ready / stale / unavailable
@@ -70,5 +71,6 @@ OneSync 已经具备稳定的软件更新能力，但缺少“宿主软件 + ski
 ## Key Decisions
 - 决策 1：以 source/bundle 为主对象，而非 per-skill 主对象。
 - 决策 2：保留 inventory 兼容层，新增 source-first skills 核心。
+- 决策 2a：`manifest.json` 是 deploy intent 主真相源，`skill_bindings` 仅保留兼容投影。
 - 决策 3：优先使用 `npx` 聚合结果作为真实用户可管理对象。
 - 决策 4：前端主数据源切换到 `/api/skills/overview`，但保留现有操作流。
