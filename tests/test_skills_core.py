@@ -16,6 +16,7 @@ from skills_core import (
     build_skills_overview,
     manifest_to_binding_rows,
     normalize_saved_skills_manifest,
+    normalize_saved_skills_lock,
 )
 
 
@@ -782,6 +783,47 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertNotIn("source_path", source)
         self.assertNotIn("sync_status", source)
         self.assertNotIn("registry_latest_version", source)
+
+    def test_normalize_saved_skills_lock_preserves_explicit_aggregation_fields(self) -> None:
+        normalized = normalize_saved_skills_lock(
+            {
+                "version": 1,
+                "generated_at": "2026-04-07T12:00:00+00:00",
+                "sources": [
+                    {
+                        "source_id": "npx_global_ui_audit",
+                        "display_name": "ui-audit",
+                        "source_kind": "npx_single",
+                        "provider_key": "npx_skills",
+                        "source_scope": "global",
+                        "source_path": "/tmp/.agents/skills/ui-audit",
+                        "locator": "https://github.com/demo/tools.git",
+                        "source_subpath": "skills/ui-audit",
+                        "install_unit_id": "skill_lock:https://github.com/demo/tools.git#skills/ui-audit",
+                        "install_unit_kind": "skill_lock_entry",
+                        "install_ref": "https://github.com/demo/tools.git#skills/ui-audit",
+                        "install_manager": "github",
+                        "install_unit_display_name": "ui-audit",
+                        "aggregation_strategy": "skill_lock_path",
+                        "collection_group_id": "collection:source_repo_demo_tools",
+                        "collection_group_name": "demo/tools",
+                        "collection_group_kind": "source_repo",
+                        "last_synced_at": "2026-04-07T12:00:00+00:00",
+                    },
+                ],
+                "deploy_targets": [],
+            },
+        )
+
+        source = normalized["sources"][0]
+        self.assertEqual(
+            "skill_lock:https://github.com/demo/tools.git#skills/ui-audit",
+            source["install_unit_id"],
+        )
+        self.assertEqual("skill_lock_entry", source["install_unit_kind"])
+        self.assertEqual("https://github.com/demo/tools.git#skills/ui-audit", source["install_ref"])
+        self.assertEqual("collection:source_repo_demo_tools", source["collection_group_id"])
+        self.assertEqual("demo/tools", source["collection_group_name"])
 
     def test_build_skills_overview_uses_saved_state_when_inventory_is_unavailable(self) -> None:
         target_root = Path(self._tempdir.name) / "codex-skills"

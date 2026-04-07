@@ -302,6 +302,15 @@ def normalize_saved_skills_lock(raw: Any) -> dict[str, Any]:
             "deployed_target_count": _to_int(item.get("deployed_target_count", 0), 0, 0),
             "resolution_hash": str(item.get("resolution_hash") or ""),
             "last_synced_at": str(item.get("last_synced_at") or ""),
+            "install_unit_id": str(item.get("install_unit_id") or ""),
+            "install_unit_kind": str(item.get("install_unit_kind") or ""),
+            "install_ref": str(item.get("install_ref") or ""),
+            "install_manager": str(item.get("install_manager") or ""),
+            "install_unit_display_name": str(item.get("install_unit_display_name") or ""),
+            "aggregation_strategy": str(item.get("aggregation_strategy") or ""),
+            "collection_group_id": str(item.get("collection_group_id") or ""),
+            "collection_group_name": str(item.get("collection_group_name") or ""),
+            "collection_group_kind": str(item.get("collection_group_kind") or ""),
         }
         source_record.update(enrich_source_aggregation(source_record))
         sources.append(source_record)

@@ -6,9 +6,11 @@ import os
 import re
 import shutil
 import subprocess
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 try:
     from .skills_hosts_core import DEFAULT_SOFTWARE_CATALOG, PROVIDER_DEFAULTS
@@ -623,13 +625,141 @@ def _match_npx_root_bundle(source_path: str) -> dict[str, Any] | None:
     return None
 
 
+def _skill_path_root(skill_path: Any) -> str:
+    text = str(skill_path or "").strip().replace("\\", "/").strip("/")
+    if not text:
+        return ""
+    if text.lower().endswith("/skill.md"):
+        return text[:-9].strip("/")
+    if text.lower() == "skill.md":
+        return ""
+    return text
+
+
+def _repo_label_from_url(url_text: Any) -> str:
+    text = str(url_text or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlparse(text)
+    except Exception:
+        parsed = None
+    if parsed:
+        repo_path = str(parsed.path or "").strip().strip("/")
+        if repo_path.endswith(".git"):
+            repo_path = repo_path[:-4]
+        if repo_path:
+            return repo_path
+    return text
+
+
+def _find_ancestor_file(path_text: Any, filename: str, *, max_hops: int = 4) -> Path | None:
+    text = str(path_text or "").strip()
+    if not text:
+        return None
+    try:
+        path = Path(os.path.expanduser(text))
+    except Exception:
+        return None
+    current = path if path.is_dir() else path.parent
+    for _ in range(max_hops + 1):
+        candidate = current / filename
+        if candidate.exists() and candidate.is_file():
+            return candidate
+        if current.parent == current:
+            break
+        current = current.parent
+    return None
+
+
+@lru_cache(maxsize=32)
+def _load_skill_lock_index(lock_path: str) -> dict[str, dict[str, Any]]:
+    try:
+        payload = json.loads(Path(lock_path).read_text(encoding="utf-8"))
+    except Exception:
+        payload = {}
+    skills = payload.get("skills", {}) if isinstance(payload, dict) else {}
+    if not isinstance(skills, dict):
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for skill_name, item in skills.items():
+        name = str(skill_name or "").strip()
+        if not name or not isinstance(item, dict):
+            continue
+        result[name] = dict(item)
+    return result
+
+
+def _derive_npx_skill_lock_provenance(skill_name: str, source_path: str) -> dict[str, Any]:
+    lock_path = _find_ancestor_file(source_path, ".skill-lock.json", max_hops=4)
+    if not lock_path:
+        return {}
+    lock_index = _load_skill_lock_index(str(lock_path))
+    entry = lock_index.get(str(skill_name or "").strip())
+    if not isinstance(entry, dict):
+        return {}
+
+    source_url = str(entry.get("sourceUrl") or "").strip()
+    source_type = str(entry.get("sourceType") or "").strip().lower()
+    source_label = str(entry.get("source") or "").strip() or _repo_label_from_url(source_url)
+    plugin_name = str(entry.get("pluginName") or "").strip()
+    skill_root = _skill_path_root(entry.get("skillPath"))
+    repo_slug = _slug(source_label or plugin_name or _repo_label_from_url(source_url), default="")
+    install_ref = ""
+    if source_url and skill_root:
+        install_ref = f"{source_url}#{skill_root}"
+    elif source_url and skill_name:
+        install_ref = f"{source_url}#{skill_name}"
+    else:
+        install_ref = source_url or source_label or plugin_name
+    install_unit_id = f"skill_lock:{install_ref}" if install_ref else ""
+
+    tags: list[str] = []
+    if repo_slug:
+        tags.append(f"source-repo:{repo_slug}")
+    if source_type:
+        tags.append(f"source-type:{_slug(source_type, default='external')}")
+
+    result = {
+        "locator": source_url,
+        "source_subpath": skill_root,
+        "managed_by": source_type or "skill_lock",
+        "update_policy": "source_sync",
+        "collection_group_name": source_label or plugin_name,
+        "collection_group_kind": "source_repo",
+        "tags": tags,
+    }
+    if install_unit_id:
+        result.update(
+            {
+                "install_unit_id": install_unit_id,
+                "install_unit_kind": "skill_lock_entry",
+                "install_ref": install_ref,
+                "install_manager": source_type or "skill_lock",
+                "install_unit_display_name": str(skill_name or "").strip() or plugin_name or source_label,
+                "aggregation_strategy": "skill_lock_path" if skill_root else "skill_lock_source",
+            },
+        )
+    if source_label or plugin_name:
+        group_label = source_label or plugin_name
+        result["collection_group_id"] = f"collection:{_slug(f'source_repo:{group_label}', default='source_repo')}"
+        result["collection_group_name"] = group_label
+    return {
+        key: value
+        for key, value in result.items()
+        if value not in ("", None) and value != []
+    }
+
+
 def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime) -> dict[str, Any]:
     name = str(raw_item.get("name", "")).strip()
     source_scope = str(raw_item.get("source_scope", "global")).strip().lower() or "global"
     source_path = str(raw_item.get("source_path", "")).strip()
     agents = _to_str_list(raw_item.get("agents", []))
     compatible_families = _map_agents_to_software_families(agents)
+    provenance = _derive_npx_skill_lock_provenance(name, source_path)
     tags = [f"npx-scope:{source_scope}", "npx-managed"]
+    tags.extend(_to_str_list(provenance.pop("tags", [])))
     tags.extend([f"agent:{_slug(agent, default='agent')}" for agent in agents if str(agent or "").strip()])
     row = {
         "id": f"npx_{_slug(f'{source_scope}:{name}', default='skill')}",
@@ -639,6 +769,8 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime)
         "skill_kind": "skill",
         "enabled": True,
         "source_path": source_path,
+        "locator": str(provenance.get("locator") or ""),
+        "source_subpath": str(provenance.get("source_subpath") or ""),
         "detect_paths": [source_path] if source_path else [],
         "compatible_software_kinds": [],
         "compatible_software_families": compatible_families,
@@ -646,6 +778,8 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime)
         "auto_discovered": True,
         "discovered": bool(source_path and Path(source_path).exists()),
         "source_scope": source_scope,
+        "managed_by": str(provenance.get("managed_by") or ""),
+        "update_policy": str(provenance.get("update_policy") or ""),
         "member_count": 1,
         "member_skill_preview": [name] if name else [],
         "member_skill_overflow": 0,
@@ -653,6 +787,7 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime)
         "registry_package_name": "",
         "registry_package_manager": "",
     }
+    row.update(provenance)
     row.update(derive_source_aggregation_fields(row))
     return _attach_source_diagnostics(row, now_dt=now_dt)
 

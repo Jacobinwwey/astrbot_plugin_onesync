@@ -181,6 +181,56 @@ class SkillsSourcesCoreTests(unittest.TestCase):
         self.assertEqual("https://github.com/demo/skills.git", source["locator"])
         self.assertEqual("packages/codex", source["source_subpath"])
 
+    def test_build_skills_registry_preserves_explicit_aggregation_fields_from_discovered_rows(self) -> None:
+        discovered_rows = [
+            {
+                "id": "npx_global_ui_audit",
+                "display_name": "ui-audit",
+                "skill_kind": "skill",
+                "source_kind": "npx_single",
+                "provider_key": "npx_skills",
+                "source_scope": "global",
+                "source_path": "/tmp/.agents/skills/ui-audit",
+                "locator": "https://github.com/demo/tools.git",
+                "source_subpath": "skills/ui-audit",
+                "managed_by": "github",
+                "update_policy": "source_sync",
+                "install_unit_id": "skill_lock:https://github.com/demo/tools.git#skills/ui-audit",
+                "install_unit_kind": "skill_lock_entry",
+                "install_ref": "https://github.com/demo/tools.git#skills/ui-audit",
+                "install_manager": "github",
+                "install_unit_display_name": "ui-audit",
+                "aggregation_strategy": "skill_lock_path",
+                "collection_group_id": "collection:source_repo_demo_tools",
+                "collection_group_name": "demo/tools",
+                "collection_group_kind": "source_repo",
+                "compatible_software_ids": ["codex"],
+                "discovered": True,
+                "auto_discovered": True,
+                "source_exists": True,
+                "freshness_status": "fresh",
+                "tags": ["npx-managed", "source-repo:demo_tools"],
+            },
+        ]
+
+        registry = build_skills_registry(
+            discovered_rows,
+            saved_registry={},
+            generated_at="2026-04-07T12:00:00+00:00",
+        )
+
+        self.assertEqual(1, len(registry["sources"]))
+        source = registry["sources"][0]
+        self.assertEqual(
+            "skill_lock:https://github.com/demo/tools.git#skills/ui-audit",
+            source["install_unit_id"],
+        )
+        self.assertEqual("source_sync", source["update_policy"])
+        self.assertEqual("collection:source_repo_demo_tools", source["collection_group_id"])
+        self.assertEqual("demo/tools", source["collection_group_name"])
+        self.assertEqual("skills/ui-audit", source["source_subpath"])
+        self.assertEqual("https://github.com/demo/tools.git", source["locator"])
+
 
 if __name__ == "__main__":
     unittest.main()

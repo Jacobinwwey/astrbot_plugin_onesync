@@ -217,6 +217,15 @@ def _normalize_registry_source(raw: dict[str, Any], *, generated_at: str = "") -
         "compatible_software_ids": _dedupe_keep_order(_to_str_list(raw.get("compatible_software_ids", []))),
         "compatible_software_families": _dedupe_keep_order(_to_str_list(raw.get("compatible_software_families", []))),
         "tags": _dedupe_keep_order(_to_str_list(raw.get("tags", []))),
+        "install_unit_id": str(raw.get("install_unit_id") or "").strip(),
+        "install_unit_kind": str(raw.get("install_unit_kind") or "").strip(),
+        "install_ref": str(raw.get("install_ref") or "").strip(),
+        "install_manager": str(raw.get("install_manager") or "").strip(),
+        "install_unit_display_name": str(raw.get("install_unit_display_name") or "").strip(),
+        "aggregation_strategy": str(raw.get("aggregation_strategy") or "").strip(),
+        "collection_group_id": str(raw.get("collection_group_id") or "").strip(),
+        "collection_group_name": str(raw.get("collection_group_name") or "").strip(),
+        "collection_group_kind": str(raw.get("collection_group_kind") or "").strip(),
     }
     normalized.update(derive_source_aggregation_fields(normalized))
     return normalized

@@ -341,6 +341,102 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertEqual("collection:dhh_rails", dhh_style["collection_group_id"])
         self.assertEqual("collection:dhh_rails", dhh_reviewer["collection_group_id"])
 
+    def test_build_inventory_snapshot_infers_skill_lock_provenance_groups_from_repo_metadata(self) -> None:
+        software_catalog = normalize_software_catalog_payload(
+            [
+                {
+                    "id": "codex",
+                    "display_name": "Codex",
+                    "software_kind": "cli",
+                    "provider_key": "codex",
+                    "detect_commands": [],
+                    "enabled": True,
+                },
+            ],
+            fallback_defaults=False,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            agents_root = root / ".agents"
+            skills_root = agents_root / "skills"
+            ui_audit_dir = skills_root / "ui-audit"
+            ui_reviewer_dir = skills_root / "ui-reviewer"
+            ui_audit_dir.mkdir(parents=True, exist_ok=True)
+            ui_reviewer_dir.mkdir(parents=True, exist_ok=True)
+            (ui_audit_dir / "SKILL.md").write_text("# ui-audit\n", encoding="utf-8")
+            (ui_reviewer_dir / "SKILL.md").write_text("# ui-reviewer\n", encoding="utf-8")
+            (agents_root / ".skill-lock.json").write_text(
+                json.dumps(
+                    {
+                        "version": 3,
+                        "skills": {
+                            "ui-audit": {
+                                "source": "demo/tools",
+                                "sourceType": "github",
+                                "sourceUrl": "https://github.com/demo/tools.git",
+                                "skillPath": "skills/ui-audit/SKILL.md",
+                            },
+                            "ui-reviewer": {
+                                "source": "demo/tools",
+                                "sourceType": "github",
+                                "sourceUrl": "https://github.com/demo/tools.git",
+                                "skillPath": "skills/ui-reviewer/SKILL.md",
+                            },
+                        },
+                    },
+                ),
+                encoding="utf-8",
+            )
+
+            global_items = [
+                {"name": "ui-audit", "path": str(ui_audit_dir), "scope": "global", "agents": ["Codex"]},
+                {"name": "ui-reviewer", "path": str(ui_reviewer_dir), "scope": "global", "agents": ["Codex"]},
+            ]
+
+            def _fake_run(command, **_kwargs):
+                class _Result:
+                    def __init__(self, stdout: str) -> None:
+                        self.stdout = stdout
+                        self.stderr = ""
+                        self.returncode = 0
+
+                if "-g" in command:
+                    return _Result(json.dumps(global_items))
+                return _Result("[]")
+
+            snapshot = build_inventory_snapshot(
+                software_catalog=software_catalog,
+                skill_catalog=[],
+                skill_bindings=[],
+                target_rows={},
+                inventory_options={
+                    "skill_management_mode": "npx",
+                    "npx_timeout_s": 3,
+                    "auto_discover_cli": False,
+                },
+                command_runner=_fake_run,
+            )
+
+        by_id = {row["id"]: row for row in snapshot["skill_rows"]}
+        ui_audit = by_id["npx_global_ui_audit"]
+        ui_reviewer = by_id["npx_global_ui_reviewer"]
+
+        self.assertEqual("https://github.com/demo/tools.git", ui_audit["locator"])
+        self.assertEqual("skills/ui-audit", ui_audit["source_subpath"])
+        self.assertEqual(
+            "skill_lock:https://github.com/demo/tools.git#skills/ui-audit",
+            ui_audit["install_unit_id"],
+        )
+        self.assertEqual(
+            "skill_lock:https://github.com/demo/tools.git#skills/ui-reviewer",
+            ui_reviewer["install_unit_id"],
+        )
+        self.assertEqual("collection:source_repo_demo_tools", ui_audit["collection_group_id"])
+        self.assertEqual("collection:source_repo_demo_tools", ui_reviewer["collection_group_id"])
+        self.assertEqual("demo/tools", ui_audit["collection_group_name"])
+        self.assertEqual("skill_lock_path", ui_audit["aggregation_strategy"])
+
     def test_build_inventory_snapshot_keeps_codex_root_skills_split_by_source(self) -> None:
         software_catalog = normalize_software_catalog_payload(
             [
