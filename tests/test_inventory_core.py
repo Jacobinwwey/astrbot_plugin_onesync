@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import time
@@ -271,6 +272,71 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["codex"])
         self.assertNotIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["claude_code"])
         self.assertEqual(6, snapshot["counts"]["skills_members_total"])
+
+    def test_build_inventory_snapshot_keeps_codex_root_skills_split_by_source(self) -> None:
+        software_catalog = normalize_software_catalog_payload(
+            [
+                {
+                    "id": "codex",
+                    "display_name": "Codex",
+                    "software_kind": "cli",
+                    "provider_key": "codex",
+                    "detect_commands": [],
+                    "enabled": True,
+                },
+            ],
+            fallback_defaults=False,
+        )
+
+        global_items = [
+            {"name": "ce:brainstorm", "path": "/root/.codex/skills/ce-brainstorm", "scope": "global", "agents": ["Codex"]},
+            {"name": "ce:compound", "path": "/root/.codex/skills/ce-compound", "scope": "global", "agents": ["Codex"]},
+            {"name": "correctness-reviewer", "path": "/root/.codex/skills/correctness-reviewer", "scope": "global", "agents": ["Codex"]},
+            {"name": "design-iterator", "path": "/root/.codex/skills/design-iterator", "scope": "global", "agents": ["Codex"]},
+            {"name": "frontend-design", "path": "/root/.codex/skills/frontend-design", "scope": "global", "agents": ["Codex"]},
+            {"name": "find-skills", "path": "/root/.codex/skills/find-skills", "scope": "global", "agents": ["Codex"]},
+            {"name": "performance-oracle", "path": "/root/.codex/skills/performance-oracle", "scope": "global", "agents": ["Codex"]},
+            {"name": "systematic-debugging", "path": "/root/.codex/skills/systematic-debugging", "scope": "global", "agents": ["Codex"]},
+            {"name": "verification-before-completion", "path": "/root/.codex/skills/verification-before-completion", "scope": "global", "agents": ["Codex"]},
+            {"name": "requesting-code-review", "path": "/root/.codex/skills/requesting-code-review", "scope": "global", "agents": ["Codex"]},
+        ]
+
+        def _fake_run(command, **_kwargs):
+            class _Result:
+                def __init__(self, stdout: str) -> None:
+                    self.stdout = stdout
+                    self.stderr = ""
+                    self.returncode = 0
+
+            if "-g" in command:
+                return _Result(json.dumps(global_items))
+            return _Result("[]")
+
+        snapshot = build_inventory_snapshot(
+            software_catalog=software_catalog,
+            skill_catalog=[],
+            skill_bindings=[],
+            target_rows={},
+            inventory_options={
+                "skill_management_mode": "npx",
+                "npx_timeout_s": 3,
+                "auto_discover_cli": False,
+            },
+            command_runner=_fake_run,
+        )
+
+        skill_ids = {row.get("id") for row in snapshot["skill_rows"]}
+        self.assertIn("npx_bundle_compound_engineering_global", skill_ids)
+        self.assertNotIn("npx_bundle_codex_skill_pack_global", skill_ids)
+        self.assertIn("npx_global_correctness_reviewer", skill_ids)
+        self.assertIn("npx_global_design_iterator", skill_ids)
+        self.assertIn("npx_global_frontend_design", skill_ids)
+        self.assertIn("npx_global_find_skills", skill_ids)
+        self.assertIn("npx_global_performance_oracle", skill_ids)
+        self.assertIn("npx_global_systematic_debugging", skill_ids)
+        self.assertIn("npx_global_verification_before_completion", skill_ids)
+        self.assertIn("npx_global_requesting_code_review", skill_ids)
+        self.assertEqual(10, snapshot["counts"]["skills_members_total"])
 
     def test_build_inventory_snapshot_marks_stale_skill_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

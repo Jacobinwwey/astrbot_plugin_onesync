@@ -17,6 +17,29 @@ except ImportError:  # pragma: no cover - direct test imports
 
 VALID_DEPLOY_SCOPES = ("global", "workspace")
 
+LEGACY_NPX_ROOT_BUNDLE_RULES = [
+    {
+        "legacy_source_id_prefix": "npx_bundle_codex_skill_pack_",
+        "path_markers": ["/.codex/skills/"],
+    },
+    {
+        "legacy_source_id_prefix": "npx_bundle_agent_skill_pack_",
+        "path_markers": ["/.agents/skills/"],
+    },
+    {
+        "legacy_source_id_prefix": "npx_bundle_claude_code_skill_pack_",
+        "path_markers": ["/.claude/skills/"],
+    },
+    {
+        "legacy_source_id_prefix": "npx_bundle_zeroclaw_skill_pack_",
+        "path_markers": ["/zeroclaw/.claude/skills/", "/zeroclaw/src/skills/"],
+    },
+    {
+        "legacy_source_id_prefix": "npx_bundle_antigravity_skill_pack_",
+        "path_markers": ["/antigravity/skills/"],
+    },
+]
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -110,6 +133,17 @@ def _target_path_exists(target_path: str) -> bool:
         return False
     path = Path(text)
     return path.exists() and path.is_dir()
+
+
+def _path_matches_markers(path_text: Any, markers: list[str]) -> bool:
+    normalized = str(path_text or "").strip().replace("\\", "/").lower()
+    if not normalized:
+        return False
+    for marker in markers:
+        marker_text = str(marker or "").strip().replace("\\", "/").lower()
+        if marker_text and marker_text in normalized:
+            return True
+    return False
 
 
 def _saved_manifest_index(saved_manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -352,6 +386,95 @@ def _source_matches_host(
     return True
 
 
+def _match_legacy_root_bundle(source_id: str) -> tuple[dict[str, Any], str] | None:
+    normalized_source_id = str(source_id or "").strip().lower()
+    if not normalized_source_id:
+        return None
+    for rule in LEGACY_NPX_ROOT_BUNDLE_RULES:
+        legacy_prefix = str(rule.get("legacy_source_id_prefix", "")).strip().lower()
+        if not legacy_prefix or not normalized_source_id.startswith(legacy_prefix):
+            continue
+        scope_suffix = normalized_source_id[len(legacy_prefix) :].strip()
+        if scope_suffix:
+            return rule, scope_suffix
+    return None
+
+
+def _legacy_root_bundle_replacement_ids(
+    source_id: str,
+    *,
+    sources: list[dict[str, Any]],
+    host: dict[str, Any] | None = None,
+    compatibility: dict[str, Any] | None = None,
+) -> list[str]:
+    matched = _match_legacy_root_bundle(source_id)
+    if not matched:
+        return []
+    matched_rule, scope_suffix = matched
+    source_id_prefix = f"npx_{scope_suffix}_"
+    replacement_ids: list[str] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        candidate_id = str(source.get("source_id", "")).strip()
+        if not candidate_id or candidate_id == source_id:
+            continue
+        if str(source.get("source_kind", "")).strip() != "npx_single":
+            continue
+        if not candidate_id.startswith(source_id_prefix):
+            continue
+        if not _path_matches_markers(source.get("source_path", ""), _to_str_list(matched_rule.get("path_markers", []))):
+            continue
+        if host is not None and not _source_matches_host(source, host, compatibility):
+            continue
+        replacement_ids.append(candidate_id)
+    return _dedupe_keep_order(replacement_ids)
+
+
+def _drop_legacy_root_bundle_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        source_id = str(source.get("source_id", "")).strip()
+        if source_id and _legacy_root_bundle_replacement_ids(source_id, sources=sources):
+            continue
+        filtered.append(source)
+    return filtered
+
+
+def _expand_legacy_root_bundle_selection(
+    selected_source_ids: list[str],
+    *,
+    sources: list[dict[str, Any]],
+    host: dict[str, Any],
+    compatibility: dict[str, Any] | None = None,
+) -> list[str]:
+    current_source_ids = {
+        str(item.get("source_id", "")).strip()
+        for item in sources
+        if isinstance(item, dict) and str(item.get("source_id", "")).strip()
+    }
+    expanded: list[str] = []
+
+    for selected_source_id in _dedupe_keep_order(_to_str_list(selected_source_ids)):
+        replacement_ids = _legacy_root_bundle_replacement_ids(
+            selected_source_id,
+            sources=sources,
+            host=host,
+            compatibility=compatibility,
+        )
+        if replacement_ids:
+            expanded.extend(replacement_ids)
+            continue
+        if selected_source_id in current_source_ids:
+            expanded.append(selected_source_id)
+            continue
+        expanded.append(selected_source_id)
+
+    return _dedupe_keep_order(expanded)
+
+
 def build_skills_manifest(
     inventory_snapshot: dict[str, Any],
     *,
@@ -497,6 +620,7 @@ def build_skills_manifest(
                 "tags": _dedupe_keep_order(_to_str_list(saved_source.get("tags", []))),
             },
         )
+    sources = _drop_legacy_root_bundle_sources(sources)
 
     deploy_targets: list[dict[str, Any]] = []
     for host in software_hosts:
@@ -510,6 +634,12 @@ def build_skills_manifest(
             selected_ids = _dedupe_keep_order(
                 _to_str_list(saved_target.get("selected_source_ids", []))
                 or selected_from_inventory,
+            )
+            selected_ids = _expand_legacy_root_bundle_selection(
+                selected_ids,
+                sources=sources,
+                host=host,
+                compatibility=compatibility,
             )
             deploy_targets.append(
                 {

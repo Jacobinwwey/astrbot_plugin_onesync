@@ -119,43 +119,11 @@ NPX_NAMESPACE_BUNDLE_RULES = [
     },
 ]
 
-NPX_ROOT_BUNDLE_RULES = [
-    {
-        "path_markers": ["/.codex/skills/"],
-        "bundle_key": "codex_skill_pack",
-        "display_name": "Codex Skill Pack",
-        "provider_key": "codex_skill_pack",
-        "management_hint": "Managed via the Codex skills registry",
-    },
-    {
-        "path_markers": ["/.agents/skills/"],
-        "bundle_key": "agent_skill_pack",
-        "display_name": "Agent Skill Pack",
-        "provider_key": "agent_skill_pack",
-        "management_hint": "Managed via the shared skills registry",
-    },
-    {
-        "path_markers": ["/.claude/skills/"],
-        "bundle_key": "claude_code_skill_pack",
-        "display_name": "Claude Code Skill Pack",
-        "provider_key": "claude_code_skill_pack",
-        "management_hint": "Managed via the Claude skills registry",
-    },
-    {
-        "path_markers": ["/zeroclaw/.claude/skills/", "/zeroclaw/src/skills/"],
-        "bundle_key": "zeroclaw_skill_pack",
-        "display_name": "ZeroClaw Skill Pack",
-        "provider_key": "zeroclaw_skill_pack",
-        "management_hint": "Managed via ZeroClaw local skill roots",
-    },
-    {
-        "path_markers": ["/antigravity/skills/"],
-        "bundle_key": "antigravity_skill_pack",
-        "display_name": "Antigravity Skill Pack",
-        "provider_key": "antigravity_skill_pack",
-        "management_hint": "Managed via Antigravity local skill roots",
-    },
-]
+# Root-directory aggregation is intentionally disabled. Shared roots like
+# ~/.codex/skills or ~/.agents/skills can contain many unrelated npx packages,
+# and collapsing them into a synthetic "skill pack" hides real package
+# boundaries from the management UI.
+NPX_ROOT_BUNDLE_RULES: list[dict[str, Any]] = []
 
 NPX_ROOT_BUNDLE_THRESHOLD = 8
 

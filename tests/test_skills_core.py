@@ -378,6 +378,16 @@ class SkillsCoreTests(unittest.TestCase):
         saved_manifest = {
             "version": 1,
             "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_bundle_codex_skill_pack_global",
+                    "display_name": "Codex Skill Pack",
+                    "source_kind": "npx_bundle",
+                    "provider_key": "codex_skill_pack",
+                    "source_path": "/root/.codex/skills",
+                    "compatible_software_ids": ["codex"],
+                },
+            ],
             "deploy_targets": [
                 {
                     "target_id": "codex:global",
@@ -395,6 +405,109 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(["gui_only_bundle"], codex_global["incompatible_source_ids"])
         self.assertEqual(["drop_incompatible_sources"], codex_global["repair_actions"])
         self.assertIn("contains incompatible sources", "\n".join(overview["warnings"]))
+
+    def test_build_skills_overview_expands_legacy_codex_root_bundle_selection(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        codex_root = Path(self._tempdir.name) / "codex-skills"
+        codex_root.mkdir(parents=True, exist_ok=True)
+        snapshot["software_rows"][0]["resolved_skill_roots"] = [str(codex_root)]
+        snapshot["software_rows"][0]["declared_skill_roots"] = [str(codex_root)]
+        snapshot["skill_rows"].extend(
+            [
+                {
+                    "id": "npx_global_correctness_reviewer",
+                    "display_name": "correctness-reviewer",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/correctness-reviewer",
+                    "member_count": 1,
+                    "member_skill_preview": ["correctness-reviewer"],
+                    "member_skill_overflow": 0,
+                    "management_hint": "",
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+                {
+                    "id": "npx_global_design_iterator",
+                    "display_name": "design-iterator",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/design-iterator",
+                    "member_count": 1,
+                    "member_skill_preview": ["design-iterator"],
+                    "member_skill_overflow": 0,
+                    "management_hint": "",
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+            ],
+        )
+        snapshot["compatibility"]["codex"] = [
+            "npx_bundle_compound_engineering_global",
+            "npx_global_correctness_reviewer",
+            "npx_global_design_iterator",
+            "npx_global_find_skills",
+        ]
+
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": [
+                        "npx_bundle_codex_skill_pack_global",
+                        "npx_bundle_compound_engineering_global",
+                    ],
+                },
+            ],
+        }
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:30+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_bundle_codex_skill_pack_global",
+                    "display_name": "Codex Skill Pack",
+                    "source_kind": "npx_bundle",
+                    "provider_key": "codex_skill_pack",
+                    "locator": "/root/.codex/skills",
+                    "compatible_software_ids": ["codex"],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(snapshot, saved_manifest=saved_manifest, saved_registry=saved_registry)
+        manifest_source_ids = {item["source_id"] for item in overview["manifest"]["sources"]}
+
+        codex_global_manifest = next(
+            item for item in overview["manifest"]["deploy_targets"] if item["target_id"] == "codex:global"
+        )
+        self.assertEqual(
+            [
+                "npx_global_correctness_reviewer",
+                "npx_global_design_iterator",
+                "npx_bundle_compound_engineering_global",
+            ],
+            codex_global_manifest["selected_source_ids"],
+        )
+        self.assertNotIn("npx_bundle_codex_skill_pack_global", manifest_source_ids)
+        self.assertNotIn("npx_bundle_codex_skill_pack_global", codex_global_manifest["available_source_ids"])
+
+        codex_global = next(item for item in overview["deploy_rows"] if item["target_id"] == "codex:global")
+        self.assertEqual("ready", codex_global["status"])
+        self.assertNotIn("npx_bundle_codex_skill_pack_global", codex_global["selected_source_ids"])
+        self.assertNotIn("npx_bundle_codex_skill_pack_global", codex_global["available_source_ids"])
 
     def test_saved_manifest_preserves_missing_sources_and_selected_targets(self) -> None:
         saved_manifest = {
