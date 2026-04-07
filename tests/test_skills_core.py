@@ -870,6 +870,62 @@ class SkillsCoreTests(unittest.TestCase):
         )
         self.assertEqual("packages/codex", manual_git["source_subpath"])
 
+    def test_build_skills_overview_groups_manual_git_subpaths_by_repo_collection(self) -> None:
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_ui_audit",
+                    "display_name": "UI Audit",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/demo/skills.git",
+                    "source_subpath": "packages/ui-audit",
+                    "source_scope": "global",
+                    "provider_key": "manual",
+                    "compatible_software_ids": ["codex"],
+                    "enabled": True,
+                },
+                {
+                    "source_id": "manual_git_ui_reviewer",
+                    "display_name": "UI Reviewer",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/demo/skills.git",
+                    "source_subpath": "packages/ui-reviewer",
+                    "source_scope": "global",
+                    "provider_key": "manual",
+                    "compatible_software_ids": ["codex"],
+                    "enabled": True,
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
+
+        install_units = [
+            item
+            for item in overview["install_unit_rows"]
+            if str(item.get("collection_group_id") or "") == "collection:source_repo_demo_skills"
+        ]
+        self.assertEqual(2, len(install_units))
+        self.assertEqual(
+            {
+                "git:https://github.com/demo/skills.git#packages/ui-audit",
+                "git:https://github.com/demo/skills.git#packages/ui-reviewer",
+            },
+            {item["install_unit_id"] for item in install_units},
+        )
+
+        group = next(
+            item
+            for item in overview["meaningful_collection_group_rows"]
+            if item["collection_group_id"] == "collection:source_repo_demo_skills"
+        )
+        self.assertEqual("demo/skills", group["display_name"])
+        self.assertEqual("source_repo", group["collection_group_kind"])
+        self.assertEqual(2, group["install_unit_count"])
+        self.assertEqual(2, group["source_count"])
+
     def test_normalize_saved_skills_manifest_keeps_intent_only_fields(self) -> None:
         normalized = normalize_saved_skills_manifest(
             {

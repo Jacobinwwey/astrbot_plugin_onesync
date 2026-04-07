@@ -5,6 +5,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 CURATED_NPX_AGGREGATION_RULES: list[dict[str, Any]] = [
     {
@@ -224,6 +225,66 @@ def _looks_like_remote_locator(locator: str) -> bool:
     return normalized.startswith(("http://", "https://", "git@", "ssh://"))
 
 
+def _normalize_subpath_text(path_text: Any) -> str:
+    return str(path_text or "").strip().replace("\\", "/").strip("/")
+
+
+def _repo_label_from_locator(locator: Any) -> str:
+    text = str(locator or "").strip()
+    if not text:
+        return ""
+    if text.startswith("git@"):
+        _, _, repo_path = text.partition(":")
+        repo_path = repo_path.strip().strip("/")
+        if repo_path.endswith(".git"):
+            repo_path = repo_path[:-4]
+        return repo_path or text
+    try:
+        parsed = urlparse(text)
+    except Exception:
+        parsed = None
+    if parsed:
+        repo_path = str(parsed.path or "").strip().strip("/")
+        if repo_path.endswith(".git"):
+            repo_path = repo_path[:-4]
+        if repo_path:
+            return repo_path
+    return text
+
+
+def _local_root_label(locator: Any) -> str:
+    normalized = _normalize_path_text(locator).rstrip("/")
+    if not normalized:
+        return ""
+    basename = normalized.rsplit("/", 1)[-1].strip()
+    return basename or normalized
+
+
+def _join_locator_with_subpath(locator: Any, source_subpath: Any) -> str:
+    locator_text = str(locator or "").strip()
+    subpath_text = _normalize_subpath_text(source_subpath)
+    if locator_text and subpath_text:
+        return f"{locator_text}#{subpath_text}"
+    return locator_text or subpath_text
+
+
+def _manual_source_collection_group(locator: Any, source_kind: str) -> tuple[str, str, str]:
+    locator_text = str(locator or "").strip()
+    if str(source_kind or "").strip().lower() == "manual_git":
+        label = _repo_label_from_locator(locator_text) or locator_text
+        return (
+            f"collection:source_repo_{_slug(label, default='source_repo')}",
+            label,
+            "source_repo",
+        )
+    label = _local_root_label(locator_text) or locator_text
+    return (
+        f"collection:source_root_{_slug(locator_text, default='source_root')}",
+        label,
+        "source_root",
+    )
+
+
 def _match_curated_rule(source: dict[str, Any]) -> dict[str, Any] | None:
     registry_package_name = str(source.get("registry_package_name") or "").strip().lower()
     names = {
@@ -321,7 +382,7 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
     source_kind = str(source.get("source_kind") or source.get("skill_kind") or "").strip().lower()
     locator = _first_non_empty(source.get("locator"), source.get("source_path"), source_id)
     source_path = str(source.get("source_path") or "").strip()
-    source_subpath = str(source.get("source_subpath") or "").strip()
+    source_subpath = _normalize_subpath_text(source.get("source_subpath"))
     management_hint = str(source.get("management_hint") or "").strip()
     registry_package_name = str(source.get("registry_package_name") or "").strip()
     registry_package_manager = str(source.get("registry_package_manager") or "").strip()
@@ -411,14 +472,18 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
         confidence = confidence or "high"
 
     if source_kind == "manual_git":
+        repo_label = _repo_label_from_locator(locator or source_path or source_id)
         origin_kind = origin_kind or "git_source"
         origin_ref = origin_ref or locator
-        origin_label = origin_label or collection_group_name or display_name
+        origin_label = origin_label or repo_label or collection_group_name or display_name
+        package_strategy = package_strategy or ("source_locator_subpath" if source_subpath else "source_locator")
         confidence = confidence or "high"
     elif source_kind == "manual_local":
+        root_label = _local_root_label(locator or source_path or source_id)
         origin_kind = origin_kind or "local_source"
         origin_ref = origin_ref or locator
-        origin_label = origin_label or display_name
+        origin_label = origin_label or root_label or collection_group_name or display_name
+        package_strategy = package_strategy or ("source_locator_subpath" if source_subpath else "source_locator")
         confidence = confidence or "medium"
     elif source_kind == "npx_bundle":
         origin_kind = origin_kind or ("registry_package" if package_name else "source_bundle")
@@ -555,6 +620,7 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
     display_name = str(source.get("display_name") or source_id).strip() or source_id
     source_kind = str(source.get("source_kind") or source.get("skill_kind") or "").strip().lower()
     locator = _first_non_empty(source.get("locator"), source.get("source_path"), source_id)
+    source_subpath = _normalize_subpath_text(source.get("source_subpath"))
     management_hint = str(source.get("management_hint") or "").strip()
     registry_package_name = str(source.get("registry_package_name") or "").strip()
     registry_package_manager = str(source.get("registry_package_manager") or "").strip()
@@ -595,19 +661,27 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             install_unit_display_name = str(rule.get("install_unit_display_name") or display_name) if rule else display_name
             aggregation_strategy = provenance_package_strategy or ("explicit_rule" if rule else "registry_package")
         elif source_kind == "manual_git":
-            install_unit_id = f"git:{locator}"
+            repo_label = _repo_label_from_locator(locator or source_id) or display_name
+            install_ref = _join_locator_with_subpath(locator or source_id, source_subpath)
+            install_unit_id = f"git:{install_ref}"
             install_unit_kind = "git_source"
-            install_ref = locator
+            install_ref = install_ref
             install_manager = "git"
-            install_unit_display_name = display_name
-            aggregation_strategy = "source_locator"
+            install_unit_display_name = (
+                f"{repo_label} :: {source_subpath}" if source_subpath else repo_label
+            )
+            aggregation_strategy = "source_locator_subpath" if source_subpath else "source_locator"
         elif source_kind == "manual_local":
-            install_unit_id = f"local:{locator}"
+            root_label = _local_root_label(locator or source_id) or display_name
+            install_ref = _join_locator_with_subpath(locator or source_id, source_subpath)
+            install_unit_id = f"local:{install_ref}"
             install_unit_kind = "local_source"
-            install_ref = locator
+            install_ref = install_ref
             install_manager = "filesystem"
-            install_unit_display_name = display_name
-            aggregation_strategy = "source_locator"
+            install_unit_display_name = (
+                f"{root_label} :: {source_subpath}" if source_subpath else root_label
+            )
+            aggregation_strategy = "source_locator_subpath" if source_subpath else "source_locator"
         elif source_kind == "npx_bundle":
             if rule:
                 install_unit_id = str(rule.get("install_unit_id") or f"bundle:{source_id}")
@@ -662,6 +736,11 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             collection_group_id = str(rule.get("collection_group_id") or f"collection:{_slug(install_unit_display_name, default='group')}")
             collection_group_name = str(rule.get("collection_group_name") or install_unit_display_name or display_name)
             collection_group_kind = str(rule.get("collection_group_kind") or "curated")
+        elif source_kind in {"manual_git", "manual_local"}:
+            collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
+                locator or source_id,
+                source_kind,
+            )
         else:
             group_name = install_unit_display_name or display_name or install_ref or source_id
             collection_group_id = f"collection:{_slug(group_name, default='group')}"

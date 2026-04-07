@@ -284,6 +284,11 @@ collection group 不能替代 install unit 成为唯一真相。
 - `update` 当前已支持 registry-managed（`bunx` / `npx` / `pnpm dlx` / `npm`）与 git-managed 聚合
 - manual / filesystem 聚合当前返回 structured unsupported，避免伪更新
 - 下一步应推进 Phase E，把同一 install-unit-first 模型扩到 `manual_git` / `manual_local`
+- 已完成 provenance foundation，并把 doctor / aggregate row / WebUI summary 全部接到后端 provenance truth
+- 已开始推进 Phase F：
+  - `manual_git` 现在按 `repo#subpath` 形成 install unit
+  - 同一 Git repo 下多个 subpath 会归到同一个 `source_repo` collection group
+  - `manual_local` 现在按 `root#subpath` 形成 install unit，并归到稳定的 `source_root` collection group
 
 ## Phase E：Provenance foundation（新的第一优先级）
 
