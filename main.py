@@ -31,6 +31,7 @@ from .skills_core import (
     build_skills_overview,
     manifest_to_binding_rows,
     normalize_saved_skills_manifest,
+    normalize_saved_skills_lock,
 )
 from .skills_sources_core import (
     normalize_skills_registry,
@@ -924,9 +925,15 @@ class OneSyncPlugin(Star):
         *,
         saved_manifest: dict[str, Any] | None = None,
         saved_registry: dict[str, Any] | None = None,
+        saved_lock: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         snapshot = inventory_snapshot if isinstance(inventory_snapshot, dict) else self._build_inventory_snapshot()
-        return build_skills_overview(snapshot, saved_manifest=saved_manifest, saved_registry=saved_registry)
+        return build_skills_overview(
+            snapshot,
+            saved_manifest=saved_manifest,
+            saved_registry=saved_registry,
+            saved_lock=saved_lock,
+        )
 
     def _read_json_file(self, path: Path) -> Any:
         if not path.exists():
@@ -957,6 +964,16 @@ class OneSyncPlugin(Star):
             skills_state["saved_registry"] = registry
         return registry
 
+    def _load_saved_skills_lock(self) -> dict[str, Any]:
+        skills_state = self._skills_state()
+        cached = skills_state.get("saved_lock")
+        if isinstance(cached, dict) and cached:
+            return normalize_saved_skills_lock(cached)
+        lock = normalize_saved_skills_lock(self._read_json_file(self.skills_lock_path))
+        if lock:
+            skills_state["saved_lock"] = lock
+        return lock
+
     def _save_skills_manifest(self, manifest: dict[str, Any]) -> dict[str, Any]:
         normalized = normalize_saved_skills_manifest(manifest)
         skills_state = self._skills_state()
@@ -971,6 +988,14 @@ class OneSyncPlugin(Star):
         skills_state["saved_registry"] = normalized
         self.skills_state_dir.mkdir(parents=True, exist_ok=True)
         self._write_json_file(self.skills_registry_path, normalized)
+        return normalized
+
+    def _save_skills_lock(self, lock: dict[str, Any]) -> dict[str, Any]:
+        normalized = normalize_saved_skills_lock(lock)
+        skills_state = self._skills_state()
+        skills_state["saved_lock"] = normalized
+        self.skills_state_dir.mkdir(parents=True, exist_ok=True)
+        self._write_json_file(self.skills_lock_path, normalized)
         return normalized
 
     def _append_skills_audit_event(
@@ -1012,16 +1037,12 @@ class OneSyncPlugin(Star):
         tmp.replace(path)
 
     def _persist_skills_state_files(self, skills_snapshot: dict[str, Any]) -> None:
-        manifest = skills_snapshot.get("manifest", {})
-        lock = skills_snapshot.get("lock", {})
-        registry = skills_snapshot.get("registry", {})
+        registry = self._save_skills_registry(skills_snapshot.get("registry", {}))
+        manifest = self._save_skills_manifest(skills_snapshot.get("manifest", {}))
+        lock = self._save_skills_lock(skills_snapshot.get("lock", {}))
         self.skills_state_dir.mkdir(parents=True, exist_ok=True)
         self.skills_sources_dir.mkdir(parents=True, exist_ok=True)
         self.skills_generated_dir.mkdir(parents=True, exist_ok=True)
-
-        self._write_json_file(self.skills_registry_path, registry)
-        self._write_json_file(self.skills_manifest_path, manifest)
-        self._write_json_file(self.skills_lock_path, lock)
 
         for existing in self.skills_sources_dir.glob("*.json"):
             try:
@@ -1095,12 +1116,14 @@ class OneSyncPlugin(Star):
         *,
         saved_manifest: dict[str, Any] | None = None,
         saved_registry: dict[str, Any] | None = None,
+        saved_lock: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
             skills_snapshot = self._build_skills_snapshot(
                 inventory_snapshot,
                 saved_manifest=saved_manifest,
                 saved_registry=saved_registry,
+                saved_lock=saved_lock,
             )
         except Exception as exc:
             logger.error("[onesync] skills snapshot build failed: %s", exc)
@@ -1140,6 +1163,7 @@ class OneSyncPlugin(Star):
     def _refresh_inventory_snapshot(self, *, sync_skills: bool = True) -> dict[str, Any]:
         saved_manifest = self._load_saved_skills_manifest()
         saved_registry = self._load_saved_skills_registry()
+        saved_lock = self._load_saved_skills_lock()
         try:
             snapshot = self._build_inventory_snapshot()
         except Exception as exc:
@@ -1164,13 +1188,18 @@ class OneSyncPlugin(Star):
                 inventory_snapshot=snapshot,
                 saved_manifest=saved_manifest,
                 saved_registry=saved_registry,
+                saved_lock=saved_lock,
             )
             manifest = skills_snapshot.get("manifest", {})
             registry = skills_snapshot.get("registry", {})
+            lock = skills_snapshot.get("lock", {})
             if isinstance(registry, dict):
                 self._save_skills_registry(registry)
             if isinstance(manifest, dict) and manifest:
                 self._save_skills_manifest(manifest)
+            if isinstance(lock, dict):
+                self._save_skills_lock(lock)
+            if isinstance(manifest, dict) and manifest:
                 bindings_changed = self._sync_skill_bindings_projection(manifest)
                 if bindings_changed:
                     snapshot = self._build_inventory_snapshot(
@@ -1182,6 +1211,7 @@ class OneSyncPlugin(Star):
                         inventory_snapshot=snapshot,
                         saved_manifest=manifest,
                         saved_registry=registry,
+                        saved_lock=lock,
                     )
             last_overview = self._skills_state().get("last_overview", {})
             if isinstance(last_overview, dict) and last_overview:
@@ -1482,7 +1512,7 @@ class OneSyncPlugin(Star):
             return {"ok": False, "message": f"source_id not found: {normalized_source_id}"}
 
         sync_record = build_source_sync_record(source)
-        manifest = self._update_saved_manifest_source_metadata(
+        registry = self._update_saved_registry_source_metadata(
             source_id=normalized_source_id,
             source_payload=source,
             sync_payload=sync_record,
@@ -1504,7 +1534,8 @@ class OneSyncPlugin(Star):
         return {
             "ok": True,
             "generated_at": source_payload.get("generated_at", refreshed_skills_snapshot.get("generated_at")),
-            "manifest": manifest,
+            "manifest": refreshed_skills_snapshot.get("manifest", {}),
+            "registry": registry,
             "inventory": inventory_snapshot,
             "skills": refreshed_skills_snapshot,
             "source": source_payload.get("source", source),
@@ -1529,14 +1560,14 @@ class OneSyncPlugin(Star):
 
         synced_source_ids: list[str] = []
         failed_sources: list[dict[str, Any]] = []
-        manifest = self._load_saved_skills_manifest()
+        registry = self._load_saved_skills_registry()
 
         for source in syncable_sources:
             source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
             if not source_id:
                 continue
             sync_record = build_source_sync_record(source)
-            manifest = self._update_saved_manifest_source_metadata(
+            registry = self._update_saved_registry_source_metadata(
                 source_id=source_id,
                 source_payload=source,
                 sync_payload=sync_record,
@@ -1564,14 +1595,15 @@ class OneSyncPlugin(Star):
         )
         return {
             "ok": True,
-            "manifest": manifest,
+            "manifest": refreshed_skills_snapshot.get("manifest", {}),
+            "registry": registry,
             "inventory": inventory_snapshot,
             "skills": refreshed_skills_snapshot,
             "synced_source_ids": synced_source_ids,
             "failed_sources": failed_sources,
         }
 
-    def _update_saved_manifest_source_metadata(
+    def _update_saved_registry_source_metadata(
         self,
         *,
         source_id: str,
@@ -1584,11 +1616,15 @@ class OneSyncPlugin(Star):
 
         source_row = source_payload if isinstance(source_payload, dict) else {}
         sync_row = sync_payload if isinstance(sync_payload, dict) else {}
-        manifest = self._load_saved_skills_manifest()
-        sources = manifest.get("sources", [])
-        if not isinstance(sources, list):
-            sources = []
-
+        current_registry = self._load_saved_skills_registry()
+        registry_source = next(
+            (
+                item
+                for item in current_registry.get("sources", [])
+                if isinstance(item, dict) and str(item.get("source_id", "")).strip() == normalized_source_id
+            ),
+            None,
+        )
         merged_fields = {
             "source_id": normalized_source_id,
             "display_name": str(source_row.get("display_name") or normalized_source_id),
@@ -1599,12 +1635,16 @@ class OneSyncPlugin(Star):
             "auto_discovered": _to_bool(source_row.get("auto_discovered", False), False),
             "source_scope": str(source_row.get("source_scope") or "global"),
             "source_path": str(source_row.get("source_path") or ""),
+            "locator": str(source_row.get("locator") or source_row.get("source_path") or source_row.get("registry_package_name") or ""),
             "member_count": _to_int(source_row.get("member_count", 1), 1, 1),
             "member_skill_preview": _to_str_list(source_row.get("member_skill_preview", [])),
             "member_skill_overflow": _to_int(source_row.get("member_skill_overflow", 0), 0, 0),
             "management_hint": str(source_row.get("management_hint") or ""),
+            "managed_by": str(source_row.get("managed_by") or ""),
+            "update_policy": str(source_row.get("update_policy") or ""),
             "source_exists": _to_bool(source_row.get("source_exists", False), False),
             "last_seen_at": str(source_row.get("last_seen_at") or ""),
+            "last_refresh_at": str(sync_row.get("sync_checked_at") or _now_iso()),
             "source_age_days": source_row.get("source_age_days"),
             "freshness_status": str(source_row.get("freshness_status") or "missing"),
             "registry_package_name": str(source_row.get("registry_package_name") or ""),
@@ -1622,21 +1662,20 @@ class OneSyncPlugin(Star):
             "registry_description": str(sync_row.get("registry_description") or ""),
         }
 
-        updated = False
-        for item in sources:
-            if not isinstance(item, dict):
-                continue
-            if str(item.get("source_id", "")).strip() != normalized_source_id:
-                continue
-            item.update({key: value for key, value in merged_fields.items() if value is not None})
-            updated = True
-            break
-
-        if not updated:
-            sources.append(merged_fields)
-
-        manifest["sources"] = sources
-        return self._save_skills_manifest(manifest)
+        if isinstance(registry_source, dict):
+            updated_registry = refresh_registry_source(
+                current_registry,
+                normalized_source_id,
+                {**registry_source, **merged_fields},
+                generated_at=_now_iso(),
+            )
+        else:
+            updated_registry = register_registry_source(
+                current_registry,
+                merged_fields,
+                generated_at=_now_iso(),
+            )
+        return self._save_skills_registry(updated_registry)
 
     def _remove_source_from_saved_manifest(self, source_id: str) -> dict[str, Any]:
         normalized_source_id = _normalize_inventory_id(source_id, default="")

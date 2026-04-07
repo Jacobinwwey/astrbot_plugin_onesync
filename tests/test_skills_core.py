@@ -15,6 +15,7 @@ from skills_core import (
     build_skills_manifest,
     build_skills_overview,
     manifest_to_binding_rows,
+    normalize_saved_skills_manifest,
 )
 
 
@@ -207,13 +208,15 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["doctor"]["source_freshness"]["missing"])
 
     def test_build_skills_overview_merges_saved_source_sync_metadata(self) -> None:
-        saved_manifest = {
+        saved_registry = {
             "version": 1,
             "generated_at": "2026-04-06T07:59:00+00:00",
             "sources": [
                 {
                     "source_id": "npx_bundle_compound_engineering_global",
                     "display_name": "Compound Engineering",
+                    "source_kind": "npx_bundle",
+                    "locator": "@every-env/compound-plugin",
                     "sync_status": "ok",
                     "sync_checked_at": "2026-04-06T08:05:00+00:00",
                     "sync_message": "fetched npm registry metadata for @every-env/compound-plugin",
@@ -225,7 +228,7 @@ class SkillsCoreTests(unittest.TestCase):
             ],
         }
 
-        overview = build_skills_overview(self.inventory_snapshot, saved_manifest=saved_manifest)
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
         compound = next(
             item
             for item in overview["source_rows"]
@@ -237,12 +240,14 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("https://github.com/every-env/compound-plugin", compound["registry_homepage"])
 
     def test_build_skills_overview_summarizes_source_sync_health(self) -> None:
-        saved_manifest = {
+        saved_registry = {
             "version": 1,
             "generated_at": "2026-04-06T07:59:00+00:00",
             "sources": [
                 {
                     "source_id": "npx_bundle_compound_engineering_global",
+                    "source_kind": "npx_bundle",
+                    "locator": "@every-env/compound-plugin",
                     "registry_package_name": "@every-env/compound-plugin",
                     "registry_package_manager": "npm",
                     "sync_status": "ok",
@@ -251,6 +256,8 @@ class SkillsCoreTests(unittest.TestCase):
                 },
                 {
                     "source_id": "npx_global_find_skills",
+                    "source_kind": "npx_single",
+                    "locator": "/root/.agents/skills/find-skills",
                     "registry_package_name": "@demo/find-skills-pack",
                     "registry_package_manager": "npm",
                     "sync_status": "error",
@@ -260,7 +267,7 @@ class SkillsCoreTests(unittest.TestCase):
             ],
         }
 
-        overview = build_skills_overview(self.inventory_snapshot, saved_manifest=saved_manifest)
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
 
         self.assertEqual(2, overview["counts"]["source_syncable_total"])
         self.assertEqual(1, overview["counts"]["source_synced_total"])
@@ -281,12 +288,14 @@ class SkillsCoreTests(unittest.TestCase):
                 "registry_package_manager": "npm",
             },
         )
-        saved_manifest = {
+        saved_registry = {
             "version": 1,
             "generated_at": "2026-04-06T07:59:00+00:00",
             "sources": [
                 {
                     "source_id": "npx_bundle_compound_engineering_global",
+                    "source_kind": "npx_bundle",
+                    "locator": "@every-env/compound-plugin",
                     "sync_status": "ok",
                     "sync_checked_at": "2026-04-06T08:05:00+00:00",
                     "registry_latest_version": "2.62.1",
@@ -294,7 +303,7 @@ class SkillsCoreTests(unittest.TestCase):
             ],
         }
 
-        overview = build_skills_overview(snapshot, saved_manifest=saved_manifest)
+        overview = build_skills_overview(snapshot, saved_registry=saved_registry)
         compatible_map = overview["compatible_source_rows_by_software"]
 
         self.assertEqual(
@@ -463,6 +472,140 @@ class SkillsCoreTests(unittest.TestCase):
         codex = next(item for item in overview["host_rows"] if item["host_id"] == "codex")
         self.assertEqual("cli", codex["kind"])
         self.assertEqual(["npx_bundle", "npx_single", "manual_local", "manual_git"], codex["supports_source_kinds"])
+
+    def test_normalize_saved_skills_manifest_keeps_intent_only_fields(self) -> None:
+        normalized = normalize_saved_skills_manifest(
+            {
+                "version": 1,
+                "generated_at": "2026-04-06T08:00:00+00:00",
+                "sources": [
+                    {
+                        "source_id": "npx_bundle_compound_engineering_global",
+                        "display_name": "Compound Engineering",
+                        "source_kind": "npx_bundle",
+                        "provider_key": "compound_engineering",
+                        "enabled": True,
+                        "source_scope": "global",
+                        "update_policy": "registry",
+                        "source_path": "/root/.codex/skills/ce-brainstorm",
+                        "sync_status": "ok",
+                        "sync_checked_at": "2026-04-06T08:05:00+00:00",
+                        "registry_latest_version": "2.62.1",
+                    },
+                ],
+                "deploy_targets": [
+                    {
+                        "target_id": "codex:global",
+                        "software_id": "codex",
+                        "scope": "global",
+                        "selected_source_ids": ["npx_bundle_compound_engineering_global"],
+                    },
+                ],
+            },
+        )
+
+        source = normalized["sources"][0]
+        self.assertEqual("npx_bundle_compound_engineering_global", source["source_id"])
+        self.assertEqual("registry", source["update_policy"])
+        self.assertNotIn("source_path", source)
+        self.assertNotIn("sync_status", source)
+        self.assertNotIn("registry_latest_version", source)
+
+    def test_build_skills_overview_uses_saved_state_when_inventory_is_unavailable(self) -> None:
+        target_root = Path(self._tempdir.name) / "codex-skills"
+        target_root.mkdir(parents=True, exist_ok=True)
+
+        unavailable_inventory = {
+            "ok": False,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "software_rows": [],
+            "skill_rows": [],
+            "binding_rows": [],
+            "binding_map": {},
+            "binding_map_by_scope": {"global": {}, "workspace": {}},
+            "compatibility": {},
+            "counts": {},
+            "warnings": ["inventory unavailable"],
+        }
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/demo/skills.git",
+                    "source_scope": "global",
+                    "provider_key": "manual",
+                    "compatible_software_ids": ["codex"],
+                    "enabled": True,
+                },
+            ],
+        }
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "provider_key": "manual",
+                    "enabled": True,
+                    "source_scope": "global",
+                },
+            ],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": ["manual_git_demo"],
+                },
+            ],
+        }
+        saved_lock = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "status": "ready",
+                },
+            ],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "software_display_name": "Codex",
+                    "software_family": "codex",
+                    "provider_key": "codex",
+                    "scope": "global",
+                    "installed": True,
+                    "managed": False,
+                    "target_path": str(target_root),
+                    "selected_source_ids": ["manual_git_demo"],
+                    "available_source_ids": ["manual_git_demo"],
+                    "declared_skill_roots": [str(target_root)],
+                    "resolved_skill_roots": [str(target_root)],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(
+            unavailable_inventory,
+            saved_manifest=saved_manifest,
+            saved_registry=saved_registry,
+            saved_lock=saved_lock,
+        )
+
+        self.assertFalse(overview["ok"])
+        self.assertEqual(1, len(overview["source_rows"]))
+        self.assertEqual(1, len(overview["deploy_rows"]))
+        self.assertEqual(1, len(overview["host_rows"]))
+        self.assertEqual("manual_git_demo", overview["source_rows"][0]["source_id"])
+        self.assertEqual("codex:global", overview["deploy_rows"][0]["target_id"])
 
     def test_manifest_to_binding_rows_projects_selected_sources(self) -> None:
         manifest = build_skills_manifest(self.inventory_snapshot)

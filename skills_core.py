@@ -133,6 +133,27 @@ def _saved_manifest_index(saved_manifest: dict[str, Any]) -> tuple[dict[str, dic
     return source_index, target_index
 
 
+def _saved_lock_index(saved_lock: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    source_index: dict[str, dict[str, Any]] = {}
+    for item in saved_lock.get("sources", []):
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("source_id", "")).strip()
+        if not source_id:
+            continue
+        source_index[source_id] = copy.deepcopy(item)
+
+    target_index: dict[str, dict[str, Any]] = {}
+    for item in saved_lock.get("deploy_targets", []):
+        if not isinstance(item, dict):
+            continue
+        target_id = str(item.get("target_id", "")).strip()
+        if not target_id:
+            continue
+        target_index[target_id] = copy.deepcopy(item)
+    return source_index, target_index
+
+
 def normalize_saved_skills_manifest(raw: Any) -> dict[str, Any]:
     manifest = raw if isinstance(raw, dict) else {}
     sources: list[dict[str, Any]] = []
@@ -149,28 +170,8 @@ def normalize_saved_skills_manifest(raw: Any) -> dict[str, Any]:
                 "source_kind": str(item.get("source_kind") or "skill"),
                 "provider_key": str(item.get("provider_key") or "generic"),
                 "enabled": _to_bool(item.get("enabled", True), True),
-                "discovered": _to_bool(item.get("discovered", False), False),
-                "auto_discovered": _to_bool(item.get("auto_discovered", False), False),
                 "source_scope": str(item.get("source_scope") or "global"),
-                "source_path": str(item.get("source_path") or ""),
-                "member_count": _to_int(item.get("member_count", 1), 1, 1),
-                "member_skill_preview": _to_str_list(item.get("member_skill_preview", [])),
-                "member_skill_overflow": _to_int(item.get("member_skill_overflow", 0), 0, 0),
-                "management_hint": str(item.get("management_hint") or ""),
-                "source_exists": _to_bool(item.get("source_exists", False), False),
-                "last_seen_at": str(item.get("last_seen_at") or ""),
-                "source_age_days": _to_int(item.get("source_age_days"), 0) if item.get("source_age_days") is not None else None,
-                "freshness_status": str(item.get("freshness_status") or "missing"),
-                "registry_package_name": str(item.get("registry_package_name") or ""),
-                "registry_package_manager": str(item.get("registry_package_manager") or ""),
-                "sync_status": str(item.get("sync_status") or ""),
-                "sync_checked_at": str(item.get("sync_checked_at") or ""),
-                "sync_kind": str(item.get("sync_kind") or ""),
-                "sync_message": str(item.get("sync_message") or ""),
-                "registry_latest_version": str(item.get("registry_latest_version") or ""),
-                "registry_published_at": str(item.get("registry_published_at") or ""),
-                "registry_homepage": str(item.get("registry_homepage") or ""),
-                "registry_description": str(item.get("registry_description") or ""),
+                "update_policy": str(item.get("update_policy") or ""),
                 "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
                 "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
                 "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
@@ -196,6 +197,112 @@ def normalize_saved_skills_manifest(raw: Any) -> dict[str, Any]:
     return {
         "version": _to_int(manifest.get("version", 1), 1, 1),
         "generated_at": str(manifest.get("generated_at") or ""),
+        "sources": sources,
+        "deploy_targets": deploy_targets,
+    }
+
+
+def normalize_saved_skills_lock(raw: Any) -> dict[str, Any]:
+    lock = raw if isinstance(raw, dict) else {}
+
+    sources: list[dict[str, Any]] = []
+    seen_source_ids: set[str] = set()
+    for item in lock.get("sources", []):
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("source_id", "")).strip()
+        if not source_id or source_id in seen_source_ids:
+            continue
+        seen_source_ids.add(source_id)
+        source_age_days = item.get("source_age_days")
+        sources.append(
+            {
+                "source_id": source_id,
+                "display_name": str(item.get("display_name") or source_id),
+                "source_kind": str(item.get("source_kind") or "skill"),
+                "provider_key": str(item.get("provider_key") or "generic"),
+                "enabled": _to_bool(item.get("enabled", True), True),
+                "discovered": _to_bool(item.get("discovered", False), False),
+                "auto_discovered": _to_bool(item.get("auto_discovered", False), False),
+                "source_scope": str(item.get("source_scope") or "global"),
+                "source_path": str(item.get("source_path") or ""),
+                "locator": str(item.get("locator") or ""),
+                "managed_by": str(item.get("managed_by") or ""),
+                "update_policy": str(item.get("update_policy") or ""),
+                "member_count": _to_int(item.get("member_count", 1), 1, 1),
+                "member_skill_preview": _to_str_list(item.get("member_skill_preview", [])),
+                "member_skill_overflow": _to_int(item.get("member_skill_overflow", 0), 0, 0),
+                "management_hint": str(item.get("management_hint") or ""),
+                "source_exists": _to_bool(item.get("source_exists", False), False),
+                "last_seen_at": str(item.get("last_seen_at") or ""),
+                "last_refresh_at": str(item.get("last_refresh_at") or ""),
+                "source_age_days": _to_int(source_age_days, 0) if source_age_days is not None else None,
+                "freshness_status": str(item.get("freshness_status") or "missing"),
+                "registry_package_name": str(item.get("registry_package_name") or ""),
+                "registry_package_manager": str(item.get("registry_package_manager") or ""),
+                "sync_status": str(item.get("sync_status") or ""),
+                "sync_checked_at": str(item.get("sync_checked_at") or ""),
+                "sync_kind": str(item.get("sync_kind") or ""),
+                "sync_message": str(item.get("sync_message") or ""),
+                "registry_latest_version": str(item.get("registry_latest_version") or ""),
+                "registry_published_at": str(item.get("registry_published_at") or ""),
+                "registry_homepage": str(item.get("registry_homepage") or ""),
+                "registry_description": str(item.get("registry_description") or ""),
+                "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
+                "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
+                "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
+                "status": str(item.get("status") or ""),
+                "deployed_target_ids": _dedupe_keep_order(_to_str_list(item.get("deployed_target_ids", []))),
+                "deployed_target_count": _to_int(item.get("deployed_target_count", 0), 0, 0),
+                "resolution_hash": str(item.get("resolution_hash") or ""),
+                "last_synced_at": str(item.get("last_synced_at") or ""),
+            },
+        )
+
+    deploy_targets: list[dict[str, Any]] = []
+    seen_target_ids: set[str] = set()
+    for item in lock.get("deploy_targets", []):
+        if not isinstance(item, dict):
+            continue
+        target_id = str(item.get("target_id", "")).strip()
+        if not target_id or target_id in seen_target_ids:
+            continue
+        seen_target_ids.add(target_id)
+        deploy_targets.append(
+            {
+                "target_id": target_id,
+                "software_id": str(item.get("software_id") or ""),
+                "software_display_name": str(item.get("software_display_name") or item.get("software_id") or ""),
+                "software_family": str(item.get("software_family") or item.get("provider_key") or item.get("software_id") or ""),
+                "software_kind": str(item.get("software_kind") or item.get("kind") or "other"),
+                "provider_key": str(item.get("provider_key") or "generic"),
+                "scope": _normalize_scope(item.get("scope", "global")),
+                "installed": _to_bool(item.get("installed", False), False),
+                "managed": _to_bool(item.get("managed", False), False),
+                "linked_target_name": str(item.get("linked_target_name") or ""),
+                "target_path": str(item.get("target_path") or ""),
+                "declared_skill_roots": _dedupe_keep_order(_to_str_list(item.get("declared_skill_roots", []))),
+                "resolved_skill_roots": _dedupe_keep_order(_to_str_list(item.get("resolved_skill_roots", []))),
+                "available_source_ids": _dedupe_keep_order(_to_str_list(item.get("available_source_ids", []))),
+                "selected_source_ids": _dedupe_keep_order(_to_str_list(item.get("selected_source_ids", []))),
+                "status": str(item.get("status") or ""),
+                "drift_status": str(item.get("drift_status") or ""),
+                "target_path_exists": _to_bool(item.get("target_path_exists", False), False),
+                "ready_source_ids": _dedupe_keep_order(_to_str_list(item.get("ready_source_ids", []))),
+                "missing_source_ids": _dedupe_keep_order(_to_str_list(item.get("missing_source_ids", []))),
+                "incompatible_source_ids": _dedupe_keep_order(_to_str_list(item.get("incompatible_source_ids", []))),
+                "available_source_count": _to_int(item.get("available_source_count", 0), 0, 0),
+                "selected_source_count": _to_int(item.get("selected_source_count", 0), 0, 0),
+                "ready_source_count": _to_int(item.get("ready_source_count", 0), 0, 0),
+                "repair_actions": _dedupe_keep_order(_to_str_list(item.get("repair_actions", []))),
+                "deployment_hash": str(item.get("deployment_hash") or ""),
+                "last_synced_at": str(item.get("last_synced_at") or ""),
+            },
+        )
+
+    return {
+        "version": _to_int(lock.get("version", 1), 1, 1),
+        "generated_at": str(lock.get("generated_at") or ""),
         "sources": sources,
         "deploy_targets": deploy_targets,
     }
@@ -559,14 +666,160 @@ def build_skills_lock(
     }
 
 
+def _merge_overlay_row(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    merged = copy.deepcopy(base)
+    for key, value in overlay.items():
+        if key not in merged:
+            merged[key] = value
+            continue
+        if isinstance(value, bool):
+            merged[key] = value
+            continue
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        merged[key] = value
+    return merged
+
+
+def _derive_host_rows_from_saved_lock(saved_lock: dict[str, Any]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for target in saved_lock.get("deploy_targets", []):
+        if not isinstance(target, dict):
+            continue
+        software_id = str(target.get("software_id") or "").strip()
+        if not software_id:
+            continue
+        bucket = grouped.setdefault(
+            software_id,
+            {
+                "id": software_id,
+                "host_id": software_id,
+                "display_name": str(target.get("software_display_name") or software_id),
+                "software_kind": str(target.get("software_kind") or "other"),
+                "kind": str(target.get("software_kind") or "other"),
+                "software_family": str(target.get("software_family") or target.get("provider_key") or software_id),
+                "family": str(target.get("software_family") or target.get("provider_key") or software_id),
+                "provider_key": str(target.get("provider_key") or "generic"),
+                "enabled": True,
+                "installed": _to_bool(target.get("installed", False), False),
+                "managed": _to_bool(target.get("managed", False), False),
+                "linked_target_name": str(target.get("linked_target_name") or ""),
+                "declared_skill_roots": [],
+                "resolved_skill_roots": [],
+                "supports_source_kinds": ["npx_bundle", "npx_single", "manual_local", "manual_git"],
+                "target_paths": {"global": "", "workspace": ""},
+            },
+        )
+        bucket["installed"] = bucket["installed"] or _to_bool(target.get("installed", False), False)
+        bucket["managed"] = bucket["managed"] or _to_bool(target.get("managed", False), False)
+        scope = _normalize_scope(target.get("scope", "global"))
+        target_path = str(target.get("target_path") or "")
+        if target_path and not bucket["target_paths"].get(scope):
+            bucket["target_paths"][scope] = target_path
+        for root in _to_str_list(target.get("declared_skill_roots", [])):
+            if root not in bucket["declared_skill_roots"]:
+                bucket["declared_skill_roots"].append(root)
+        for root in _to_str_list(target.get("resolved_skill_roots", [])):
+            if root not in bucket["resolved_skill_roots"]:
+                bucket["resolved_skill_roots"].append(root)
+        if target_path:
+            target_key = "resolved_skill_roots" if _to_bool(target.get("target_path_exists", False), False) else "declared_skill_roots"
+            if target_path not in bucket[target_key]:
+                bucket[target_key].append(target_path)
+
+    hosts: list[dict[str, Any]] = []
+    for item in grouped.values():
+        item["target_path"] = item["target_paths"].get("global") or item["target_paths"].get("workspace") or ""
+        hosts.append(item)
+    hosts.sort(key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("host_id", "")).lower()))
+    return hosts
+
+
+def _apply_saved_lock_fallback(
+    computed_lock: dict[str, Any],
+    manifest: dict[str, Any],
+    saved_lock: dict[str, Any],
+    *,
+    generated_at: str,
+    prefer_saved_targets: bool = False,
+) -> dict[str, Any]:
+    normalized_saved_lock = normalize_saved_skills_lock(saved_lock)
+    computed_source_index, computed_target_index = _saved_lock_index(computed_lock)
+    saved_source_index, saved_target_index = _saved_lock_index(normalized_saved_lock)
+
+    source_rows: list[dict[str, Any]] = []
+    seen_source_ids: set[str] = set()
+    manifest_sources = manifest.get("sources", []) if isinstance(manifest.get("sources", []), list) else []
+    for source in manifest_sources:
+        if not isinstance(source, dict):
+            continue
+        source_id = str(source.get("source_id", "")).strip()
+        if not source_id:
+            continue
+        row = copy.deepcopy(computed_source_index.get(source_id, source))
+        if source_id in saved_source_index:
+            row = _merge_overlay_row(row, saved_source_index[source_id])
+        source_rows.append(row)
+        seen_source_ids.add(source_id)
+
+    for source_id, saved_source in saved_source_index.items():
+        if source_id in seen_source_ids:
+            continue
+        source_rows.append(copy.deepcopy(saved_source))
+
+    deploy_rows: list[dict[str, Any]] = []
+    if prefer_saved_targets:
+        deploy_rows = [
+            copy.deepcopy(item)
+            for item in normalized_saved_lock.get("deploy_targets", [])
+            if isinstance(item, dict)
+        ]
+    elif computed_target_index:
+        for target in computed_lock.get("deploy_targets", []):
+            if not isinstance(target, dict):
+                continue
+            target_id = str(target.get("target_id", "")).strip()
+            if not target_id:
+                continue
+            row = copy.deepcopy(target)
+            if target_id in saved_target_index:
+                row = _merge_overlay_row(row, saved_target_index[target_id])
+            deploy_rows.append(row)
+    else:
+        deploy_rows = [
+            copy.deepcopy(item)
+            for item in normalized_saved_lock.get("deploy_targets", [])
+            if isinstance(item, dict)
+        ]
+
+    return normalize_saved_skills_lock(
+        {
+            "version": max(
+                _to_int(computed_lock.get("version", 1), 1, 1),
+                _to_int(normalized_saved_lock.get("version", 1), 1, 1),
+            ),
+            "generated_at": generated_at,
+            "sources": source_rows,
+            "deploy_targets": deploy_rows,
+        },
+    )
+
+
 def build_skills_overview(
     inventory_snapshot: dict[str, Any],
     *,
     saved_manifest: dict[str, Any] | None = None,
     saved_registry: dict[str, Any] | None = None,
+    saved_lock: dict[str, Any] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
+    normalized_saved_manifest = normalize_saved_skills_manifest(saved_manifest or {})
+    normalized_saved_lock = normalize_saved_skills_lock(saved_lock or {})
     software_rows = [
         copy.deepcopy(item)
         for item in inventory_snapshot.get("software_rows", [])
@@ -578,16 +831,35 @@ def build_skills_overview(
         if isinstance(item, dict)
     ]
     host_rows = build_host_adapters(software_rows)
+    if not host_rows and normalized_saved_lock.get("deploy_targets"):
+        host_rows = _derive_host_rows_from_saved_lock(normalized_saved_lock)
     registry = build_skills_registry(skill_rows, saved_registry=saved_registry, generated_at=ts)
     manifest = build_skills_manifest(
         inventory_snapshot,
-        saved_manifest=saved_manifest,
+        saved_manifest=normalized_saved_manifest,
         saved_registry=saved_registry,
         registry=registry,
         host_rows=host_rows,
         generated_at=ts,
     )
+    if not manifest.get("deploy_targets") and normalized_saved_manifest.get("deploy_targets"):
+        manifest = {
+            **manifest,
+            "software_hosts": copy.deepcopy(host_rows),
+            "deploy_targets": copy.deepcopy(normalized_saved_manifest.get("deploy_targets", [])),
+        }
     lock = build_skills_lock(manifest, inventory_snapshot, generated_at=ts)
+    inventory_unavailable = not bool(inventory_snapshot.get("ok", True))
+    if inventory_unavailable and (
+        normalized_saved_lock.get("sources") or normalized_saved_lock.get("deploy_targets")
+    ):
+        lock = _apply_saved_lock_fallback(
+            lock,
+            manifest,
+            normalized_saved_lock,
+            generated_at=ts,
+            prefer_saved_targets=not software_rows,
+        )
 
     source_rows = [
         copy.deepcopy(item)
