@@ -248,7 +248,10 @@ collection group 不能替代 install unit 成为唯一真相。
 - 前端动作栏已从 “单 install unit” 升级为 “按当前 aggregate 自动路由”
 - 已补 install unit / collection group 级 doctor 汇总
 - 前端 doctor summary 已切到 aggregate-aware 统计
-- 下一步应补足 update 的 aggregate-first 编排
+- 已补 install-unit / collection-group 级 `update` 编排
+- `update` 当前已支持 registry-managed（`bunx` / `npx` / `pnpm dlx` / `npm`）与 git-managed 聚合
+- manual / filesystem 聚合当前返回 structured unsupported，避免伪更新
+- 下一步应推进 Phase E，把同一 install-unit-first 模型扩到 `manual_git` / `manual_local`
 
 ## Phase E：扩展到 manual_git 与 manual_local
 

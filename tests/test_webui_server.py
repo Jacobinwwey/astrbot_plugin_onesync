@@ -269,6 +269,27 @@ class _FakePlugin:
             "inventory": self.inventory_snapshot,
         }
 
+    async def webui_update_install_unit(self, install_unit_id: str, payload: dict) -> dict:
+        _ = payload
+        if install_unit_id == "unsupported":
+            return {"ok": False, "message": "update unsupported for aggregate"}
+        if install_unit_id != "install:skill_cli":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "update": {
+                "supported": True,
+                "policy": "registry",
+                "manager": "bunx",
+                "commands": ["bunx @every-env/compound-plugin"],
+                "message": "updated",
+            },
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
     def webui_deploy_install_unit(self, install_unit_id: str, payload: dict) -> dict:
         if install_unit_id != "install:skill_cli":
             return {"ok": False, "message": "not found"}
@@ -304,6 +325,28 @@ class _FakePlugin:
             "install_unit_rows": self.skills_snapshot["install_unit_rows"],
             "source_rows": self.skills_snapshot["source_rows"],
             "synced_source_ids": ["skill_cli"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    async def webui_update_collection_group(self, collection_group_id: str, payload: dict) -> dict:
+        _ = payload
+        if collection_group_id == "unsupported":
+            return {"ok": False, "message": "update unsupported for aggregate"}
+        if collection_group_id != "collection:cli_tools":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "install_unit_rows": self.skills_snapshot["install_unit_rows"],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "update": {
+                "supported": True,
+                "policy": "registry",
+                "manager": "bunx",
+                "commands": ["bunx @every-env/compound-plugin"],
+                "message": "updated",
+            },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
         }
@@ -681,6 +724,11 @@ class WebUIServerTests(unittest.TestCase):
         self.assertTrue(unit_sync_resp.json()["ok"])
         self.assertEqual(["skill_cli"], unit_sync_resp.json()["synced_source_ids"])
 
+        unit_update_resp = self.client.post("/api/skills/install-units/install%3Askill_cli/update", json={})
+        self.assertEqual(200, unit_update_resp.status_code)
+        self.assertTrue(unit_update_resp.json()["ok"])
+        self.assertEqual("bunx", unit_update_resp.json()["update"]["manager"])
+
         group_refresh_resp = self.client.post("/api/skills/collections/collection%3Acli_tools/refresh", json={})
         self.assertEqual(200, group_refresh_resp.status_code)
         self.assertTrue(group_refresh_resp.json()["ok"])
@@ -690,6 +738,11 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, group_sync_resp.status_code)
         self.assertTrue(group_sync_resp.json()["ok"])
         self.assertEqual(["skill_cli"], group_sync_resp.json()["synced_source_ids"])
+
+        group_update_resp = self.client.post("/api/skills/collections/collection%3Acli_tools/update", json={})
+        self.assertEqual(200, group_update_resp.status_code)
+        self.assertTrue(group_update_resp.json()["ok"])
+        self.assertEqual("bunx", group_update_resp.json()["update"]["manager"])
 
         unit_deploy_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/deploy",
@@ -725,6 +778,10 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(404, missing_unit_sync_resp.status_code)
         self.assertFalse(missing_unit_sync_resp.json()["ok"])
 
+        missing_unit_update_resp = self.client.post("/api/skills/install-units/missing/update", json={})
+        self.assertEqual(404, missing_unit_update_resp.status_code)
+        self.assertFalse(missing_unit_update_resp.json()["ok"])
+
         missing_group_refresh_resp = self.client.post("/api/skills/collections/missing/refresh", json={})
         self.assertEqual(404, missing_group_refresh_resp.status_code)
         self.assertFalse(missing_group_refresh_resp.json()["ok"])
@@ -733,6 +790,10 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(404, missing_group_sync_resp.status_code)
         self.assertFalse(missing_group_sync_resp.json()["ok"])
 
+        missing_group_update_resp = self.client.post("/api/skills/collections/missing/update", json={})
+        self.assertEqual(404, missing_group_update_resp.status_code)
+        self.assertFalse(missing_group_update_resp.json()["ok"])
+
         missing_unit_repair_resp = self.client.post("/api/skills/install-units/missing/repair", json={})
         self.assertEqual(404, missing_unit_repair_resp.status_code)
         self.assertFalse(missing_unit_repair_resp.json()["ok"])
@@ -740,6 +801,14 @@ class WebUIServerTests(unittest.TestCase):
         missing_group_repair_resp = self.client.post("/api/skills/collections/missing/repair", json={})
         self.assertEqual(404, missing_group_repair_resp.status_code)
         self.assertFalse(missing_group_repair_resp.json()["ok"])
+
+        bad_unit_update_resp = self.client.post("/api/skills/install-units/unsupported/update", json={})
+        self.assertEqual(400, bad_unit_update_resp.status_code)
+        self.assertFalse(bad_unit_update_resp.json()["ok"])
+
+        bad_group_update_resp = self.client.post("/api/skills/collections/unsupported/update", json={})
+        self.assertEqual(400, bad_group_update_resp.status_code)
+        self.assertFalse(bad_group_update_resp.json()["ok"])
 
         bad_unit_deploy_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/deploy",

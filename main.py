@@ -27,6 +27,10 @@ from .skills_projection_core import (
     read_generated_target_payload,
 )
 from .skills_runtime_health import build_skills_runtime_health
+from .skills_update_core import (
+    build_collection_group_update_plan,
+    build_install_unit_update_plan,
+)
 from .skills_core import (
     build_collection_group_detail_payload,
     build_install_unit_detail_payload,
@@ -1473,6 +1477,213 @@ class OneSyncPlugin(Star):
             "target_ids": target_ids,
             "repairable_target_ids": repairable_target_ids,
         }
+
+    async def _execute_install_unit_update_plans(
+        self,
+        update_plans: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        install_unit_results: list[dict[str, Any]] = []
+        command_results: list[dict[str, Any]] = []
+        executed_install_unit_ids: list[str] = []
+        failed_install_units: list[dict[str, Any]] = []
+
+        for plan in update_plans:
+            if not isinstance(plan, dict) or not plan.get("supported"):
+                continue
+            commands = _to_str_list(plan.get("commands", []))
+            if not commands:
+                continue
+            install_unit_id = str(plan.get("install_unit_id") or "").strip()
+            plan_results: list[dict[str, Any]] = []
+            timeout_s = 1800 if str(plan.get("manager") or "").strip().lower() == "git" else 900
+
+            for command in commands:
+                result = await self.runner.run(command, timeout_s=timeout_s)
+                result_payload = {
+                    "install_unit_id": install_unit_id,
+                    "command": result.command,
+                    "exit_code": result.exit_code,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "duration_s": result.duration_s,
+                    "timed_out": result.timed_out,
+                    "ok": result.exit_code == 0 and not result.timed_out,
+                }
+                plan_results.append(result_payload)
+                command_results.append(result_payload)
+
+            plan_ok = bool(plan_results) and all(item.get("ok") for item in plan_results)
+            if install_unit_id:
+                executed_install_unit_ids.append(install_unit_id)
+            install_unit_result = {
+                "install_unit_id": install_unit_id,
+                "display_name": str(plan.get("display_name") or install_unit_id or "").strip(),
+                "manager": str(plan.get("manager") or "").strip(),
+                "policy": str(plan.get("policy") or "").strip(),
+                "commands": commands,
+                "command_count": len(commands),
+                "results": plan_results,
+                "ok": plan_ok,
+            }
+            install_unit_results.append(install_unit_result)
+            if not plan_ok:
+                failed_install_units.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "message": f"update command failed for {install_unit_id or 'install unit'}",
+                    },
+                )
+
+        success_count = sum(1 for item in command_results if item.get("ok"))
+        failure_count = len(command_results) - success_count
+        return {
+            "results": command_results,
+            "install_unit_results": install_unit_results,
+            "executed_install_unit_ids": executed_install_unit_ids,
+            "failed_install_units": failed_install_units,
+            "success_count": success_count,
+            "failure_count": failure_count,
+        }
+
+    async def webui_update_install_unit(
+        self,
+        install_unit_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = payload if isinstance(payload, dict) else {}
+        context = self._resolve_install_unit_action_context(install_unit_id)
+        if not context.get("ok"):
+            return context
+
+        plan = build_install_unit_update_plan(
+            context.get("install_unit", {}),
+            context.get("source_rows", []),
+        )
+        if not plan.get("supported"):
+            return {
+                "ok": False,
+                "message": str(plan.get("message") or f"update unsupported for install unit: {install_unit_id}"),
+                "update": plan,
+            }
+
+        execution = await self._execute_install_unit_update_plans([plan])
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        await self._save_state()
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        update_summary = {
+            **plan,
+            **execution,
+            "message": (
+                "install unit update finished: "
+                f"{execution.get('success_count', 0)} commands ok, "
+                f"{execution.get('failure_count', 0)} failed"
+            ),
+        }
+        self._append_skills_audit_event(
+            "install_unit_update",
+            source_id=normalized_install_unit_id,
+            payload={
+                "commands": _to_str_list(plan.get("commands", [])),
+                "success_count": execution.get("success_count", 0),
+                "failure_count": execution.get("failure_count", 0),
+            },
+        )
+        self._push_debug_log(
+            "info" if not execution.get("failure_count") else "warn",
+            (
+                "install unit updated: "
+                f"install_unit={normalized_install_unit_id} "
+                f"ok={execution.get('success_count', 0)} "
+                f"failed={execution.get('failure_count', 0)}"
+            ),
+            source="webui",
+        )
+        return self._build_install_unit_mutation_response(
+            normalized_install_unit_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "update": update_summary,
+                "updated_install_unit_ids": execution.get("executed_install_unit_ids", []),
+                "failed_install_units": execution.get("failed_install_units", []),
+            },
+        )
+
+    async def webui_update_collection_group(
+        self,
+        collection_group_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = payload if isinstance(payload, dict) else {}
+        context = self._resolve_collection_group_action_context(collection_group_id)
+        if not context.get("ok"):
+            return context
+
+        plan = build_collection_group_update_plan(
+            context.get("collection_group", {}),
+            context.get("install_unit_rows", []),
+            context.get("source_rows", []),
+        )
+        if not plan.get("supported"):
+            return {
+                "ok": False,
+                "message": str(plan.get("message") or f"update unsupported for collection group: {collection_group_id}"),
+                "update": plan,
+            }
+
+        supported_unit_plans = [
+            item
+            for item in plan.get("install_unit_plans", [])
+            if isinstance(item, dict) and item.get("supported")
+        ]
+        execution = await self._execute_install_unit_update_plans(supported_unit_plans)
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        await self._save_state()
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        update_summary = {
+            **plan,
+            **execution,
+            "message": (
+                "collection group update finished: "
+                f"{execution.get('success_count', 0)} commands ok, "
+                f"{execution.get('failure_count', 0)} failed, "
+                f"{plan.get('unsupported_install_unit_total', 0)} unsupported units"
+            ),
+        }
+        self._append_skills_audit_event(
+            "collection_group_update",
+            source_id=normalized_collection_group_id,
+            payload={
+                "install_unit_ids": execution.get("executed_install_unit_ids", []),
+                "success_count": execution.get("success_count", 0),
+                "failure_count": execution.get("failure_count", 0),
+                "unsupported_install_unit_total": plan.get("unsupported_install_unit_total", 0),
+            },
+        )
+        self._push_debug_log(
+            "info" if not execution.get("failure_count") and not plan.get("unsupported_install_unit_total") else "warn",
+            (
+                "collection group updated: "
+                f"collection_group={normalized_collection_group_id} "
+                f"ok={execution.get('success_count', 0)} "
+                f"failed={execution.get('failure_count', 0)} "
+                f"unsupported={plan.get('unsupported_install_unit_total', 0)}"
+            ),
+            source="webui",
+        )
+        return self._build_collection_group_mutation_response(
+            normalized_collection_group_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "update": update_summary,
+                "updated_install_unit_ids": execution.get("executed_install_unit_ids", []),
+                "failed_install_units": execution.get("failed_install_units", []),
+                "unsupported_install_units": plan.get("unsupported_install_units", []),
+            },
+        )
 
     def webui_get_deploy_target_payload(self, target_id: str) -> dict[str, Any]:
         normalized_target_id = str(target_id or "").strip()
