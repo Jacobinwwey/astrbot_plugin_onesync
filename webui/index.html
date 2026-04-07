@@ -1390,6 +1390,13 @@
       flex-wrap: wrap;
     }
 
+    .skills-subhead-tools {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     .inventory-doctor-note {
       margin: 0 0 8px;
       color: var(--muted);
@@ -1880,6 +1887,22 @@
             <div class="skills-subpanel">
               <div class="skills-subhead">
                 <p class="inventory-quick-title" id="inventoryDeployTitle">Deploy Targets</p>
+                <div class="skills-subhead-tools">
+                  <div class="inventory-segment-block">
+                    <span class="inventory-segment-label" id="inventoryDeployScopeFilterLabel">显示范围</span>
+                    <div class="inventory-segmented" id="inventoryDeployScopeTabs">
+                      <button type="button" id="inventoryDeployScopeGlobal" data-inventory-deploy-scope="global">全局</button>
+                      <button type="button" id="inventoryDeployScopeWorkspace" data-inventory-deploy-scope="workspace">工作区</button>
+                    </div>
+                  </div>
+                  <div class="inventory-segment-block">
+                    <span class="inventory-segment-label" id="inventoryDeployInstallFilterLabel">显示对象</span>
+                    <div class="inventory-segmented" id="inventoryDeployInstallTabs">
+                      <button type="button" id="inventoryDeployInstallInstalled" data-inventory-deploy-install="installed">已安装</button>
+                      <button type="button" id="inventoryDeployInstallAll" data-inventory-deploy-install="all">全部</button>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="inventory-deploy-rows" id="inventoryDeployRows">
                 <div class="debug-empty" id="inventoryDeployRowsEmpty">暂无 Deploy Target</div>
@@ -2320,6 +2343,8 @@
       inventoryCardFontSize: "md",
       inventoryCardWidth: "standard",
       inventoryCardHeight: "compact",
+      inventoryDeployScopeFilter: "global",
+      inventoryDeployInstallFilter: "installed",
       inventoryKindFilter: "all",
       inventoryShowUninstalled: false,
       inventoryDraftSkillIds: [],
@@ -2568,6 +2593,10 @@
         inventory_scope_label: "部署范围",
         inventory_scope_global: "全局",
         inventory_scope_workspace: "工作区",
+        inventory_deploy_scope_filter_label: "显示范围",
+        inventory_deploy_install_filter_label: "显示对象",
+        inventory_deploy_install_installed: "已安装",
+        inventory_deploy_install_all: "全部",
         inventory_display_settings_summary: "面板设置",
         inventory_view_mode_label: "面板视图",
         inventory_view_mode_single: "单列卡片",
@@ -2646,6 +2675,7 @@
         inventory_reproject_error: "重建当前投影失败: {msg}",
         inventory_source_empty: "暂无 Source / Bundle 数据",
         inventory_deploy_empty: "暂无 Deploy Target",
+        inventory_deploy_empty_filtered: "当前过滤条件下暂无 Deploy Target",
         inventory_kind_filter_label: "软件类型",
         inventory_kind_all: "全部",
         inventory_kind_cli: "CLI",
@@ -2940,6 +2970,10 @@
         inventory_scope_label: "Deploy Scope",
         inventory_scope_global: "Global",
         inventory_scope_workspace: "Workspace",
+        inventory_deploy_scope_filter_label: "Show Scope",
+        inventory_deploy_install_filter_label: "Show Hosts",
+        inventory_deploy_install_installed: "Installed",
+        inventory_deploy_install_all: "All",
         inventory_display_settings_summary: "Panel Settings",
         inventory_view_mode_label: "Panel View",
         inventory_view_mode_single: "Single Column",
@@ -3018,6 +3052,7 @@
         inventory_reproject_error: "Failed to rebuild current projection: {msg}",
         inventory_source_empty: "No source or bundle data",
         inventory_deploy_empty: "No deploy target",
+        inventory_deploy_empty_filtered: "No deploy targets match the current filters",
         inventory_kind_filter_label: "Software Kind",
         inventory_kind_all: "All",
         inventory_kind_cli: "CLI",
@@ -3119,6 +3154,16 @@
       return ["cli", "gui", "claw", "other"].includes(kind) ? kind : "all";
     }
 
+    function normalizeInventoryDeployScopeFilter(value) {
+      const scope = String(value || "global").trim().toLowerCase();
+      return scope === "workspace" ? "workspace" : "global";
+    }
+
+    function normalizeInventoryDeployInstallFilter(value) {
+      const filter = String(value || "installed").trim().toLowerCase();
+      return filter === "all" ? "all" : "installed";
+    }
+
     function normalizeInventoryCardView(value) {
       const mode = String(value || "double").trim().toLowerCase();
       return ["single", "double", "list"].includes(mode) ? mode : "double";
@@ -3190,6 +3235,19 @@
       });
     }
 
+    function syncInventoryDeployFilterTabs() {
+      const activeScope = normalizeInventoryDeployScopeFilter(state.inventoryDeployScopeFilter);
+      const activeInstall = normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter);
+      document.querySelectorAll("#inventoryDeployScopeTabs [data-inventory-deploy-scope]").forEach((el) => {
+        const scope = normalizeInventoryDeployScopeFilter(el.getAttribute("data-inventory-deploy-scope"));
+        el.classList.toggle("active", scope === activeScope);
+      });
+      document.querySelectorAll("#inventoryDeployInstallTabs [data-inventory-deploy-install]").forEach((el) => {
+        const filter = normalizeInventoryDeployInstallFilter(el.getAttribute("data-inventory-deploy-install"));
+        el.classList.toggle("active", filter === activeInstall);
+      });
+    }
+
     function isSkillCapableSoftware(item) {
       if (!item || typeof item !== "object") return false;
       if (Object.prototype.hasOwnProperty.call(item, "skill_capable")) {
@@ -3197,6 +3255,22 @@
       }
       const kind = String(item.software_kind || "other").trim().toLowerCase();
       return ["cli", "gui", "claw"].includes(kind);
+    }
+
+    function ensureInventorySoftwareVisible(softwareId) {
+      const normalizedId = String(softwareId || "").trim();
+      if (!normalizedId) return;
+      const overview = state.inventoryOverview || {};
+      const allSoftwareRows = Array.isArray(overview.software_rows) ? overview.software_rows : [];
+      const targetSoftware = allSoftwareRows.find((item) => String(item.id || "").trim() === normalizedId);
+      if (!targetSoftware || !isSkillCapableSoftware(targetSoftware)) return;
+      const kind = normalizeInventoryKindFilter(targetSoftware.software_kind || "other");
+      if (state.inventoryKindFilter !== "all" && kind !== state.inventoryKindFilter) {
+        state.inventoryKindFilter = "all";
+      }
+      if (!Boolean(targetSoftware.installed)) {
+        state.inventoryShowUninstalled = true;
+      }
     }
 
     function applyPreferences() {
@@ -3231,6 +3305,12 @@
         if (typeof parsed.inventoryCardHeight === "string") {
           state.inventoryCardHeight = normalizeInventoryCardHeight(parsed.inventoryCardHeight);
         }
+        if (typeof parsed.inventoryDeployScopeFilter === "string") {
+          state.inventoryDeployScopeFilter = normalizeInventoryDeployScopeFilter(parsed.inventoryDeployScopeFilter);
+        }
+        if (typeof parsed.inventoryDeployInstallFilter === "string") {
+          state.inventoryDeployInstallFilter = normalizeInventoryDeployInstallFilter(parsed.inventoryDeployInstallFilter);
+        }
         if (typeof parsed.inventoryKindFilter === "string") {
           state.inventoryKindFilter = normalizeInventoryKindFilter(parsed.inventoryKindFilter);
         }
@@ -3256,6 +3336,8 @@
         inventoryCardFontSize: normalizeInventoryCardFontSize(state.inventoryCardFontSize),
         inventoryCardWidth: normalizeInventoryCardWidth(state.inventoryCardWidth),
         inventoryCardHeight: normalizeInventoryCardHeight(state.inventoryCardHeight),
+        inventoryDeployScopeFilter: normalizeInventoryDeployScopeFilter(state.inventoryDeployScopeFilter),
+        inventoryDeployInstallFilter: normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter),
         inventoryKindFilter: normalizeInventoryKindFilter(state.inventoryKindFilter),
         inventoryShowUninstalled: Boolean(state.inventoryShowUninstalled)
       };
@@ -3344,6 +3426,12 @@
       $("inventoryQuickTitle").textContent = t("inventory_quick_title");
       $("inventorySourcesTitle").textContent = t("inventory_sources_title");
       $("inventoryDeployTitle").textContent = t("inventory_deploy_title");
+      $("inventoryDeployScopeFilterLabel").textContent = t("inventory_deploy_scope_filter_label");
+      $("inventoryDeployScopeGlobal").textContent = t("inventory_scope_global");
+      $("inventoryDeployScopeWorkspace").textContent = t("inventory_scope_workspace");
+      $("inventoryDeployInstallFilterLabel").textContent = t("inventory_deploy_install_filter_label");
+      $("inventoryDeployInstallInstalled").textContent = t("inventory_deploy_install_installed");
+      $("inventoryDeployInstallAll").textContent = t("inventory_deploy_install_all");
       $("inventoryDoctorBtn").textContent = t("inventory_doctor");
       $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
       const inventoryTargetHeroEmptyEl = $("inventoryTargetHeroEmpty");
@@ -3949,18 +4037,22 @@
       const selectAllBtn = $("inventorySelectAllBtn");
       const selectDiscoveredBtn = $("inventorySelectDiscoveredBtn");
       const clearSelectionBtn = $("inventoryClearSelectionBtn");
-      const bindingScope = normalizeInventoryScope(scopeEl ? scopeEl.value : state.inventorySelectedScope);
+      const bindingScope = normalizeInventoryScope(state.inventorySelectedScope);
       const cardView = normalizeInventoryCardView(state.inventoryCardView);
-      const cardFontSize = normalizeInventoryCardFontSize(cardFontEl ? cardFontEl.value : state.inventoryCardFontSize);
-      const cardWidth = normalizeInventoryCardWidth(cardWidthEl ? cardWidthEl.value : state.inventoryCardWidth);
-      const cardHeight = normalizeInventoryCardHeight(cardHeightEl ? cardHeightEl.value : state.inventoryCardHeight);
-      const kindFilter = normalizeInventoryKindFilter(kindFilterEl ? kindFilterEl.value : state.inventoryKindFilter);
-      const showUninstalled = Boolean(showUninstalledEl ? showUninstalledEl.checked : state.inventoryShowUninstalled);
+      const cardFontSize = normalizeInventoryCardFontSize(state.inventoryCardFontSize);
+      const cardWidth = normalizeInventoryCardWidth(state.inventoryCardWidth);
+      const cardHeight = normalizeInventoryCardHeight(state.inventoryCardHeight);
+      const deployScopeFilter = normalizeInventoryDeployScopeFilter(state.inventoryDeployScopeFilter);
+      const deployInstallFilter = normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter);
+      const kindFilter = normalizeInventoryKindFilter(state.inventoryKindFilter);
+      const showUninstalled = Boolean(state.inventoryShowUninstalled);
       state.inventorySelectedScope = bindingScope;
       state.inventoryCardView = cardView;
       state.inventoryCardFontSize = cardFontSize;
       state.inventoryCardWidth = cardWidth;
       state.inventoryCardHeight = cardHeight;
+      state.inventoryDeployScopeFilter = deployScopeFilter;
+      state.inventoryDeployInstallFilter = deployInstallFilter;
       state.inventoryKindFilter = kindFilter;
       state.inventoryShowUninstalled = showUninstalled;
       if (scopeEl && scopeEl.value !== bindingScope) {
@@ -3984,6 +4076,7 @@
       applyInventoryDisplayPreferences();
       syncInventoryScopeTabs();
       syncInventoryViewModeTabs();
+      syncInventoryDeployFilterTabs();
 
       const overview = state.inventoryOverview || {};
       const allSoftwareRows = Array.isArray(overview.software_rows) ? overview.software_rows : [];
@@ -3998,6 +4091,15 @@
       const warnings = Array.isArray(overview.warnings) ? overview.warnings : [];
       const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
       const deployRows = Array.isArray(overview.deploy_rows) ? overview.deploy_rows : [];
+      const visibleDeployRows = deployRows.filter((item) => {
+        if (!item || typeof item !== "object") return false;
+        const itemScope = normalizeInventoryDeployScopeFilter(item.scope || "global");
+        if (itemScope !== deployScopeFilter) return false;
+        if (deployInstallFilter === "installed" && !Boolean(item.installed)) {
+          return false;
+        }
+        return true;
+      });
       const doctor = overview.doctor && typeof overview.doctor === "object" ? overview.doctor : {};
       const repairableTotal = Number(counts.deploy_repairable_total) || deployRows.filter((item) => (
         item
@@ -4079,8 +4181,8 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
         }).join("")
         : `<div class="debug-empty">${t("inventory_source_empty")}</div>`;
 
-      deployRowsEl.innerHTML = deployRows.length
-        ? deployRows.map((item) => {
+      deployRowsEl.innerHTML = visibleDeployRows.length
+        ? visibleDeployRows.map((item) => {
           const targetId = String(item.target_id || "").trim();
           const selectedCount = Number(item.selected_source_count ?? (Array.isArray(item.selected_source_ids) ? item.selected_source_ids.length : 0)) || 0;
           const availableCount = Number(item.available_source_count ?? (Array.isArray(item.available_source_ids) ? item.available_source_ids.length : 0)) || 0;
@@ -4109,7 +4211,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
             </button>
           `;
         }).join("")
-        : `<div class="debug-empty">${t("inventory_deploy_empty")}</div>`;
+        : `<div class="debug-empty">${t(deployRows.length ? "inventory_deploy_empty_filtered" : "inventory_deploy_empty")}</div>`;
 
       doctorSummaryEl.textContent = t("inventory_doctor_summary", {
         ready: doctor.source_health && doctor.source_health.ready || 0,
@@ -6064,6 +6166,26 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         renderInventoryPanel();
       });
 
+      $("inventoryDeployScopeTabs").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-deploy-scope]")
+          : null;
+        if (!el) return;
+        state.inventoryDeployScopeFilter = normalizeInventoryDeployScopeFilter(el.getAttribute("data-inventory-deploy-scope"));
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryDeployInstallTabs").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-deploy-install]")
+          : null;
+        if (!el) return;
+        state.inventoryDeployInstallFilter = normalizeInventoryDeployInstallFilter(el.getAttribute("data-inventory-deploy-install"));
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
       $("inventoryCardFontSizeSelect").addEventListener("change", (evt) => {
         state.inventoryCardFontSize = normalizeInventoryCardFontSize(evt.target.value);
         applyInventoryDisplayPreferences();
@@ -6136,6 +6258,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const [softwareId, scope = "global"] = targetId.split(":");
         state.inventorySelectedSoftwareId = softwareId;
         state.inventorySelectedScope = normalizeInventoryScope(scope);
+        ensureInventorySoftwareVisible(softwareId);
         persistPreferences();
         syncInventoryDraftWithSelectedSoftware();
         renderInventoryPanel();

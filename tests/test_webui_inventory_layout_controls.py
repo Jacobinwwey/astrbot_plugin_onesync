@@ -14,6 +14,8 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
 
         self.assertIn('id="inventoryScopeTabs"', html)
         self.assertIn('id="inventoryPanelViewTabs"', html)
+        self.assertIn('id="inventoryDeployScopeTabs"', html)
+        self.assertIn('id="inventoryDeployInstallTabs"', html)
         self.assertIn('id="inventoryCardFontSizeSelect"', html)
         self.assertIn('id="inventoryCardWidthSelect"', html)
         self.assertIn('id="inventoryCardHeightSelect"', html)
@@ -25,6 +27,11 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
         self.assertIn("inventoryCardFontSize", html)
         self.assertIn("inventoryCardWidth", html)
         self.assertIn("inventoryCardHeight", html)
+        self.assertIn("inventoryDeployScopeFilter", html)
+        self.assertIn("inventoryDeployInstallFilter", html)
+        self.assertIn("syncInventoryDeployFilterTabs", html)
+        self.assertIn('$("inventoryDeployScopeTabs").addEventListener("click"', html)
+        self.assertIn('$("inventoryDeployInstallTabs").addEventListener("click"', html)
         self.assertIn("--inventory-card-font-size", html)
 
 
