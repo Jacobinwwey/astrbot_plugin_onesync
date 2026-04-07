@@ -1321,6 +1321,67 @@ class OneSyncPlugin(Star):
         snapshot = self.webui_get_skills_payload()
         return build_collection_group_detail_payload(snapshot, normalized_collection_group_id)
 
+    def _resolve_install_unit_action_context(self, install_unit_id: str) -> dict[str, Any]:
+        normalized_install_unit_id = str(install_unit_id or "").strip()
+        if not normalized_install_unit_id:
+            return {"ok": False, "message": "install_unit_id is required"}
+
+        detail = self.webui_get_install_unit_payload(normalized_install_unit_id)
+        if not detail.get("ok"):
+            return detail
+
+        source_rows = [
+            item
+            for item in detail.get("source_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_ids = _dedupe_keep_order(
+            [
+                _normalize_inventory_id(item.get("source_id", ""), default="")
+                for item in source_rows
+                if _normalize_inventory_id(item.get("source_id", ""), default="")
+            ],
+        )
+        if not source_ids:
+            return {
+                "ok": False,
+                "message": f"install_unit has no source members: {normalized_install_unit_id}",
+            }
+
+        return {
+            "ok": True,
+            "install_unit_id": normalized_install_unit_id,
+            "detail": detail,
+            "install_unit": detail.get("install_unit", {}),
+            "collection_group": detail.get("collection_group", {}),
+            "source_rows": source_rows,
+            "source_ids": source_ids,
+        }
+
+    def _build_install_unit_mutation_response(
+        self,
+        install_unit_id: str,
+        *,
+        inventory_snapshot: dict[str, Any],
+        skills_snapshot: dict[str, Any],
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        detail = self.webui_get_install_unit_payload(install_unit_id)
+        response = {
+            "ok": True,
+            "generated_at": detail.get("generated_at", skills_snapshot.get("generated_at")),
+            "install_unit": detail.get("install_unit", {}),
+            "collection_group": detail.get("collection_group", {}),
+            "source_rows": detail.get("source_rows", []),
+            "deploy_rows": detail.get("deploy_rows", []),
+            "warnings": detail.get("warnings", []),
+            "skills": skills_snapshot,
+            "inventory": inventory_snapshot,
+        }
+        if isinstance(extra, dict):
+            response.update(extra)
+        return response
+
     def webui_get_deploy_target_payload(self, target_id: str) -> dict[str, Any]:
         normalized_target_id = str(target_id or "").strip()
         if not normalized_target_id:
@@ -1510,6 +1571,83 @@ class OneSyncPlugin(Star):
             "inventory": inventory_snapshot,
         }
 
+    def webui_refresh_install_unit(
+        self,
+        install_unit_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        source_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_install_unit_action_context(install_unit_id)
+        if not context.get("ok"):
+            return context
+
+        updated_registry = self._load_saved_skills_registry()
+        refreshed_source_ids: list[str] = []
+        for source_row in context.get("source_rows", []):
+            if not isinstance(source_row, dict):
+                continue
+            source_id = _normalize_inventory_id(source_row.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            registry_source = next(
+                (
+                    item
+                    for item in updated_registry.get("sources", [])
+                    if isinstance(item, dict) and str(item.get("source_id", "")).strip() == source_id
+                ),
+                None,
+            )
+            merged_source = {
+                **(registry_source if isinstance(registry_source, dict) else {}),
+                **source_row,
+                **source_payload,
+                "source_id": source_id,
+            }
+            if isinstance(registry_source, dict):
+                updated_registry = refresh_registry_source(
+                    updated_registry,
+                    source_id,
+                    merged_source,
+                    generated_at=_now_iso(),
+                )
+            else:
+                updated_registry = register_registry_source(
+                    updated_registry,
+                    merged_source,
+                    generated_at=_now_iso(),
+                )
+            refreshed_source_ids.append(source_id)
+
+        self._save_skills_registry(updated_registry)
+        normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        self._append_skills_audit_event(
+            "install_unit_refresh",
+            source_id=normalized_install_unit_id,
+            payload={
+                "source_ids": refreshed_source_ids,
+                **source_payload,
+            },
+        )
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        self._push_debug_log(
+            "info",
+            (
+                "install unit refreshed: "
+                f"install_unit={normalized_install_unit_id} sources={','.join(refreshed_source_ids)}"
+            ),
+            source="webui",
+        )
+        return self._build_install_unit_mutation_response(
+            normalized_install_unit_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "registry": updated_registry,
+                "refreshed_source_ids": refreshed_source_ids,
+            },
+        )
+
     def webui_sync_skill_source(self, source_id: str) -> dict[str, Any]:
         normalized_source_id = _normalize_inventory_id(source_id, default="")
         if not normalized_source_id:
@@ -1559,6 +1697,60 @@ class OneSyncPlugin(Star):
             "warnings": source_payload.get("warnings", []),
             "sync": sync_record,
         }
+
+    def webui_sync_install_unit(self, install_unit_id: str) -> dict[str, Any]:
+        context = self._resolve_install_unit_action_context(install_unit_id)
+        if not context.get("ok"):
+            return context
+
+        synced_source_ids: list[str] = []
+        failed_sources: list[dict[str, Any]] = []
+        registry = self._load_saved_skills_registry()
+
+        for source in context.get("source_rows", []):
+            if not isinstance(source, dict):
+                continue
+            source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            sync_record = build_source_sync_record(source)
+            registry = self._update_saved_registry_source_metadata(
+                source_id=source_id,
+                source_payload=source,
+                sync_payload=sync_record,
+            )
+            if str(sync_record.get("sync_status") or "") == "ok":
+                synced_source_ids.append(source_id)
+            else:
+                failed_sources.append(
+                    {
+                        "source_id": source_id,
+                        "sync_status": str(sync_record.get("sync_status") or ""),
+                        "sync_message": str(sync_record.get("sync_message") or ""),
+                    },
+                )
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        self._push_debug_log(
+            "info" if not failed_sources else "warn",
+            (
+                "install unit synced: "
+                f"install_unit={normalized_install_unit_id} ok={len(synced_source_ids)} failed={len(failed_sources)}"
+            ),
+            source="webui",
+        )
+        return self._build_install_unit_mutation_response(
+            normalized_install_unit_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "registry": registry,
+                "synced_source_ids": synced_source_ids,
+                "failed_sources": failed_sources,
+            },
+        )
 
     def webui_sync_all_skill_sources(self) -> dict[str, Any]:
         skills_snapshot = self.webui_get_skills_payload()
@@ -1718,6 +1910,96 @@ class OneSyncPlugin(Star):
         manifest["sources"] = sources
         manifest["deploy_targets"] = deploy_targets
         return self._save_skills_manifest(manifest)
+
+    def _deploy_source_ids_to_targets(
+        self,
+        source_ids: list[str],
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized_source_ids = _dedupe_keep_order(
+            [
+                _normalize_inventory_id(item, default="")
+                for item in source_ids
+                if _normalize_inventory_id(item, default="")
+            ],
+        )
+        if not normalized_source_ids:
+            return {"ok": False, "message": "source_ids is required"}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        scope = _normalize_inventory_id(payload.get("scope", "global"), default="global")
+        if scope not in {"global", "workspace"}:
+            scope = "global"
+
+        requested_software_ids = [
+            _normalize_inventory_id(item, default="")
+            for item in _to_str_list(payload.get("software_ids", []))
+        ]
+        target_ids = _to_str_list(payload.get("target_ids", []))
+        for target_id in target_ids:
+            software_text, _, scope_text = str(target_id).partition(":")
+            software_id = _normalize_inventory_id(software_text, default="")
+            if not software_id:
+                continue
+            requested_software_ids.append(software_id)
+            if scope_text.strip():
+                parsed_scope = _normalize_inventory_id(scope_text, default="global")
+                if parsed_scope in {"global", "workspace"}:
+                    scope = parsed_scope
+        requested_software_ids = _dedupe_keep_order([item for item in requested_software_ids if item])
+        if not requested_software_ids:
+            return {"ok": False, "message": "software_ids or target_ids is required"}
+
+        snapshot = self.webui_get_skills_payload()
+        compatibility = snapshot.get("compatibility", {})
+        for software_id in requested_software_ids:
+            compatible_ids = set(_to_str_list(compatibility.get(software_id, [])))
+            incompatible_sources = [
+                source_id
+                for source_id in normalized_source_ids
+                if source_id not in compatible_ids
+            ]
+            if incompatible_sources:
+                return {
+                    "ok": False,
+                    "message": (
+                        "some sources are incompatible with software "
+                        f"{software_id}: {', '.join(incompatible_sources)}"
+                    ),
+                }
+
+        manifest = self._load_saved_skills_manifest()
+        resolved_target_ids: list[str] = []
+        for software_id in requested_software_ids:
+            target_id = f"{software_id}:{scope}"
+            resolved_target_ids.append(target_id)
+            current_target = next(
+                (
+                    item for item in manifest.get("deploy_targets", [])
+                    if isinstance(item, dict) and str(item.get("target_id", "")) == target_id
+                ),
+                None,
+            )
+            next_source_ids = _dedupe_keep_order(
+                _to_str_list(current_target.get("selected_source_ids", [])) + normalized_source_ids,
+            ) if isinstance(current_target, dict) else normalized_source_ids
+            manifest = self._update_saved_manifest_target_selection(
+                target_id=target_id,
+                selected_source_ids=next_source_ids,
+            )
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        return {
+            "ok": True,
+            "scope": scope,
+            "source_ids": normalized_source_ids,
+            "target_ids": resolved_target_ids,
+            "manifest": manifest,
+            "inventory": inventory_snapshot,
+            "skills": skills_snapshot,
+        }
 
     def _update_saved_manifest_target_selection(
         self,
@@ -2078,76 +2360,58 @@ class OneSyncPlugin(Star):
         normalized_source_id = _normalize_inventory_id(source_id, default="")
         if not normalized_source_id:
             return {"ok": False, "message": "source_id is required"}
-        if not isinstance(payload, dict):
-            payload = {}
-
-        scope = _normalize_inventory_id(payload.get("scope", "global"), default="global")
-        if scope not in {"global", "workspace"}:
-            scope = "global"
-
-        requested_software_ids = [
-            _normalize_inventory_id(item, default="")
-            for item in _to_str_list(payload.get("software_ids", []))
-        ]
-        target_ids = _to_str_list(payload.get("target_ids", []))
-        for target_id in target_ids:
-            software_text, _, scope_text = str(target_id).partition(":")
-            software_id = _normalize_inventory_id(software_text, default="")
-            if not software_id:
-                continue
-            requested_software_ids.append(software_id)
-            if scope_text.strip():
-                parsed_scope = _normalize_inventory_id(scope_text, default="global")
-                if parsed_scope in {"global", "workspace"}:
-                    scope = parsed_scope
-        requested_software_ids = _dedupe_keep_order([item for item in requested_software_ids if item])
-        if not requested_software_ids:
-            return {"ok": False, "message": "software_ids or target_ids is required"}
-
-        snapshot = self.webui_get_skills_payload()
-        compatibility = snapshot.get("compatibility", {})
-        for software_id in requested_software_ids:
-            compatible_ids = set(_to_str_list(compatibility.get(software_id, [])))
-            if normalized_source_id not in compatible_ids:
-                return {
-                    "ok": False,
-                    "message": f"source {normalized_source_id} is incompatible with software {software_id}",
-                }
-        manifest = self._load_saved_skills_manifest()
-        for software_id in requested_software_ids:
-            target_id = f"{software_id}:{scope}"
-            current_target = next(
-                (
-                    item for item in manifest.get("deploy_targets", [])
-                    if isinstance(item, dict) and str(item.get("target_id", "")) == target_id
-                ),
-                None,
-            )
-            next_source_ids = _dedupe_keep_order(
-                _to_str_list(current_target.get("selected_source_ids", [])) + [normalized_source_id],
-            ) if isinstance(current_target, dict) else [normalized_source_id]
-            manifest = self._update_saved_manifest_target_selection(
-                target_id=target_id,
-                selected_source_ids=next_source_ids,
-            )
-
-        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        skills_snapshot = self._skills_state().get("last_overview", {})
+        deploy_result = self._deploy_source_ids_to_targets([normalized_source_id], payload)
+        if not deploy_result.get("ok"):
+            return deploy_result
         self._push_debug_log(
             "info",
             (
                 "skill source deployed: "
-                f"source={normalized_source_id} scope={scope} targets={','.join(requested_software_ids)}"
+                f"source={normalized_source_id} scope={deploy_result.get('scope', 'global')} "
+                f"targets={','.join(_to_str_list(deploy_result.get('target_ids', [])))}"
             ),
             source="webui",
         )
         return {
             "ok": True,
-            "manifest": manifest,
-            "inventory": inventory_snapshot,
-            "skills": skills_snapshot,
+            "manifest": deploy_result.get("manifest", {}),
+            "inventory": deploy_result.get("inventory", {}),
+            "skills": deploy_result.get("skills", {}),
+            "target_ids": deploy_result.get("target_ids", []),
             "source": self.webui_get_skill_source_payload(normalized_source_id).get("source"),
         }
+
+    def webui_deploy_install_unit(self, install_unit_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        context = self._resolve_install_unit_action_context(install_unit_id)
+        if not context.get("ok"):
+            return context
+
+        deploy_result = self._deploy_source_ids_to_targets(
+            _to_str_list(context.get("source_ids", [])),
+            payload,
+        )
+        if not deploy_result.get("ok"):
+            return deploy_result
+
+        normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        self._push_debug_log(
+            "info",
+            (
+                "install unit deployed: "
+                f"install_unit={normalized_install_unit_id} scope={deploy_result.get('scope', 'global')} "
+                f"targets={','.join(_to_str_list(deploy_result.get('target_ids', [])))}"
+            ),
+            source="webui",
+        )
+        return self._build_install_unit_mutation_response(
+            normalized_install_unit_id,
+            inventory_snapshot=deploy_result.get("inventory", {}),
+            skills_snapshot=deploy_result.get("skills", {}),
+            extra={
+                "manifest": deploy_result.get("manifest", {}),
+                "target_ids": deploy_result.get("target_ids", []),
+            },
+        )
 
     def webui_doctor_skills(self) -> dict[str, Any]:
         snapshot = self.webui_get_skills_payload()

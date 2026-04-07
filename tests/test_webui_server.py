@@ -245,6 +245,43 @@ class _FakePlugin:
             "warnings": [],
         }
 
+    def webui_refresh_install_unit(self, install_unit_id: str, payload: dict) -> dict:
+        _ = payload
+        if install_unit_id != "install:skill_cli":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_sync_install_unit(self, install_unit_id: str) -> dict:
+        if install_unit_id != "install:skill_cli":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "synced_source_ids": ["skill_cli"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_deploy_install_unit(self, install_unit_id: str, payload: dict) -> dict:
+        if install_unit_id != "install:skill_cli":
+            return {"ok": False, "message": "not found"}
+        if not payload.get("software_ids") and not payload.get("target_ids"):
+            return {"ok": False, "message": "software_ids or target_ids is required"}
+        return {
+            "ok": True,
+            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "target_ids": ["claude_code:global"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
     def webui_get_skills_registry_payload(self) -> dict:
         return {
             "ok": True,
@@ -567,6 +604,39 @@ class WebUIServerTests(unittest.TestCase):
         sync_resp = self.client.post("/api/skills/sources/skill_cli/sync", json={})
         self.assertEqual(200, sync_resp.status_code)
         self.assertTrue(sync_resp.json()["ok"])
+
+        unit_refresh_resp = self.client.post("/api/skills/install-units/install%3Askill_cli/refresh", json={})
+        self.assertEqual(200, unit_refresh_resp.status_code)
+        self.assertTrue(unit_refresh_resp.json()["ok"])
+        self.assertEqual("install:skill_cli", unit_refresh_resp.json()["install_unit"]["install_unit_id"])
+
+        unit_sync_resp = self.client.post("/api/skills/install-units/install%3Askill_cli/sync", json={})
+        self.assertEqual(200, unit_sync_resp.status_code)
+        self.assertTrue(unit_sync_resp.json()["ok"])
+        self.assertEqual(["skill_cli"], unit_sync_resp.json()["synced_source_ids"])
+
+        unit_deploy_resp = self.client.post(
+            "/api/skills/install-units/install%3Askill_cli/deploy",
+            json={"software_ids": ["claude_code"], "scope": "global"},
+        )
+        self.assertEqual(200, unit_deploy_resp.status_code)
+        self.assertTrue(unit_deploy_resp.json()["ok"])
+        self.assertEqual(["claude_code:global"], unit_deploy_resp.json()["target_ids"])
+
+        missing_unit_refresh_resp = self.client.post("/api/skills/install-units/missing/refresh", json={})
+        self.assertEqual(404, missing_unit_refresh_resp.status_code)
+        self.assertFalse(missing_unit_refresh_resp.json()["ok"])
+
+        missing_unit_sync_resp = self.client.post("/api/skills/install-units/missing/sync", json={})
+        self.assertEqual(404, missing_unit_sync_resp.status_code)
+        self.assertFalse(missing_unit_sync_resp.json()["ok"])
+
+        bad_unit_deploy_resp = self.client.post(
+            "/api/skills/install-units/install%3Askill_cli/deploy",
+            json={},
+        )
+        self.assertEqual(400, bad_unit_deploy_resp.status_code)
+        self.assertFalse(bad_unit_deploy_resp.json()["ok"])
 
         refresh_resp = self.client.post("/api/skills/sources/skill_cli/refresh", json={})
         self.assertEqual(200, refresh_resp.status_code)

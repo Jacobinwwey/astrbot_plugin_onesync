@@ -180,6 +180,13 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
+        @self.app.post("/api/skills/install-units/{install_unit_id}/refresh")
+        async def skill_install_unit_refresh(install_unit_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_refresh_install_unit(install_unit_id, payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
         @self.app.post("/api/skills/sources/{source_id}/remove")
         async def skill_source_remove(source_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_remove_skill_source(source_id, payload)
@@ -191,6 +198,14 @@ class OneSyncWebUIServer:
         async def skill_source_sync(source_id: str, payload: dict[str, Any]):
             _ = payload
             ret = self.plugin.webui_sync_skill_source(source_id)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
+        @self.app.post("/api/skills/install-units/{install_unit_id}/sync")
+        async def skill_install_unit_sync(install_unit_id: str, payload: dict[str, Any]):
+            _ = payload
+            ret = self.plugin.webui_sync_install_unit(install_unit_id)
             if not ret.get("ok"):
                 return JSONResponse(ret, status_code=404)
             return ret
@@ -208,6 +223,14 @@ class OneSyncWebUIServer:
             ret = self.plugin.webui_deploy_skill_source(source_id, payload)
             if not ret.get("ok"):
                 return JSONResponse(ret, status_code=400)
+            return ret
+
+        @self.app.post("/api/skills/install-units/{install_unit_id}/deploy")
+        async def skill_install_unit_deploy(install_unit_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_deploy_install_unit(install_unit_id, payload)
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(ret, status_code=status_code)
             return ret
 
         @self.app.post("/api/skills/deploy-targets/repair-all")

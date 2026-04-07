@@ -2025,6 +2025,19 @@
               <div class="inventory-target-hero" id="inventorySourceHero">
                 <div class="debug-empty" id="inventorySourceHeroEmpty">等待选择 Source / Bundle...</div>
               </div>
+              <div class="inventory-repair-bar" id="inventoryInstallUnitBar">
+                <div class="inventory-repair-top">
+                  <div class="inventory-repair-copy">
+                    <div class="inventory-repair-title" id="inventoryInstallUnitTitle">当前 Install Unit 运维</div>
+                    <div class="inventory-repair-note" id="inventoryInstallUnitNote">等待聚合详情...</div>
+                  </div>
+                  <div class="inventory-repair-buttons">
+                    <button id="inventoryRefreshInstallUnitBtn" type="button">刷新当前 Unit</button>
+                    <button id="inventorySyncInstallUnitBtn" type="button">同步当前 Unit</button>
+                    <button id="inventoryDeployInstallUnitBtn" class="success" type="button">部署当前 Unit</button>
+                  </div>
+                </div>
+              </div>
               <div class="inventory-source-rows" id="inventorySourceRows">
                 <div class="debug-empty" id="inventorySourceRowsEmpty">暂无 Source 数据</div>
               </div>
@@ -2565,6 +2578,9 @@
       inventoryTargetDetail: null,
       inventorySelectedSourceKey: "",
       inventorySourceDetail: null,
+      inventoryRefreshingInstallUnit: false,
+      inventorySyncingInstallUnit: false,
+      inventoryDeployingInstallUnit: false,
       inventoryRepairing: false,
       inventoryRepairAllRunning: false,
       inventoryReprojecting: false
@@ -2856,6 +2872,17 @@
         inventory_selection_note: "按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 ce:* Skill 单独展开。",
         inventory_sync_all: "同步全部 Source",
         inventory_sync_all_running: "同步中",
+        inventory_install_unit_title: "当前 Install Unit 运维",
+        inventory_install_unit_note_idle: "围绕真实 install unit 执行 refresh / sync / deploy，而不是对每条 leaf skill 分别操作。",
+        inventory_install_unit_note_ready: "当前将操作 install unit {installUnit}，目标宿主 {target}。",
+        inventory_install_unit_note_group: "当前聚合下包含 {count} 个 install unit。此阶段仅支持单个 install unit 动作。",
+        inventory_install_unit_note_empty: "当前没有可执行的 install unit 动作。",
+        inventory_install_unit_refresh: "刷新当前 Unit",
+        inventory_install_unit_refreshing: "刷新中",
+        inventory_install_unit_sync: "同步当前 Unit",
+        inventory_install_unit_syncing: "同步中",
+        inventory_install_unit_deploy: "部署当前 Unit",
+        inventory_install_unit_deploying: "部署中",
         inventory_target_empty: "等待选择宿主软件...",
         inventory_target_kicker: "当前 Deploy Target",
         inventory_target_scope_host: "{host} · {scope}",
@@ -2969,6 +2996,9 @@
         inventory_source_syncing: "同步中",
         inventory_sync_pending: "未同步",
         inventory_sync_all_error: "批量同步 Source 失败: {msg}",
+        inventory_install_unit_refresh_error: "刷新当前 Install Unit 失败: {msg}",
+        inventory_install_unit_sync_error: "同步当前 Install Unit 失败: {msg}",
+        inventory_install_unit_deploy_error: "部署当前 Install Unit 失败: {msg}",
         inventory_save_error: "保存部署选择失败: {msg}",
         inventory_sync_error: "同步 Source 失败: {msg}",
         inventory_scan_error: "刷新资产失败: {msg}",
@@ -3263,6 +3293,17 @@
         inventory_selection_note: "Manage by source package. Compound Engineering appears as one bundle instead of expanding every ce:* skill.",
         inventory_sync_all: "Sync All Sources",
         inventory_sync_all_running: "Syncing",
+        inventory_install_unit_title: "Current Install Unit Operations",
+        inventory_install_unit_note_idle: "Operate on real install units for refresh, sync, and deploy instead of touching every leaf skill separately.",
+        inventory_install_unit_note_ready: "Current action scope: install unit {installUnit} targeting {target}.",
+        inventory_install_unit_note_group: "This aggregate contains {count} install units. This slice only enables single install-unit actions.",
+        inventory_install_unit_note_empty: "No install-unit action is available for the current selection.",
+        inventory_install_unit_refresh: "Refresh Unit",
+        inventory_install_unit_refreshing: "Refreshing",
+        inventory_install_unit_sync: "Sync Unit",
+        inventory_install_unit_syncing: "Syncing",
+        inventory_install_unit_deploy: "Deploy Unit",
+        inventory_install_unit_deploying: "Deploying",
         inventory_target_empty: "Select a host to inspect the current deploy target.",
         inventory_target_kicker: "Current Deploy Target",
         inventory_target_scope_host: "{host} · {scope}",
@@ -3376,6 +3417,9 @@
         inventory_source_syncing: "Syncing",
         inventory_sync_pending: "unsynced",
         inventory_sync_all_error: "Failed to sync all sources: {msg}",
+        inventory_install_unit_refresh_error: "Failed to refresh the current install unit: {msg}",
+        inventory_install_unit_sync_error: "Failed to sync the current install unit: {msg}",
+        inventory_install_unit_deploy_error: "Failed to deploy the current install unit: {msg}",
         inventory_doctor_error: "Doctor check failed: {msg}",
         inventory_deploy_meta_scope: "scope",
         inventory_deploy_meta_status: "status",
@@ -3840,9 +3884,24 @@
       $("inventoryDeployInstallAll").textContent = t("inventory_deploy_install_all");
       $("inventoryDoctorBtn").textContent = t("inventory_doctor");
       $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
+      $("inventoryInstallUnitTitle").textContent = t("inventory_install_unit_title");
+      $("inventoryInstallUnitNote").textContent = t("inventory_install_unit_note_idle");
+      $("inventoryRefreshInstallUnitBtn").textContent = state.inventoryRefreshingInstallUnit
+        ? t("inventory_install_unit_refreshing")
+        : t("inventory_install_unit_refresh");
+      $("inventorySyncInstallUnitBtn").textContent = state.inventorySyncingInstallUnit
+        ? t("inventory_install_unit_syncing")
+        : t("inventory_install_unit_sync");
+      $("inventoryDeployInstallUnitBtn").textContent = state.inventoryDeployingInstallUnit
+        ? t("inventory_install_unit_deploying")
+        : t("inventory_install_unit_deploy");
       const inventoryTargetHeroEmptyEl = $("inventoryTargetHeroEmpty");
       if (inventoryTargetHeroEmptyEl) {
         inventoryTargetHeroEmptyEl.textContent = t("inventory_target_empty");
+      }
+      const inventorySourceHeroEmptyEl = $("inventorySourceHeroEmpty");
+      if (inventorySourceHeroEmptyEl) {
+        inventorySourceHeroEmptyEl.textContent = t("inventory_source_empty");
       }
       $("inventoryKindFilterLabel").textContent = t("inventory_kind_filter_label");
       $("inventoryKindOptAll").textContent = t("inventory_kind_all");
@@ -4374,6 +4433,22 @@
       return "";
     }
 
+    function getSelectedInstallUnitRowFromDetail() {
+      const detail = state.inventorySourceDetail;
+      if (detail && detail.install_unit && typeof detail.install_unit === "object") {
+        return detail.install_unit;
+      }
+      if (detail && Array.isArray(detail.install_unit_rows) && detail.install_unit_rows.length === 1) {
+        return detail.install_unit_rows[0];
+      }
+      const overview = state.inventoryOverview && typeof state.inventoryOverview === "object"
+        ? state.inventoryOverview
+        : {};
+      const selectedSourceKey = String(state.inventorySelectedSourceKey || "").trim();
+      const installUnitRows = Array.isArray(overview.install_unit_rows) ? overview.install_unit_rows : [];
+      return installUnitRows.find((item) => String(item.install_unit_id || "").trim() === selectedSourceKey) || null;
+    }
+
     function resolveInventorySourceDetailEndpoint(sourceKey, overview = state.inventoryOverview) {
       const normalizedSourceKey = String(sourceKey || "").trim();
       if (!normalizedSourceKey) {
@@ -4549,6 +4624,86 @@
       }
     }
 
+    async function refreshSelectedInstallUnit() {
+      const installUnit = getSelectedInstallUnitRowFromDetail();
+      const installUnitId = String(installUnit && installUnit.install_unit_id || "").trim();
+      if (!installUnitId || state.inventoryRefreshingInstallUnit) {
+        return null;
+      }
+      state.inventoryRefreshingInstallUnit = true;
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/install-units/${encodeURIComponent(installUnitId)}/refresh`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventorySourceDetail = null;
+        renderInventoryPanel();
+        await refreshSelectedInventorySourceDetail();
+        await refreshSelectedDeployTargetDetail();
+        return result;
+      } finally {
+        state.inventoryRefreshingInstallUnit = false;
+        renderInventoryPanel();
+      }
+    }
+
+    async function syncSelectedInstallUnit() {
+      const installUnit = getSelectedInstallUnitRowFromDetail();
+      const installUnitId = String(installUnit && installUnit.install_unit_id || "").trim();
+      if (!installUnitId || state.inventorySyncingInstallUnit) {
+        return null;
+      }
+      state.inventorySyncingInstallUnit = true;
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/install-units/${encodeURIComponent(installUnitId)}/sync`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventorySourceDetail = null;
+        renderInventoryPanel();
+        await refreshSelectedInventorySourceDetail();
+        await refreshSelectedDeployTargetDetail();
+        return result;
+      } finally {
+        state.inventorySyncingInstallUnit = false;
+        renderInventoryPanel();
+      }
+    }
+
+    async function deploySelectedInstallUnit() {
+      const installUnit = getSelectedInstallUnitRowFromDetail();
+      const installUnitId = String(installUnit && installUnit.install_unit_id || "").trim();
+      const softwareId = String(state.inventorySelectedSoftwareId || "").trim();
+      const scope = normalizeInventoryScope(state.inventorySelectedScope);
+      if (!installUnitId || !softwareId || state.inventoryDeployingInstallUnit) {
+        return null;
+      }
+      state.inventoryDeployingInstallUnit = true;
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/install-units/${encodeURIComponent(installUnitId)}/deploy`, {
+          method: "POST",
+          body: JSON.stringify({
+            software_ids: [softwareId],
+            scope,
+          }),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventorySourceDetail = null;
+        renderInventoryPanel();
+        await refreshSelectedInventorySourceDetail();
+        await refreshSelectedDeployTargetDetail();
+        return result;
+      } finally {
+        state.inventoryDeployingInstallUnit = false;
+        renderInventoryPanel();
+      }
+    }
+
     function renderInventoryPanel() {
       const summaryEl = $("inventorySummary");
       const selectEl = $("inventorySoftwareSelect");
@@ -4565,6 +4720,11 @@
       const skillListEl = $("inventorySkillList");
       const softwareRowsEl = $("inventorySoftwareRows");
       const sourceHeroEl = $("inventorySourceHero");
+      const installUnitTitleEl = $("inventoryInstallUnitTitle");
+      const installUnitNoteEl = $("inventoryInstallUnitNote");
+      const refreshInstallUnitBtn = $("inventoryRefreshInstallUnitBtn");
+      const syncInstallUnitBtn = $("inventorySyncInstallUnitBtn");
+      const deployInstallUnitBtn = $("inventoryDeployInstallUnitBtn");
       const sourceRowsEl = $("inventorySourceRows");
       const deployRowsEl = $("inventoryDeployRows");
       const doctorSummaryEl = $("inventoryDoctorSummary");
@@ -5039,6 +5199,16 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         projection_missing: doctor.projection_health && doctor.projection_health.binding_rows_missing_total || 0,
         projection_extra: doctor.projection_health && doctor.projection_health.binding_rows_extra_total || 0,
       });
+      installUnitTitleEl.textContent = t("inventory_install_unit_title");
+      refreshInstallUnitBtn.textContent = state.inventoryRefreshingInstallUnit
+        ? t("inventory_install_unit_refreshing")
+        : t("inventory_install_unit_refresh");
+      syncInstallUnitBtn.textContent = state.inventorySyncingInstallUnit
+        ? t("inventory_install_unit_syncing")
+        : t("inventory_install_unit_sync");
+      deployInstallUnitBtn.textContent = state.inventoryDeployingInstallUnit
+        ? t("inventory_install_unit_deploying")
+        : t("inventory_install_unit_deploy");
       $("inventorySyncAllBtn").disabled = state.inventorySyncAllRunning;
       repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
       reprojectBtn.disabled = true;
@@ -5055,11 +5225,15 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         repairActionsEl.innerHTML = "";
         skillListEl.innerHTML = `<div class="debug-empty">${t("inventory_no_skills")}</div>`;
         softwareRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(noVisibleSoftwareText)}</div>`;
+        installUnitNoteEl.textContent = t("inventory_install_unit_note_empty");
         state.inventoryDraftSkillIds = [];
         state.inventoryVisibleCompatibleSkillIds = [];
         state.inventoryVisibleDiscoveredSkillIds = [];
         state.inventoryTargetDetail = null;
         saveBtn.disabled = true;
+        refreshInstallUnitBtn.disabled = true;
+        syncInstallUnitBtn.disabled = true;
+        deployInstallUnitBtn.disabled = true;
         reprojectBtn.disabled = true;
         repairBtn.disabled = true;
         repairAllBtn.disabled = true;
@@ -5088,9 +5262,41 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         ? hostIndex[selectedSoftwareId]
         : {};
       const currentTargetId = `${selectedSoftwareId}:${bindingScope}`;
+      const actionableInstallUnit = getSelectedInstallUnitRowFromDetail();
+      const actionableInstallUnitId = String(actionableInstallUnit && actionableInstallUnit.install_unit_id || "").trim();
+      const detailInstallUnitRows = state.inventorySourceDetail && Array.isArray(state.inventorySourceDetail.install_unit_rows)
+        ? state.inventorySourceDetail.install_unit_rows
+        : [];
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
       const hiddenUninstalledCandidates = Math.max(0, skillCapableRows.length - softwareRows.length);
+      if (actionableInstallUnitId) {
+        installUnitNoteEl.textContent = t("inventory_install_unit_note_ready", {
+          installUnit: actionableInstallUnitId,
+          target: currentTargetId,
+        });
+      } else if (detailInstallUnitRows.length > 1) {
+        installUnitNoteEl.textContent = t("inventory_install_unit_note_group", {
+          count: detailInstallUnitRows.length,
+        });
+      } else if (selectedSourceRow) {
+        installUnitNoteEl.textContent = t("inventory_install_unit_note_idle");
+      } else {
+        installUnitNoteEl.textContent = t("inventory_install_unit_note_empty");
+      }
+      refreshInstallUnitBtn.disabled = !actionableInstallUnitId
+        || state.inventoryRefreshingInstallUnit
+        || state.inventorySyncingInstallUnit
+        || state.inventoryDeployingInstallUnit;
+      syncInstallUnitBtn.disabled = !actionableInstallUnitId
+        || state.inventoryRefreshingInstallUnit
+        || state.inventorySyncingInstallUnit
+        || state.inventoryDeployingInstallUnit;
+      deployInstallUnitBtn.disabled = !actionableInstallUnitId
+        || !selectedSoftwareId
+        || state.inventoryRefreshingInstallUnit
+        || state.inventorySyncingInstallUnit
+        || state.inventoryDeployingInstallUnit;
       const compatibleSources = inventoryCompatibleSelectionRows(overview, selectedSoftwareId);
       state.inventoryVisibleCompatibleSkillIds = [...new Set(
         compatibleSources.flatMap((item) => inventoryAggregateSourceIds(item)),
@@ -7064,6 +7270,30 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           await runSkillsDoctor();
         } catch (err) {
           alert(t("inventory_doctor_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryRefreshInstallUnitBtn").addEventListener("click", async () => {
+        try {
+          await refreshSelectedInstallUnit();
+        } catch (err) {
+          alert(t("inventory_install_unit_refresh_error", { msg: err.message }));
+        }
+      });
+
+      $("inventorySyncInstallUnitBtn").addEventListener("click", async () => {
+        try {
+          await syncSelectedInstallUnit();
+        } catch (err) {
+          alert(t("inventory_install_unit_sync_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryDeployInstallUnitBtn").addEventListener("click", async () => {
+        try {
+          await deploySelectedInstallUnit();
+        } catch (err) {
+          alert(t("inventory_install_unit_deploy_error", { msg: err.message }));
         }
       });
 

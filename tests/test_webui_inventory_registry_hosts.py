@@ -36,6 +36,13 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventorySourceHero", html)
         self.assertIn("/api/skills/install-units/", html)
         self.assertIn("/api/skills/collections/", html)
+        self.assertIn('id="inventoryRefreshInstallUnitBtn"', html)
+        self.assertIn('id="inventorySyncInstallUnitBtn"', html)
+        self.assertIn('id="inventoryDeployInstallUnitBtn"', html)
+        self.assertIn("/api/skills/install-units/", html)
+        self.assertIn("/refresh", html)
+        self.assertIn("/sync", html)
+        self.assertIn("/deploy", html)
 
     def test_inventory_panel_exposes_source_import_wizard_strings_and_hooks(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
