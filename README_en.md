@@ -95,6 +95,8 @@ python3 scripts/stitch_mcp_runner.py baseline \
 
 For full parameters and reliability notes, see:
 - [Stitch WebUI Baseline Notes](./docs/plans/stitch-webui-baseline-2026-04-06.md)
+- [Skills Management Reference Comparison](./docs/plans/skills-management-reference-comparative-analysis-2026-04-06.md)
+- [Skills Management Next-Step Plan](./docs/plans/skills-management-next-step-implementation-plan-2026-04-06.md)
 
 ### Embedded AI Assistant and Guide
 

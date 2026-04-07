@@ -138,6 +138,8 @@ python3 scripts/stitch_mcp_runner.py baseline \
 
 更多参数与稳定性策略见：
 - [Stitch WebUI 基线记录](./docs/plans/stitch-webui-baseline-2026-04-06.md)
+- [Skills 管理参考仓库对比分析](./docs/plans/skills-management-reference-comparative-analysis-2026-04-06.md)
+- [Skills 管理下一步实施计划](./docs/plans/skills-management-next-step-implementation-plan-2026-04-06.md)
 
 ### WebUI 内嵌 AI 助手与使用指引
 

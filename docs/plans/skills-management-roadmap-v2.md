@@ -6,6 +6,10 @@ status: active
 
 # OneSync Skills 管理路线图
 
+## 参考分析入口
+- `docs/plans/skills-management-reference-comparative-analysis-2026-04-06.md`
+- `docs/plans/skills-management-next-step-implementation-plan-2026-04-06.md`
+
 ## 阶段 1.5：Source-First 过渡层
 - 保留 `inventory_core.py`
 - 引入 `skills_core.py`
@@ -25,6 +29,23 @@ status: active
 - 把当前 inventory 派生状态升级为独立可写状态
 - 增加 source import/sync/deploy/repair 明确动作
 - 让 deploy target 不再只依赖 `skill_bindings`
+
+### 阶段 2A：Source Registry 与 Host Adapter
+- 把 source registry 从 inventory 派生逻辑中拆出
+- 把 built-in host / future custom host 抽象为统一 adapter contract
+- 新增 `registry.json` 与 `audit.log.jsonl`
+- 新增 source register / refresh / remove API
+
+### 阶段 2B：Manifest/Lock 独立化
+- `skills_core.py` 改为基于 registry + manifest + lock 生成 overview
+- inventory 降级为 discovery input 与兼容层
+- `skill_bindings` 继续保留，但明确为 compatibility projection
+
+### 阶段 2C：受管导入
+- 增加 `manual_local` source
+- 增加 `manual_git` source
+- 增加 custom host registry
+- package-first UI 保持不变，不回退到默认 leaf-first
 
 ## 阶段 3：完整运维视图
 - 增加 drift diff
@@ -52,3 +73,9 @@ status: active
 - 扩更多 CLI / GUI / claw 家族
 - 增加 git source / registry source
 - 视需要再讨论跨主机统一管理
+
+## 当前判断
+- 下一步主线不是继续堆 UI，而是先做 Phase 2A。
+- `skill-flow` 主要借鉴 source state / planner / doctor。
+- `ai-toolbox` 主要借鉴 host registry / custom tool / sync trigger 思路。
+- 两者都不应直接改变 OneSync 当前的 package-first 主交互。
