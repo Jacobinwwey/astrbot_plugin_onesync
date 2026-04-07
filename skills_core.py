@@ -592,6 +592,20 @@ def build_skills_overview(
     source_rows.sort(key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("source_id", "")).lower()))
     deploy_rows.sort(key=lambda item: (str(item.get("software_display_name", "")).lower(), str(item.get("scope", "")).lower()))
 
+    compatible_source_rows_by_software: dict[str, list[dict[str, Any]]] = {}
+    compatibility_raw = inventory_snapshot.get("compatibility", {})
+    compatibility = compatibility_raw if isinstance(compatibility_raw, dict) else {}
+    for host in software_hosts:
+        software_id = str(host.get("id", "")).strip()
+        if not software_id:
+            continue
+        compatible_ids = set(_to_str_list(compatibility.get(software_id, [])))
+        compatible_source_rows_by_software[software_id] = [
+            copy.deepcopy(item)
+            for item in source_rows
+            if str(item.get("source_id", "")).strip() in compatible_ids
+        ]
+
     inventory_counts = inventory_snapshot.get("counts", {})
     counts = dict(inventory_counts) if isinstance(inventory_counts, dict) else {}
     counts.update(
@@ -667,6 +681,7 @@ def build_skills_overview(
         "warnings": warnings,
         "software_rows": copy.deepcopy(inventory_snapshot.get("software_rows", [])),
         "skill_rows": copy.deepcopy(inventory_snapshot.get("skill_rows", [])),
+        "compatible_source_rows_by_software": compatible_source_rows_by_software,
         "binding_rows": copy.deepcopy(inventory_snapshot.get("binding_rows", [])),
         "binding_map": copy.deepcopy(inventory_snapshot.get("binding_map", {})),
         "binding_map_by_scope": copy.deepcopy(inventory_snapshot.get("binding_map_by_scope", {})),

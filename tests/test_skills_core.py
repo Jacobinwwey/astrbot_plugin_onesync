@@ -271,6 +271,50 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["doctor"]["source_sync"]["error"])
         self.assertIn("registry timeout", "\n".join(overview["warnings"]))
 
+    def test_build_skills_overview_projects_compatible_source_rows_by_software(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["skill_rows"][0].update(
+            {
+                "source_exists": True,
+                "freshness_status": "fresh",
+                "registry_package_name": "@every-env/compound-plugin",
+                "registry_package_manager": "npm",
+            },
+        )
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_bundle_compound_engineering_global",
+                    "sync_status": "ok",
+                    "sync_checked_at": "2026-04-06T08:05:00+00:00",
+                    "registry_latest_version": "2.62.1",
+                },
+            ],
+        }
+
+        overview = build_skills_overview(snapshot, saved_manifest=saved_manifest)
+        compatible_map = overview["compatible_source_rows_by_software"]
+
+        self.assertEqual(
+            [
+                "npx_bundle_compound_engineering_global",
+                "npx_global_find_skills",
+            ],
+            [item["source_id"] for item in compatible_map["codex"]],
+        )
+        compound = next(
+            item
+            for item in compatible_map["codex"]
+            if item["source_id"] == "npx_bundle_compound_engineering_global"
+        )
+        self.assertEqual("ok", compound["sync_status"])
+        self.assertEqual("2.62.1", compound["registry_latest_version"])
+
+        self.assertEqual(["npx_global_find_skills"], [item["source_id"] for item in compatible_map["antigravity"]])
+        self.assertEqual("missing", compatible_map["antigravity"][0]["status"])
+
     def test_build_skills_lock_marks_missing_target_path_and_repair_actions(self) -> None:
         snapshot = copy.deepcopy(self.inventory_snapshot)
         missing_root = Path(self._tempdir.name) / "missing-codex-skills"

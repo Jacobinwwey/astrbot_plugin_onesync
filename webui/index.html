@@ -3573,6 +3573,31 @@
       ];
     }
 
+    function inventoryCompatibleSourceRows(overview, softwareId) {
+      const snapshot = overview && typeof overview === "object" ? overview : {};
+      const normalizedSoftwareId = String(softwareId || "").trim();
+      if (!normalizedSoftwareId) {
+        return [];
+      }
+      const compatibleMap = snapshot.compatible_source_rows_by_software
+        && typeof snapshot.compatible_source_rows_by_software === "object"
+        ? snapshot.compatible_source_rows_by_software
+        : {};
+      if (Array.isArray(compatibleMap[normalizedSoftwareId])) {
+        return compatibleMap[normalizedSoftwareId];
+      }
+      const sourceRows = Array.isArray(snapshot.source_rows) ? snapshot.source_rows : [];
+      const compatibility = snapshot.compatibility && typeof snapshot.compatibility === "object"
+        ? snapshot.compatibility
+        : {};
+      const compatibleIds = new Set(
+        Array.isArray(compatibility[normalizedSoftwareId])
+          ? compatibility[normalizedSoftwareId].map((item) => String(item || "").trim()).filter(Boolean)
+          : [],
+      );
+      return sourceRows.filter((item) => compatibleIds.has(String(item.source_id || item.id || "").trim()));
+    }
+
     async function refreshSelectedDeployTargetDetail({ silent = true } = {}) {
       const targetId = getSelectedInventoryTargetId();
       if (!targetId) {
@@ -3835,16 +3860,13 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
       const hiddenUninstalledCandidates = Math.max(0, skillCapableRows.length - softwareRows.length);
-      const compatibleSkillIds = new Set(
-        Array.isArray(compatibility[selectedSoftwareId]) ? compatibility[selectedSoftwareId] : [],
-      );
-      const compatibleSkills = skillRows.filter((item) => compatibleSkillIds.has(String(item.id || "")));
-      state.inventoryVisibleCompatibleSkillIds = compatibleSkills
-        .map((item) => String(item.id || "").trim())
+      const compatibleSources = inventoryCompatibleSourceRows(overview, selectedSoftwareId);
+      state.inventoryVisibleCompatibleSkillIds = compatibleSources
+        .map((item) => String(item.source_id || item.id || "").trim())
         .filter(Boolean);
-      state.inventoryVisibleDiscoveredSkillIds = compatibleSkills
-        .filter((item) => Boolean(item.discovered))
-        .map((item) => String(item.id || "").trim())
+      state.inventoryVisibleDiscoveredSkillIds = compatibleSources
+        .filter((item) => Boolean(item.discovered) || String(item.status || "").trim().toLowerCase() === "ready")
+        .map((item) => String(item.source_id || item.id || "").trim())
         .filter(Boolean);
 
       const compatibleSet = new Set(state.inventoryVisibleCompatibleSkillIds);
@@ -3998,7 +4020,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         repairAllBtn.disabled = !repairableTotal || state.inventoryRepairing || state.inventoryRepairAllRunning;
       }
 
-      if (!compatibleSkills.length) {
+      if (!compatibleSources.length) {
         skillListEl.innerHTML = `<div class="debug-empty">${t("inventory_no_compatible")}</div>`;
         saveBtn.disabled = true;
         selectAllBtn.disabled = true;
@@ -4006,10 +4028,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         clearSelectionBtn.disabled = true;
       } else {
         const selectedSet = new Set(state.inventoryDraftSkillIds);
-        skillListEl.innerHTML = compatibleSkills.map((item) => {
-          const skillId = String(item.id || "");
-          const checked = selectedSet.has(skillId) ? "checked" : "";
-          const selectedCls = selectedSet.has(skillId) ? "selected" : "";
+        skillListEl.innerHTML = compatibleSources.map((item) => {
+          const sourceId = String(item.source_id || item.id || "");
+          const checked = selectedSet.has(sourceId) ? "checked" : "";
+          const selectedCls = selectedSet.has(sourceId) ? "selected" : "";
           const discovered = item.discovered ? t("yes") : t("no");
           const freshnessStatus = String(item.freshness_status || (item.source_exists ? "fresh" : "missing")).trim().toLowerCase() || "missing";
           const sourceAge = formatInventorySourceAge(item.source_age_days);
@@ -4020,7 +4042,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const syncStatus = String(item.sync_status || t("inventory_sync_pending")).trim() || t("inventory_sync_pending");
           const syncCheckedAt = String(item.sync_checked_at || "-").trim() || "-";
           const syncMessage = String(item.sync_message || "").trim();
-          const sourceKind = item.skill_kind === "skill_bundle"
+          const syncing = Array.isArray(state.inventorySyncingSourceIds) && state.inventorySyncingSourceIds.includes(sourceId);
+          const sourceKindValue = String(item.source_kind || item.skill_kind || "skill").trim().toLowerCase();
+          const sourceKind = sourceKindValue === "skill_bundle"
             ? t("inventory_skill_source_bundle")
             : item.auto_discovered
             ? t("inventory_skill_source_auto")
@@ -4034,23 +4058,33 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             : [];
           const previewText = preview.length ? preview.join(", ") : sourcePath;
           return `
-            <label class="inventory-skill-item ${selectedCls}">
+            <div class="inventory-skill-item ${selectedCls}">
               <div class="inventory-skill-head">
-                <span class="inventory-skill-toggle">
+                <label class="inventory-skill-toggle">
                   <input
                     type="checkbox"
-                    data-inventory-skill-id="${escapeHtml(skillId)}"
+                    data-inventory-skill-id="${escapeHtml(sourceId)}"
                     ${checked}
                   >
-                  <strong>${escapeHtml(item.display_name || skillId)}</strong>
-                </span>
-                <span class="inventory-source-badges">
-                  ${renderSkillsStatusBadge(item.discovered ? "ready" : "missing")}
-                  ${renderSkillsStatusBadge(freshnessStatus)}
+                  <strong>${escapeHtml(item.display_name || sourceId)}</strong>
+                </label>
+                <span class="inventory-source-actions">
+                  <span class="inventory-source-badges">
+                    ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
+                    ${renderSkillsStatusBadge(freshnessStatus)}
+                  </span>
+                  ${registryPackageName ? `
+                    <button
+                      type="button"
+                      class="inventory-source-sync-btn"
+                      data-source-sync-id="${escapeHtml(sourceId)}"
+                      ${syncing ? "disabled" : ""}
+                    >${escapeHtml(syncing ? t("inventory_source_syncing") : t("inventory_source_sync"))}</button>
+                  ` : ""}
                 </span>
               </div>
               <div class="meta">
-                ${t("inventory_skill_meta_id")}=${escapeHtml(skillId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
+                ${t("inventory_skill_meta_id")}=${escapeHtml(sourceId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
               </div>
               <div class="meta">
                 ${t("inventory_skill_meta_freshness")}=${escapeHtml(freshnessStatus)} | ${t("inventory_skill_meta_age")}=${escapeHtml(sourceAge)} | ${t("inventory_skill_meta_last_seen")}=${escapeHtml(lastSeen)}
@@ -4060,7 +4094,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
               ${registryPackageName ? `<div class="meta">${t("inventory_skill_meta_registry")}=${escapeHtml(registryPackageName)}${registryPackageManager ? ` (${escapeHtml(registryPackageManager)})` : ""}</div>` : ""}
               ${registryPackageName ? `<div class="meta">${t("inventory_skill_meta_sync_status")}=${escapeHtml(syncStatus)} | ${t("inventory_skill_meta_latest_version")}=${escapeHtml(registryLatestVersion)} | ${t("inventory_skill_meta_sync_checked")}=${escapeHtml(syncCheckedAt)}</div>` : ""}
               ${syncMessage ? `<div class="meta">${escapeHtml(syncMessage)}</div>` : ""}
-            </label>
+            </div>
           `;
         }).join("");
         saveBtn.disabled = state.inventorySaving;
@@ -5650,6 +5684,21 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           ? evt.target.closest("[data-source-sync-id]")
           : null;
         if (!el) return;
+        const sourceId = String(el.getAttribute("data-source-sync-id") || "").trim();
+        if (!sourceId) return;
+        try {
+          await syncInventorySource(sourceId);
+        } catch (err) {
+          alert(t("inventory_sync_error", { msg: err.message }));
+        }
+      });
+
+      $("inventorySkillList").addEventListener("click", async (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-source-sync-id]")
+          : null;
+        if (!el) return;
+        evt.preventDefault();
         const sourceId = String(el.getAttribute("data-source-sync-id") || "").trim();
         if (!sourceId) return;
         try {
