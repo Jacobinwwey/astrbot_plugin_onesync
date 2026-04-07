@@ -27,6 +27,13 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("target_paths", html)
         self.assertIn("inventory_summary_registry_hosts", html)
 
+    def test_inventory_panel_supports_aggregate_selection_rows(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("collection_group_rows", html)
+        self.assertIn("install_unit_rows", html)
+        self.assertIn("data-inventory-source-ids", html)
+
     def test_inventory_panel_exposes_source_import_wizard_strings_and_hooks(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

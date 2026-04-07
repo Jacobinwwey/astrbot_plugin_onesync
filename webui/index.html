@@ -4316,6 +4316,28 @@
         : t("inventory_skill_source_manual");
     }
 
+    function inventoryAggregateKindLabel(item) {
+      if (!item || typeof item !== "object") {
+        return inventorySourceKindLabel(item);
+      }
+      if (item.collection_group_id) {
+        return "Collection Group";
+      }
+      if (item.install_unit_id) {
+        return "Install Unit";
+      }
+      return inventorySourceKindLabel(item);
+    }
+
+    function inventoryAggregateSourceIds(item) {
+      if (!item || typeof item !== "object") return [];
+      if (Array.isArray(item.source_ids)) {
+        return item.source_ids.map((entry) => String(entry || "").trim()).filter(Boolean);
+      }
+      const single = String(item.source_id || item.id || "").trim();
+      return single ? [single] : [];
+    }
+
     function inventorySourceLocatorText(item) {
       const locator = String(item && (item.locator || item.source_path) || "-").trim() || "-";
       const sourceSubpath = String(item && item.source_subpath || "").trim();
@@ -4402,6 +4424,29 @@
           : [],
       );
       return sourceRows.filter((item) => compatibleIds.has(String(item.source_id || item.id || "").trim()));
+    }
+
+    function inventoryCompatibleSelectionRows(overview, softwareId) {
+      const snapshot = overview && typeof overview === "object" ? overview : {};
+      const normalizedSoftwareId = String(softwareId || "").trim();
+      if (!normalizedSoftwareId) {
+        return [];
+      }
+      const collectionMap = snapshot.compatible_collection_group_rows_by_software
+        && typeof snapshot.compatible_collection_group_rows_by_software === "object"
+        ? snapshot.compatible_collection_group_rows_by_software
+        : {};
+      if (Array.isArray(collectionMap[normalizedSoftwareId]) && collectionMap[normalizedSoftwareId].length) {
+        return collectionMap[normalizedSoftwareId];
+      }
+      const installUnitMap = snapshot.compatible_install_unit_rows_by_software
+        && typeof snapshot.compatible_install_unit_rows_by_software === "object"
+        ? snapshot.compatible_install_unit_rows_by_software
+        : {};
+      if (Array.isArray(installUnitMap[normalizedSoftwareId]) && installUnitMap[normalizedSoftwareId].length) {
+        return installUnitMap[normalizedSoftwareId];
+      }
+      return inventoryCompatibleSourceRows(snapshot, normalizedSoftwareId);
     }
 
     async function refreshSelectedDeployTargetDetail({ silent = true } = {}) {
@@ -4532,6 +4577,11 @@
           .filter(([hostId]) => Boolean(hostId)),
       );
       const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
+      const installUnitRows = Array.isArray(overview.install_unit_rows) ? overview.install_unit_rows : [];
+      const collectionGroupRows = Array.isArray(overview.collection_group_rows) ? overview.collection_group_rows : [];
+      const primarySourceRows = collectionGroupRows.length
+        ? collectionGroupRows
+        : (installUnitRows.length ? installUnitRows : sourceRows);
       const deployRows = Array.isArray(overview.deploy_rows) ? overview.deploy_rows : [];
       const visibleDeployRows = deployRows.filter((item) => {
         if (!item || typeof item !== "object") return false;
@@ -4557,10 +4607,14 @@
         ? state.inventoryTargetDetail.generated_projection
         : null;
 
-      sourceRowsEl.innerHTML = sourceRows.length
-        ? sourceRows.map((item) => {
-          const sourceId = String(item.source_id || item.id || "").trim();
+      sourceRowsEl.innerHTML = primarySourceRows.length
+        ? primarySourceRows.map((item) => {
+          const sourceId = String(item.collection_group_id || item.install_unit_id || item.source_id || item.id || "").trim();
+          const sourceIds = inventoryAggregateSourceIds(item);
+          const primarySourceId = String(item.primary_source_id || (sourceIds.length === 1 ? sourceIds[0] : "")).trim();
           const memberCount = Number(item.member_count) || 1;
+          const sourceCount = Number(item.source_count) || sourceIds.length || 1;
+          const installUnitCount = Number(item.install_unit_count) || (item.install_unit_id ? 1 : 0);
           const deployedCount = Number(item.deployed_target_count) || 0;
           const freshnessStatus = String(item.freshness_status || (item.source_exists ? "fresh" : "missing")).trim().toLowerCase() || "missing";
           const sourceAge = formatInventorySourceAge(item.source_age_days);
@@ -4571,14 +4625,14 @@
           const syncStatus = String(item.sync_status || t("inventory_sync_pending")).trim() || t("inventory_sync_pending");
           const syncCheckedAt = String(item.sync_checked_at || "-").trim() || "-";
           const syncMessage = String(item.sync_message || "").trim();
-          const syncing = Array.isArray(state.inventorySyncingSourceIds) && state.inventorySyncingSourceIds.includes(sourceId);
+          const syncing = Array.isArray(state.inventorySyncingSourceIds) && primarySourceId && state.inventorySyncingSourceIds.includes(primarySourceId);
           const preview = Array.isArray(item.member_skill_preview)
             ? item.member_skill_preview.map((entry) => String(entry || "").trim()).filter(Boolean)
             : [];
           const previewText = preview.length ? preview.join(", ") : (item.source_path || "-");
           const managementHint = String(item.management_hint || "").trim();
-          const sourceKind = inventorySourceKindLabel(item);
-          const locator = String(item.locator || item.source_path || "-").trim() || "-";
+          const sourceKind = inventoryAggregateKindLabel(item);
+          const locator = String(item.install_ref || item.locator || item.source_path || "-").trim() || "-";
           const sourceSubpath = String(item.source_subpath || "").trim();
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
@@ -4591,11 +4645,11 @@
                     ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
                     ${renderSkillsStatusBadge(freshnessStatus)}
                   </span>
-                  ${registryPackageName ? `
+                  ${registryPackageName && primarySourceId ? `
                     <button
                       type="button"
                       class="inventory-source-sync-btn"
-                      data-source-sync-id="${escapeHtml(sourceId)}"
+                      data-source-sync-id="${escapeHtml(primarySourceId)}"
                       ${syncing ? "disabled" : ""}
                     >${escapeHtml(syncing ? t("inventory_source_syncing") : t("inventory_source_sync"))}</button>
                   ` : ""}
@@ -4604,6 +4658,8 @@
               <div class="meta">
 ${escapeHtml(t("inventory_skill_meta_id"))}: ${escapeHtml(sourceId)}
  | ${escapeHtml(t("inventory_skill_meta_members"))}: ${escapeHtml(memberCount)}
+ | Sources: ${escapeHtml(sourceCount)}
+${installUnitCount ? ` | Units: ${escapeHtml(installUnitCount)}` : ""}
  | ${escapeHtml(t("inventory_skill_meta_scope"))}: ${escapeHtml(item.source_scope || "-")}
  | ${escapeHtml(t("inventory_skill_meta_deployed"))}: ${escapeHtml(deployedCount)}
               </div>
@@ -4741,14 +4797,19 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
       const hiddenUninstalledCandidates = Math.max(0, skillCapableRows.length - softwareRows.length);
-      const compatibleSources = inventoryCompatibleSourceRows(overview, selectedSoftwareId);
-      state.inventoryVisibleCompatibleSkillIds = compatibleSources
-        .map((item) => String(item.source_id || item.id || "").trim())
-        .filter(Boolean);
-      state.inventoryVisibleDiscoveredSkillIds = compatibleSources
-        .filter((item) => Boolean(item.discovered) || String(item.status || "").trim().toLowerCase() === "ready")
-        .map((item) => String(item.source_id || item.id || "").trim())
-        .filter(Boolean);
+      const compatibleSources = inventoryCompatibleSelectionRows(overview, selectedSoftwareId);
+      state.inventoryVisibleCompatibleSkillIds = [...new Set(
+        compatibleSources.flatMap((item) => inventoryAggregateSourceIds(item)),
+      )];
+      state.inventoryVisibleDiscoveredSkillIds = [...new Set(
+        compatibleSources
+          .filter((item) => {
+            const status = String(item.status || "").trim().toLowerCase();
+            const freshness = String(item.freshness_status || "").trim().toLowerCase();
+            return status === "ready" || freshness === "fresh" || freshness === "aging";
+          })
+          .flatMap((item) => inventoryAggregateSourceIds(item)),
+      )];
 
       const compatibleSet = new Set(state.inventoryVisibleCompatibleSkillIds);
       state.inventoryDraftSkillIds = state.inventoryDraftSkillIds
@@ -4923,10 +4984,13 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       } else {
         const selectedSet = new Set(state.inventoryDraftSkillIds);
         skillListEl.innerHTML = compatibleSources.map((item) => {
-          const sourceId = String(item.source_id || item.id || "");
-          const checked = selectedSet.has(sourceId) ? "checked" : "";
-          const selectedCls = selectedSet.has(sourceId) ? "selected" : "";
-          const discovered = item.discovered ? t("yes") : t("no");
+          const rowId = String(item.collection_group_id || item.install_unit_id || item.source_id || item.id || "");
+          const sourceIds = inventoryAggregateSourceIds(item);
+          const allSelected = sourceIds.length ? sourceIds.every((sourceId) => selectedSet.has(sourceId)) : false;
+          const partiallySelected = sourceIds.some((sourceId) => selectedSet.has(sourceId)) && !allSelected;
+          const checked = allSelected ? "checked" : "";
+          const selectedCls = allSelected ? "selected" : (partiallySelected ? "selected" : "");
+          const discovered = (item.discovered || String(item.status || "").trim().toLowerCase() === "ready") ? t("yes") : t("no");
           const freshnessStatus = String(item.freshness_status || (item.source_exists ? "fresh" : "missing")).trim().toLowerCase() || "missing";
           const sourceAge = formatInventorySourceAge(item.source_age_days);
           const lastSeen = String(item.last_seen_at || "-").trim() || "-";
@@ -4936,14 +5000,17 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const syncStatus = String(item.sync_status || t("inventory_sync_pending")).trim() || t("inventory_sync_pending");
           const syncCheckedAt = String(item.sync_checked_at || "-").trim() || "-";
           const syncMessage = String(item.sync_message || "").trim();
-          const syncing = Array.isArray(state.inventorySyncingSourceIds) && state.inventorySyncingSourceIds.includes(sourceId);
-          const sourceKind = inventorySourceKindLabel(item);
+          const primarySourceId = String(item.primary_source_id || (sourceIds.length === 1 ? sourceIds[0] : "")).trim();
+          const syncing = Array.isArray(state.inventorySyncingSourceIds) && primarySourceId && state.inventorySyncingSourceIds.includes(primarySourceId);
+          const sourceKind = inventoryAggregateKindLabel(item);
           const sourcePath = item.source_path || "-";
-          const locator = String(item.locator || sourcePath || "-").trim() || "-";
+          const locator = String(item.install_ref || item.locator || sourcePath || "-").trim() || "-";
           const sourceSubpath = String(item.source_subpath || "").trim();
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
           const memberCount = Number(item.member_count) || 1;
+          const sourceCount = Number(item.source_count) || sourceIds.length || 1;
+          const installUnitCount = Number(item.install_unit_count) || (item.install_unit_id ? 1 : 0);
           const scope = String(item.source_scope || "-");
           const managementHint = String(item.management_hint || "").trim();
           const preview = Array.isArray(item.member_skill_preview)
@@ -4956,28 +5023,29 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
                 <label class="inventory-skill-toggle">
                   <input
                     type="checkbox"
-                    data-inventory-skill-id="${escapeHtml(sourceId)}"
+                    data-inventory-skill-id="${escapeHtml(rowId)}"
+                    data-inventory-source-ids="${escapeHtml(sourceIds.join(","))}"
                     ${checked}
                   >
-                  <strong>${escapeHtml(item.display_name || sourceId)}</strong>
+                  <strong>${escapeHtml(item.display_name || rowId)}</strong>
                 </label>
                 <span class="inventory-source-actions">
                   <span class="inventory-source-badges">
                     ${renderSkillsStatusBadge(item.status || (item.discovered ? "ready" : "missing"))}
                     ${renderSkillsStatusBadge(freshnessStatus)}
                   </span>
-                  ${registryPackageName ? `
+                  ${registryPackageName && primarySourceId ? `
                     <button
                       type="button"
                       class="inventory-source-sync-btn"
-                      data-source-sync-id="${escapeHtml(sourceId)}"
+                      data-source-sync-id="${escapeHtml(primarySourceId)}"
                       ${syncing ? "disabled" : ""}
                     >${escapeHtml(syncing ? t("inventory_source_syncing") : t("inventory_source_sync"))}</button>
                   ` : ""}
                 </span>
               </div>
               <div class="meta">
-                ${t("inventory_skill_meta_id")}=${escapeHtml(sourceId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
+                ${t("inventory_skill_meta_id")}=${escapeHtml(rowId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | sources=${escapeHtml(sourceCount)}${installUnitCount ? ` | units=${escapeHtml(installUnitCount)}` : ""} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
               </div>
               <div class="meta">
                 ${t("inventory_skill_meta_locator")}=${escapeHtml(locator)}${sourceSubpath ? ` | ${t("inventory_skill_meta_subpath")}=${escapeHtml(sourceSubpath)}` : ""} | ${t("inventory_skill_meta_policy")}=${escapeHtml(updatePolicy)} | ${t("inventory_skill_meta_managed_by")}=${escapeHtml(managedBy)}
@@ -4993,6 +5061,15 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             </div>
           `;
         }).join("");
+        skillListEl.querySelectorAll("input[data-inventory-source-ids]").forEach((el) => {
+          const sourceIds = String(el.getAttribute("data-inventory-source-ids") || "")
+            .split(",")
+            .map((entry) => String(entry || "").trim())
+            .filter(Boolean);
+          if (!sourceIds.length) return;
+          const selectedCount = sourceIds.filter((sourceId) => selectedSet.has(sourceId)).length;
+          el.indeterminate = selectedCount > 0 && selectedCount < sourceIds.length;
+        });
         saveBtn.disabled = state.inventorySaving;
         selectAllBtn.disabled = false;
         selectDiscoveredBtn.disabled = state.inventoryVisibleDiscoveredSkillIds.length === 0;
@@ -6878,12 +6955,17 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const el = evt.target;
         if (!el || el.type !== "checkbox") return;
         const skillId = String(el.getAttribute("data-inventory-skill-id") || "").trim();
-        if (!skillId) return;
+        const sourceIds = String(el.getAttribute("data-inventory-source-ids") || "")
+          .split(",")
+          .map((entry) => String(entry || "").trim())
+          .filter(Boolean);
+        const targetIds = sourceIds.length ? sourceIds : (skillId ? [skillId] : []);
+        if (!targetIds.length) return;
         const next = new Set(state.inventoryDraftSkillIds);
         if (el.checked) {
-          next.add(skillId);
+          targetIds.forEach((targetId) => next.add(targetId));
         } else {
-          next.delete(skillId);
+          targetIds.forEach((targetId) => next.delete(targetId));
         }
         state.inventoryDraftSkillIds = [...next];
         renderInventoryPanel();

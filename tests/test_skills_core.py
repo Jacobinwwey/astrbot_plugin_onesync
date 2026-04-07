@@ -162,6 +162,8 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertTrue(overview["ok"])
         self.assertIn("software_rows", overview)
         self.assertIn("skill_rows", overview)
+        self.assertIn("install_unit_rows", overview)
+        self.assertIn("collection_group_rows", overview)
         self.assertEqual(2, overview["counts"]["source_total"])
         self.assertEqual(4, overview["counts"]["deploy_target_total"])
         self.assertEqual(1, overview["counts"]["deploy_unavailable_total"])
@@ -585,6 +587,137 @@ class SkillsCoreTests(unittest.TestCase):
         codex = next(item for item in overview["host_rows"] if item["host_id"] == "codex")
         self.assertEqual("cli", codex["kind"])
         self.assertEqual(["npx_bundle", "npx_single", "manual_local", "manual_git"], codex["supports_source_kinds"])
+
+    def test_build_skills_overview_aggregates_install_units_and_collection_groups(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["skill_rows"].extend(
+            [
+                {
+                    "id": "npx_global_design_implementation_reviewer",
+                    "display_name": "design-implementation-reviewer",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/design-implementation-reviewer",
+                    "member_count": 1,
+                    "member_skill_preview": ["design-implementation-reviewer"],
+                    "member_skill_overflow": 0,
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+                {
+                    "id": "npx_global_design_iterator",
+                    "display_name": "design-iterator",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/design-iterator",
+                    "member_count": 1,
+                    "member_skill_preview": ["design-iterator"],
+                    "member_skill_overflow": 0,
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+                {
+                    "id": "npx_global_design_lens_reviewer",
+                    "display_name": "design-lens-reviewer",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/design-lens-reviewer",
+                    "member_count": 1,
+                    "member_skill_preview": ["design-lens-reviewer"],
+                    "member_skill_overflow": 0,
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+                {
+                    "id": "npx_global_dhh_rails_style",
+                    "display_name": "dhh-rails-style",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/dhh-rails-style",
+                    "member_count": 1,
+                    "member_skill_preview": ["dhh-rails-style"],
+                    "member_skill_overflow": 0,
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+                {
+                    "id": "npx_global_dhh_rails_reviewer",
+                    "display_name": "dhh-rails-reviewer",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/dhh-rails-reviewer",
+                    "member_count": 1,
+                    "member_skill_preview": ["dhh-rails-reviewer"],
+                    "member_skill_overflow": 0,
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+            ],
+        )
+        snapshot["compatibility"]["codex"] = [
+            "npx_bundle_compound_engineering_global",
+            "npx_global_find_skills",
+            "npx_global_design_implementation_reviewer",
+            "npx_global_design_iterator",
+            "npx_global_design_lens_reviewer",
+            "npx_global_dhh_rails_style",
+            "npx_global_dhh_rails_reviewer",
+        ]
+
+        overview = build_skills_overview(snapshot)
+
+        design_unit = next(
+            item for item in overview["install_unit_rows"]
+            if item["install_unit_id"] == "curated:design_review_pack"
+        )
+        self.assertEqual(3, design_unit["source_count"])
+        self.assertEqual(3, design_unit["member_count"])
+        self.assertEqual(
+            [
+                "npx_global_design_implementation_reviewer",
+                "npx_global_design_iterator",
+                "npx_global_design_lens_reviewer",
+            ],
+            design_unit["source_ids"],
+        )
+
+        design_group = next(
+            item for item in overview["collection_group_rows"]
+            if item["collection_group_id"] == "collection:design_review"
+        )
+        self.assertEqual(1, design_group["install_unit_count"])
+        self.assertEqual(3, design_group["source_count"])
+        self.assertEqual(3, design_group["member_count"])
+
+        dhh_group = next(
+            item for item in overview["collection_group_rows"]
+            if item["collection_group_id"] == "collection:dhh_rails"
+        )
+        self.assertEqual(2, dhh_group["source_count"])
+        self.assertEqual(2, dhh_group["member_count"])
+
+        self.assertGreaterEqual(overview["counts"]["install_unit_total"], 4)
+        self.assertGreaterEqual(overview["counts"]["collection_group_total"], 4)
 
     def test_build_skills_overview_preserves_registry_source_subpath(self) -> None:
         saved_registry = {

@@ -9,6 +9,8 @@ status: active
 ## 参考分析入口
 - `docs/plans/skills-management-reference-comparative-analysis-2026-04-06.md`
 - `docs/plans/skills-management-next-step-implementation-plan-2026-04-06.md`
+- `docs/plans/skills-aggregation-reference-analysis-2026-04-07.md`
+- `docs/plans/skills-aggregation-next-step-plan-2026-04-07.md`
 
 ## 阶段 1.5：Source-First 过渡层
 - 保留 `inventory_core.py`
@@ -35,6 +37,17 @@ status: active
 - 把 built-in host / future custom host 抽象为统一 adapter contract
 - 新增 `registry.json` 与 `audit.log.jsonl`
 - 新增 source register / refresh / remove API
+- 引入 install-unit metadata，停止只靠 namespace bundle 规则表达聚合
+- 聚合策略升级为：
+  - install unit 负责真实维护边界
+  - collection group 负责主面板压缩显示
+
+### 阶段 2A.1：聚合管理内核
+- 新增 `skills_aggregation_core.py`
+- 为 `npx` 结果补齐 package provenance
+- 把 legacy root bundle 逐步迁移为真实 install units
+- 默认不恢复 root-directory synthetic bundle
+- 让 WebUI 主列表逐步从 source-only 过渡到 install unit / collection group
 
 ### 阶段 2B：Manifest/Lock 独立化
 - `skills_core.py` 改为基于 registry + manifest + lock 生成 overview
@@ -79,3 +92,4 @@ status: active
 - `skill-flow` 主要借鉴 source state / planner / doctor。
 - `ai-toolbox` 主要借鉴 host registry / custom tool / sync trigger 思路。
 - 两者都不应直接改变 OneSync 当前的 package-first 主交互。
+- 聚合管理专项的近期主线是 Phase 2A.1，而不是新增更多 bundle 命名规则。

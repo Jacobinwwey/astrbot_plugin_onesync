@@ -9,9 +9,21 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from .skills_aggregation_core import (
+        build_collection_group_rows,
+        build_compatible_aggregate_rows_by_software,
+        build_install_unit_rows,
+        enrich_source_aggregation,
+    )
     from .skills_hosts_core import build_host_adapters, resolve_host_target_path
     from .skills_sources_core import build_skills_registry
 except ImportError:  # pragma: no cover - direct test imports
+    from skills_aggregation_core import (
+        build_collection_group_rows,
+        build_compatible_aggregate_rows_by_software,
+        build_install_unit_rows,
+        enrich_source_aggregation,
+    )
     from skills_hosts_core import build_host_adapters, resolve_host_target_path
     from skills_sources_core import build_skills_registry
 
@@ -197,20 +209,20 @@ def normalize_saved_skills_manifest(raw: Any) -> dict[str, Any]:
         source_id = str(item.get("source_id", "")).strip()
         if not source_id:
             continue
-        sources.append(
-            {
-                "source_id": source_id,
-                "display_name": str(item.get("display_name") or source_id),
-                "source_kind": str(item.get("source_kind") or "skill"),
-                "provider_key": str(item.get("provider_key") or "generic"),
-                "enabled": _to_bool(item.get("enabled", True), True),
-                "source_scope": str(item.get("source_scope") or "global"),
-                "update_policy": str(item.get("update_policy") or ""),
-                "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
-                "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
-                "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
-            },
-        )
+        source_record = {
+            "source_id": source_id,
+            "display_name": str(item.get("display_name") or source_id),
+            "source_kind": str(item.get("source_kind") or "skill"),
+            "provider_key": str(item.get("provider_key") or "generic"),
+            "enabled": _to_bool(item.get("enabled", True), True),
+            "source_scope": str(item.get("source_scope") or "global"),
+            "update_policy": str(item.get("update_policy") or ""),
+            "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
+            "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
+            "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
+        }
+        source_record.update(enrich_source_aggregation(source_record))
+        sources.append(source_record)
 
     deploy_targets: list[dict[str, Any]] = []
     for item in manifest.get("deploy_targets", []):
@@ -249,50 +261,50 @@ def normalize_saved_skills_lock(raw: Any) -> dict[str, Any]:
             continue
         seen_source_ids.add(source_id)
         source_age_days = item.get("source_age_days")
-        sources.append(
-            {
-                "source_id": source_id,
-                "display_name": str(item.get("display_name") or source_id),
-                "source_kind": str(item.get("source_kind") or "skill"),
-                "provider_key": str(item.get("provider_key") or "generic"),
-                "enabled": _to_bool(item.get("enabled", True), True),
-                "discovered": _to_bool(item.get("discovered", False), False),
-                "auto_discovered": _to_bool(item.get("auto_discovered", False), False),
-                "source_scope": str(item.get("source_scope") or "global"),
-                "source_path": str(item.get("source_path") or ""),
-                "locator": str(item.get("locator") or ""),
-                "source_subpath": str(item.get("source_subpath") or ""),
-                "managed_by": str(item.get("managed_by") or ""),
-                "update_policy": str(item.get("update_policy") or ""),
-                "member_count": _to_int(item.get("member_count", 1), 1, 1),
-                "member_skill_preview": _to_str_list(item.get("member_skill_preview", [])),
-                "member_skill_overflow": _to_int(item.get("member_skill_overflow", 0), 0, 0),
-                "management_hint": str(item.get("management_hint") or ""),
-                "source_exists": _to_bool(item.get("source_exists", False), False),
-                "last_seen_at": str(item.get("last_seen_at") or ""),
-                "last_refresh_at": str(item.get("last_refresh_at") or ""),
-                "source_age_days": _to_int(source_age_days, 0) if source_age_days is not None else None,
-                "freshness_status": str(item.get("freshness_status") or "missing"),
-                "registry_package_name": str(item.get("registry_package_name") or ""),
-                "registry_package_manager": str(item.get("registry_package_manager") or ""),
-                "sync_status": str(item.get("sync_status") or ""),
-                "sync_checked_at": str(item.get("sync_checked_at") or ""),
-                "sync_kind": str(item.get("sync_kind") or ""),
-                "sync_message": str(item.get("sync_message") or ""),
-                "registry_latest_version": str(item.get("registry_latest_version") or ""),
-                "registry_published_at": str(item.get("registry_published_at") or ""),
-                "registry_homepage": str(item.get("registry_homepage") or ""),
-                "registry_description": str(item.get("registry_description") or ""),
-                "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
-                "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
-                "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
-                "status": str(item.get("status") or ""),
-                "deployed_target_ids": _dedupe_keep_order(_to_str_list(item.get("deployed_target_ids", []))),
-                "deployed_target_count": _to_int(item.get("deployed_target_count", 0), 0, 0),
-                "resolution_hash": str(item.get("resolution_hash") or ""),
-                "last_synced_at": str(item.get("last_synced_at") or ""),
-            },
-        )
+        source_record = {
+            "source_id": source_id,
+            "display_name": str(item.get("display_name") or source_id),
+            "source_kind": str(item.get("source_kind") or "skill"),
+            "provider_key": str(item.get("provider_key") or "generic"),
+            "enabled": _to_bool(item.get("enabled", True), True),
+            "discovered": _to_bool(item.get("discovered", False), False),
+            "auto_discovered": _to_bool(item.get("auto_discovered", False), False),
+            "source_scope": str(item.get("source_scope") or "global"),
+            "source_path": str(item.get("source_path") or ""),
+            "locator": str(item.get("locator") or ""),
+            "source_subpath": str(item.get("source_subpath") or ""),
+            "managed_by": str(item.get("managed_by") or ""),
+            "update_policy": str(item.get("update_policy") or ""),
+            "member_count": _to_int(item.get("member_count", 1), 1, 1),
+            "member_skill_preview": _to_str_list(item.get("member_skill_preview", [])),
+            "member_skill_overflow": _to_int(item.get("member_skill_overflow", 0), 0, 0),
+            "management_hint": str(item.get("management_hint") or ""),
+            "source_exists": _to_bool(item.get("source_exists", False), False),
+            "last_seen_at": str(item.get("last_seen_at") or ""),
+            "last_refresh_at": str(item.get("last_refresh_at") or ""),
+            "source_age_days": _to_int(source_age_days, 0) if source_age_days is not None else None,
+            "freshness_status": str(item.get("freshness_status") or "missing"),
+            "registry_package_name": str(item.get("registry_package_name") or ""),
+            "registry_package_manager": str(item.get("registry_package_manager") or ""),
+            "sync_status": str(item.get("sync_status") or ""),
+            "sync_checked_at": str(item.get("sync_checked_at") or ""),
+            "sync_kind": str(item.get("sync_kind") or ""),
+            "sync_message": str(item.get("sync_message") or ""),
+            "registry_latest_version": str(item.get("registry_latest_version") or ""),
+            "registry_published_at": str(item.get("registry_published_at") or ""),
+            "registry_homepage": str(item.get("registry_homepage") or ""),
+            "registry_description": str(item.get("registry_description") or ""),
+            "compatible_software_ids": _dedupe_keep_order(_to_str_list(item.get("compatible_software_ids", []))),
+            "compatible_software_families": _dedupe_keep_order(_to_str_list(item.get("compatible_software_families", []))),
+            "tags": _dedupe_keep_order(_to_str_list(item.get("tags", []))),
+            "status": str(item.get("status") or ""),
+            "deployed_target_ids": _dedupe_keep_order(_to_str_list(item.get("deployed_target_ids", []))),
+            "deployed_target_count": _to_int(item.get("deployed_target_count", 0), 0, 0),
+            "resolution_hash": str(item.get("resolution_hash") or ""),
+            "last_synced_at": str(item.get("last_synced_at") or ""),
+        }
+        source_record.update(enrich_source_aggregation(source_record))
+        sources.append(source_record)
 
     deploy_targets: list[dict[str, Any]] = []
     seen_target_ids: set[str] = set()
@@ -529,8 +541,7 @@ def build_skills_manifest(
             or _to_str_list(item.get("compatible_software_ids", [])),
         )
         saved_source = saved_source_index.get(source_id, {})
-        sources.append(
-            {
+        source_record = {
                 "source_id": source_id,
                 "display_name": str(item.get("display_name") or saved_source.get("display_name") or source_id),
                 "source_kind": str(item.get("source_kind") or saved_source.get("source_kind") or "skill"),
@@ -570,15 +581,15 @@ def build_skills_manifest(
                 "compatible_software_ids": compatible_hosts,
                 "compatible_software_families": _to_str_list(item.get("compatible_software_families", []) or saved_source.get("compatible_software_families", [])),
                 "tags": _dedupe_keep_order(_to_str_list(item.get("tags", [])) + _to_str_list(saved_source.get("tags", []))),
-            },
-        )
+            }
+        source_record.update(enrich_source_aggregation({**saved_source, **item, **source_record}))
+        sources.append(source_record)
 
     discovered_source_ids = {str(item.get("source_id", "")).strip() for item in sources}
     for source_id, saved_source in saved_source_index.items():
         if source_id in discovered_source_ids:
             continue
-        sources.append(
-            {
+        source_record = {
                 "source_id": source_id,
                 "display_name": str(saved_source.get("display_name") or source_id),
                 "source_kind": str(saved_source.get("source_kind") or "skill"),
@@ -618,8 +629,9 @@ def build_skills_manifest(
                 "compatible_software_ids": _dedupe_keep_order(_to_str_list(saved_source.get("compatible_software_ids", []))),
                 "compatible_software_families": _dedupe_keep_order(_to_str_list(saved_source.get("compatible_software_families", []))),
                 "tags": _dedupe_keep_order(_to_str_list(saved_source.get("tags", []))),
-            },
-        )
+            }
+        source_record.update(enrich_source_aggregation({**saved_source, **source_record}))
+        sources.append(source_record)
     sources = _drop_legacy_root_bundle_sources(sources)
 
     deploy_targets: list[dict[str, Any]] = []
@@ -995,7 +1007,7 @@ def build_skills_overview(
         )
 
     source_rows = [
-        copy.deepcopy(item)
+        enrich_source_aggregation(copy.deepcopy(item))
         for item in lock.get("sources", [])
         if isinstance(item, dict)
     ]
@@ -1054,6 +1066,17 @@ def build_skills_overview(
             if _source_matches_host(item, host, compatibility)
         ]
 
+    install_unit_rows = build_install_unit_rows(source_rows, deploy_rows)
+    collection_group_rows = build_collection_group_rows(install_unit_rows)
+    compatible_install_unit_rows_by_software = build_compatible_aggregate_rows_by_software(
+        install_unit_rows,
+        compatible_source_rows_by_software,
+    )
+    compatible_collection_group_rows_by_software = build_compatible_aggregate_rows_by_software(
+        collection_group_rows,
+        compatible_source_rows_by_software,
+    )
+
     inventory_counts = inventory_snapshot.get("counts", {})
     counts = dict(inventory_counts) if isinstance(inventory_counts, dict) else {}
     counts.update(
@@ -1084,6 +1107,8 @@ def build_skills_overview(
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
             "registry_total": len(registry.get("sources", [])),
+            "install_unit_total": len(install_unit_rows),
+            "collection_group_total": len(collection_group_rows),
             "host_total": len(software_hosts),
             "deploy_target_total": len(deploy_rows),
             "deploy_ready_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "ready"),
@@ -1131,6 +1156,8 @@ def build_skills_overview(
         "host_rows": software_hosts,
         "software_hosts": software_hosts,
         "source_rows": source_rows,
+        "install_unit_rows": install_unit_rows,
+        "collection_group_rows": collection_group_rows,
         "deploy_rows": deploy_rows,
         "doctor": doctor,
         "counts": counts,
@@ -1138,6 +1165,8 @@ def build_skills_overview(
         "software_rows": copy.deepcopy(inventory_snapshot.get("software_rows", [])),
         "skill_rows": copy.deepcopy(inventory_snapshot.get("skill_rows", [])),
         "compatible_source_rows_by_software": compatible_source_rows_by_software,
+        "compatible_install_unit_rows_by_software": compatible_install_unit_rows_by_software,
+        "compatible_collection_group_rows_by_software": compatible_collection_group_rows_by_software,
         "binding_rows": copy.deepcopy(inventory_snapshot.get("binding_rows", [])),
         "binding_map": copy.deepcopy(inventory_snapshot.get("binding_map", {})),
         "binding_map_by_scope": copy.deepcopy(inventory_snapshot.get("binding_map_by_scope", {})),

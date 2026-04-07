@@ -267,11 +267,79 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertEqual("skill_bundle", compound_row["skill_kind"])
         self.assertEqual("bunx @every-env/compound-plugin", compound_row["management_hint"])
         self.assertEqual("@every-env/compound-plugin", compound_row["registry_package_name"])
+        self.assertEqual("npm:@every-env/compound-plugin", compound_row["install_unit_id"])
+        self.assertEqual("collection:compound_engineering", compound_row["collection_group_id"])
         self.assertEqual("fresh", compound_row["freshness_status"])
 
         self.assertIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["codex"])
         self.assertNotIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["claude_code"])
         self.assertEqual(6, snapshot["counts"]["skills_members_total"])
+
+    def test_build_inventory_snapshot_marks_curated_npx_install_units_for_related_skill_sets(self) -> None:
+        software_catalog = normalize_software_catalog_payload(
+            [
+                {
+                    "id": "codex",
+                    "display_name": "Codex",
+                    "software_kind": "cli",
+                    "provider_key": "codex",
+                    "detect_commands": [],
+                    "enabled": True,
+                },
+            ],
+            fallback_defaults=False,
+        )
+
+        global_items = [
+            {"name": "design-implementation-reviewer", "path": "/root/.codex/skills/design-implementation-reviewer", "scope": "global", "agents": ["Codex"]},
+            {"name": "design-iterator", "path": "/root/.codex/skills/design-iterator", "scope": "global", "agents": ["Codex"]},
+            {"name": "design-lens-reviewer", "path": "/root/.codex/skills/design-lens-reviewer", "scope": "global", "agents": ["Codex"]},
+            {"name": "dhh-rails-style", "path": "/root/.codex/skills/dhh-rails-style", "scope": "global", "agents": ["Codex"]},
+            {"name": "dhh-rails-reviewer", "path": "/root/.codex/skills/dhh-rails-reviewer", "scope": "global", "agents": ["Codex"]},
+        ]
+
+        def _fake_run(command, **_kwargs):
+            class _Result:
+                def __init__(self, stdout: str) -> None:
+                    self.stdout = stdout
+                    self.stderr = ""
+                    self.returncode = 0
+
+            if "-g" in command:
+                return _Result(json.dumps(global_items))
+            return _Result("[]")
+
+        snapshot = build_inventory_snapshot(
+            software_catalog=software_catalog,
+            skill_catalog=[],
+            skill_bindings=[],
+            target_rows={},
+            inventory_options={
+                "skill_management_mode": "npx",
+                "npx_timeout_s": 3,
+                "auto_discover_cli": False,
+            },
+            command_runner=_fake_run,
+        )
+
+        by_id = {row["id"]: row for row in snapshot["skill_rows"]}
+
+        design_impl = by_id["npx_global_design_implementation_reviewer"]
+        design_iter = by_id["npx_global_design_iterator"]
+        design_lens = by_id["npx_global_design_lens_reviewer"]
+        self.assertEqual("curated:design_review_pack", design_impl["install_unit_id"])
+        self.assertEqual("curated:design_review_pack", design_iter["install_unit_id"])
+        self.assertEqual("curated:design_review_pack", design_lens["install_unit_id"])
+        self.assertEqual("collection:design_review", design_impl["collection_group_id"])
+        self.assertEqual("collection:design_review", design_iter["collection_group_id"])
+        self.assertEqual("collection:design_review", design_lens["collection_group_id"])
+
+        dhh_style = by_id["npx_global_dhh_rails_style"]
+        dhh_reviewer = by_id["npx_global_dhh_rails_reviewer"]
+        self.assertEqual("curated:dhh_rails_pack", dhh_style["install_unit_id"])
+        self.assertEqual("curated:dhh_rails_pack", dhh_reviewer["install_unit_id"])
+        self.assertEqual("collection:dhh_rails", dhh_style["collection_group_id"])
+        self.assertEqual("collection:dhh_rails", dhh_reviewer["collection_group_id"])
 
     def test_build_inventory_snapshot_keeps_codex_root_skills_split_by_source(self) -> None:
         software_catalog = normalize_software_catalog_payload(

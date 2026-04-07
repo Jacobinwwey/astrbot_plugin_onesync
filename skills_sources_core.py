@@ -8,6 +8,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+try:
+    from .skills_aggregation_core import derive_source_aggregation_fields
+except ImportError:  # pragma: no cover - direct test imports
+    from skills_aggregation_core import derive_source_aggregation_fields
+
 VALID_SOURCE_KINDS = {"npx_bundle", "npx_single", "manual_local", "manual_git"}
 VALID_SOURCE_SCOPES = {"global", "workspace"}
 
@@ -176,7 +181,7 @@ def _normalize_registry_source(raw: dict[str, Any], *, generated_at: str = "") -
         source_path = locator
     source_subpath = _normalize_source_subpath(raw.get("source_subpath") or raw.get("subpath"))
 
-    return {
+    normalized = {
         "source_id": source_id,
         "display_name": display_name,
         "source_kind": source_kind,
@@ -213,6 +218,8 @@ def _normalize_registry_source(raw: dict[str, Any], *, generated_at: str = "") -
         "compatible_software_families": _dedupe_keep_order(_to_str_list(raw.get("compatible_software_families", []))),
         "tags": _dedupe_keep_order(_to_str_list(raw.get("tags", []))),
     }
+    normalized.update(derive_source_aggregation_fields(normalized))
+    return normalized
 
 
 def normalize_skills_registry(raw: Any) -> dict[str, Any]:

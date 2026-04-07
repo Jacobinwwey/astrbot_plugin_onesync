@@ -12,8 +12,10 @@ from typing import Any, Callable
 
 try:
     from .skills_hosts_core import DEFAULT_SOFTWARE_CATALOG, PROVIDER_DEFAULTS
+    from .skills_aggregation_core import derive_source_aggregation_fields
 except ImportError:  # pragma: no cover - direct test imports
     from skills_hosts_core import DEFAULT_SOFTWARE_CATALOG, PROVIDER_DEFAULTS
+    from skills_aggregation_core import derive_source_aggregation_fields
 
 VALID_SOFTWARE_KINDS = {"cli", "gui", "claw", "other"}
 VALID_BINDING_SCOPES = {"global", "workspace"}
@@ -633,6 +635,7 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime)
         "id": f"npx_{_slug(f'{source_scope}:{name}', default='skill')}",
         "display_name": name,
         "provider_key": "npx_skills",
+        "source_kind": "npx_single",
         "skill_kind": "skill",
         "enabled": True,
         "source_path": source_path,
@@ -650,6 +653,7 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime)
         "registry_package_name": "",
         "registry_package_manager": "",
     }
+    row.update(derive_source_aggregation_fields(row))
     return _attach_source_diagnostics(row, now_dt=now_dt)
 
 
@@ -689,6 +693,7 @@ def _build_npx_bundle_row(
         "id": f"npx_bundle_{bundle_key}_{scope}",
         "display_name": str(bundle_meta.get("display_name") or bundle_key),
         "provider_key": str(bundle_meta.get("provider_key") or bundle_key),
+        "source_kind": "npx_bundle",
         "skill_kind": "skill_bundle",
         "enabled": True,
         "source_path": source_paths[0] if source_paths else "",
@@ -709,6 +714,7 @@ def _build_npx_bundle_row(
         "registry_package_name": str(bundle_meta.get("registry_package_name") or "").strip(),
         "registry_package_manager": str(bundle_meta.get("registry_package_manager") or "").strip(),
     }
+    row.update(derive_source_aggregation_fields(row))
     return _attach_source_diagnostics(row, now_dt=now_dt)
 
 
