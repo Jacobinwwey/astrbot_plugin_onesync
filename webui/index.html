@@ -1844,6 +1844,7 @@
             </div>
             <div class="modal-actions">
               <button id="inventoryRefreshBtn">刷新资产</button>
+              <button id="inventoryImportSourceBtn" class="primary">导入 Source</button>
               <button id="inventorySyncAllBtn">同步全部 Source</button>
             </div>
           </div>
@@ -2439,6 +2440,65 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="inventoryImportModal">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 class="modal-title" id="inventoryImportModalTitle">导入 Source</h2>
+        <div class="modal-actions">
+          <button id="inventoryImportCloseBtn">关闭</button>
+          <button id="inventoryImportSubmitBtn" class="success">导入</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="cfg-block">
+          <p class="cfg-title" id="inventoryImportIntro">将本地 Source 根目录或 Git 仓库纳入 registry 管理，保持 package-first 视图，不回退到逐条 Skill 平铺。</p>
+          <div class="cfg-grid">
+            <label class="cfg-label">
+              <span id="inventoryImportSourceKindLabel">Source 类型</span>
+              <select id="inventoryImportSourceKind">
+                <option value="manual_local" id="inventoryImportSourceKindLocal">本地 Source</option>
+                <option value="manual_git" id="inventoryImportSourceKindGit">Git Source</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryImportSourceScopeLabel">Source 范围</span>
+              <select id="inventoryImportSourceScope">
+                <option value="global" id="inventoryImportSourceScopeGlobal">全局</option>
+                <option value="workspace" id="inventoryImportSourceScopeWorkspace">工作区</option>
+              </select>
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryImportDisplayNameLabel">显示名称</span>
+              <input id="inventoryImportDisplayNameInput" type="text" placeholder="My Skills Pack">
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryImportLocatorLabel">路径 / Git 仓库</span>
+              <input id="inventoryImportLocatorInput" type="text" placeholder="/path/to/skills or https://github.com/org/repo.git">
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryImportSubpathLabel">可选子路径</span>
+              <input id="inventoryImportSubpathInput" type="text" placeholder="packages/codex">
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryImportCompatibleIdsLabel">兼容宿主 IDs</span>
+              <input id="inventoryImportCompatibleIdsInput" type="text" placeholder="codex, claude_code">
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryImportCompatibleFamiliesLabel">兼容宿主 Families</span>
+              <input id="inventoryImportCompatibleFamiliesInput" type="text" placeholder="codex, antigravity">
+            </label>
+            <label class="cfg-label">
+              <span id="inventoryImportProviderKeyLabel">Provider Key（可选）</span>
+              <input id="inventoryImportProviderKeyInput" type="text" placeholder="manual">
+            </label>
+          </div>
+          <p class="hint" id="inventoryImportHostHint">默认会预填当前宿主 ID，导入完成后会回到 Skills 面板，你可以继续选择并保存部署。</p>
+          <p class="hint" id="inventoryImportStatus"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const state = {
       rows: [],
@@ -2485,6 +2545,7 @@
       inventoryVisibleDiscoveredSkillIds: [],
       inventorySyncingSourceIds: [],
       inventorySyncAllRunning: false,
+      inventoryImportSaving: false,
       inventorySaving: false,
       inventoryTargetDetail: null,
       inventoryRepairing: false,
@@ -2715,6 +2776,25 @@
         inventory_title: "Skills管理",
         inventory_head_note: "按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。",
         inventory_refresh: "刷新资产",
+        inventory_import_open: "导入 Source",
+        inventory_import_title: "导入 Source",
+        inventory_import_close: "关闭",
+        inventory_import_submit: "导入",
+        inventory_import_submitting: "导入中",
+        inventory_import_intro: "将本地 Source 根目录或 Git 仓库纳入 registry 管理，保持 package-first 视图，不回退到逐条 Skill 平铺。",
+        inventory_import_kind: "Source 类型",
+        inventory_import_locator: "路径 / Git 仓库",
+        inventory_import_scope: "Source 范围",
+        inventory_import_name: "显示名称",
+        inventory_import_subpath: "可选子路径",
+        inventory_import_compat_ids: "兼容宿主 IDs",
+        inventory_import_compat_families: "兼容宿主 Families",
+        inventory_import_provider_key: "Provider Key（可选）",
+        inventory_import_host_hint: "默认会预填当前宿主 ID，导入完成后会回到 Skills 面板，你可以继续选择并保存部署。",
+        inventory_import_status_ready_local: "导入本地 Source 时填写本机目录；导入后系统会按路径发现状态展示 freshness。",
+        inventory_import_status_ready_git: "导入 Git Source 时填写仓库地址，可用“可选子路径”指向仓库内的 skills 根目录。",
+        inventory_import_success: "Source 导入成功：{name}",
+        inventory_import_error: "导入 Source 失败: {msg}",
         inventory_save_bindings: "保存部署选择",
         inventory_reproject_target: "重建当前投影",
         inventory_reproject_running: "重建中",
@@ -2850,6 +2930,7 @@
         inventory_skill_meta_scope: "范围",
         inventory_skill_meta_manage: "维护",
         inventory_skill_meta_locator: "定位",
+        inventory_skill_meta_subpath: "子路径",
         inventory_skill_meta_policy: "策略",
         inventory_skill_meta_managed_by: "管理方",
         inventory_skill_meta_deployed: "部署目标",
@@ -3102,6 +3183,25 @@
         inventory_title: "Skills Management",
         inventory_head_note: "Manage deployable skills as source packages, with unified host visibility, deployment selection, and drift repair.",
         inventory_refresh: "Refresh Inventory",
+        inventory_import_open: "Import Source",
+        inventory_import_title: "Import Source",
+        inventory_import_close: "Close",
+        inventory_import_submit: "Import",
+        inventory_import_submitting: "Importing",
+        inventory_import_intro: "Register a local source root or git repository into the registry while keeping the package-first workflow intact.",
+        inventory_import_kind: "Source Kind",
+        inventory_import_locator: "Path / Git Repository",
+        inventory_import_scope: "Source Scope",
+        inventory_import_name: "Display Name",
+        inventory_import_subpath: "Optional Subpath",
+        inventory_import_compat_ids: "Compatible Host IDs",
+        inventory_import_compat_families: "Compatible Host Families",
+        inventory_import_provider_key: "Provider Key (optional)",
+        inventory_import_host_hint: "The current host ID is prefilled by default. After import, return to the Skills panel to select and save deployment.",
+        inventory_import_status_ready_local: "For local sources, enter a local directory. Freshness will be derived from path discovery after import.",
+        inventory_import_status_ready_git: "For git sources, enter the repository URL. Use the optional subpath when skills live under a nested directory.",
+        inventory_import_success: "Source imported: {name}",
+        inventory_import_error: "Failed to import source: {msg}",
         inventory_save_bindings: "Save Deployment",
         inventory_reproject_target: "Rebuild Current Projection",
         inventory_reproject_running: "Rebuilding",
@@ -3237,6 +3337,7 @@
         inventory_skill_meta_scope: "scope",
         inventory_skill_meta_manage: "manage",
         inventory_skill_meta_locator: "locator",
+        inventory_skill_meta_subpath: "subpath",
         inventory_skill_meta_policy: "policy",
         inventory_skill_meta_managed_by: "managed_by",
         inventory_skill_meta_deployed: "deploy",
@@ -3335,6 +3436,20 @@
     function normalizeInventoryCardHeight(value) {
       const height = String(value || "compact").trim().toLowerCase();
       return ["compact", "standard", "tall"].includes(height) ? height : "compact";
+    }
+
+    function normalizeInventoryImportKind(value) {
+      const kind = String(value || "manual_local").trim().toLowerCase();
+      return kind === "manual_git" ? "manual_git" : "manual_local";
+    }
+
+    function parseInventoryDelimitedList(value) {
+      return [...new Set(
+        String(value || "")
+          .split(/[\n,]+/)
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+      )];
     }
 
     function resolveInventoryCardStylePrefs(view, fontSize, width, height) {
@@ -3615,9 +3730,33 @@
       $("inventoryTitle").textContent = t("inventory_title");
       $("inventoryHeadNote").textContent = t("inventory_head_note");
       $("inventoryRefreshBtn").textContent = t("inventory_refresh");
+      $("inventoryImportSourceBtn").textContent = t("inventory_import_open");
       $("inventorySyncAllBtn").textContent = state.inventorySyncAllRunning
         ? t("inventory_sync_all_running")
         : t("inventory_sync_all");
+      $("inventoryImportModalTitle").textContent = t("inventory_import_title");
+      $("inventoryImportCloseBtn").textContent = t("inventory_import_close");
+      $("inventoryImportSubmitBtn").textContent = state.inventoryImportSaving
+        ? t("inventory_import_submitting")
+        : t("inventory_import_submit");
+      $("inventoryImportIntro").textContent = t("inventory_import_intro");
+      $("inventoryImportSourceKindLabel").textContent = t("inventory_import_kind");
+      $("inventoryImportSourceKindLocal").textContent = t("inventory_skill_source_manual_local");
+      $("inventoryImportSourceKindGit").textContent = t("inventory_skill_source_manual_git");
+      $("inventoryImportSourceScopeLabel").textContent = t("inventory_import_scope");
+      $("inventoryImportSourceScopeGlobal").textContent = t("inventory_scope_global");
+      $("inventoryImportSourceScopeWorkspace").textContent = t("inventory_scope_workspace");
+      $("inventoryImportDisplayNameLabel").textContent = t("inventory_import_name");
+      $("inventoryImportLocatorLabel").textContent = t("inventory_import_locator");
+      $("inventoryImportSubpathLabel").textContent = t("inventory_import_subpath");
+      $("inventoryImportCompatibleIdsLabel").textContent = t("inventory_import_compat_ids");
+      $("inventoryImportCompatibleFamiliesLabel").textContent = t("inventory_import_compat_families");
+      $("inventoryImportProviderKeyLabel").textContent = t("inventory_import_provider_key");
+      $("inventoryImportHostHint").textContent = t("inventory_import_host_hint");
+      if ($("inventoryImportModal").classList.contains("hidden")
+        || !String($("inventoryImportStatus").textContent || "").trim()) {
+        syncInventoryImportKindCopy();
+      }
       $("inventorySaveBindingsBtn").textContent = t("inventory_save_bindings");
       $("inventoryReprojectTargetBtn").textContent = state.inventoryReprojecting
         ? t("inventory_reproject_running")
@@ -4177,6 +4316,15 @@
         : t("inventory_skill_source_manual");
     }
 
+    function inventorySourceLocatorText(item) {
+      const locator = String(item && (item.locator || item.source_path) || "-").trim() || "-";
+      const sourceSubpath = String(item && item.source_subpath || "").trim();
+      if (!sourceSubpath) {
+        return locator;
+      }
+      return `${locator} :: ${sourceSubpath}`;
+    }
+
     function inventoryTargetDriftNotes(targetRow) {
       if (!targetRow || typeof targetRow !== "object") return [];
       const notes = [];
@@ -4431,6 +4579,7 @@
           const managementHint = String(item.management_hint || "").trim();
           const sourceKind = inventorySourceKindLabel(item);
           const locator = String(item.locator || item.source_path || "-").trim() || "-";
+          const sourceSubpath = String(item.source_subpath || "").trim();
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
           return `
@@ -4461,6 +4610,7 @@ ${escapeHtml(t("inventory_skill_meta_id"))}: ${escapeHtml(sourceId)}
               <div class="meta">
 ${escapeHtml(t("inventory_skill_meta_source"))}: ${escapeHtml(sourceKind)}
  | ${escapeHtml(t("inventory_skill_meta_locator"))}: ${escapeHtml(locator)}
+${sourceSubpath ? ` | ${escapeHtml(t("inventory_skill_meta_subpath"))}: ${escapeHtml(sourceSubpath)}` : ""}
  | ${escapeHtml(t("inventory_skill_meta_policy"))}: ${escapeHtml(updatePolicy)}
  | ${escapeHtml(t("inventory_skill_meta_managed_by"))}: ${escapeHtml(managedBy)}
               </div>
@@ -4790,6 +4940,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const sourceKind = inventorySourceKindLabel(item);
           const sourcePath = item.source_path || "-";
           const locator = String(item.locator || sourcePath || "-").trim() || "-";
+          const sourceSubpath = String(item.source_subpath || "").trim();
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
           const memberCount = Number(item.member_count) || 1;
@@ -4829,7 +4980,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
                 ${t("inventory_skill_meta_id")}=${escapeHtml(sourceId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
               </div>
               <div class="meta">
-                ${t("inventory_skill_meta_locator")}=${escapeHtml(locator)} | ${t("inventory_skill_meta_policy")}=${escapeHtml(updatePolicy)} | ${t("inventory_skill_meta_managed_by")}=${escapeHtml(managedBy)}
+                ${t("inventory_skill_meta_locator")}=${escapeHtml(locator)}${sourceSubpath ? ` | ${t("inventory_skill_meta_subpath")}=${escapeHtml(sourceSubpath)}` : ""} | ${t("inventory_skill_meta_policy")}=${escapeHtml(updatePolicy)} | ${t("inventory_skill_meta_managed_by")}=${escapeHtml(managedBy)}
               </div>
               <div class="meta">
                 ${t("inventory_skill_meta_freshness")}=${escapeHtml(freshnessStatus)} | ${t("inventory_skill_meta_age")}=${escapeHtml(sourceAge)} | ${t("inventory_skill_meta_last_seen")}=${escapeHtml(lastSeen)}
@@ -5726,6 +5877,115 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       );
     }
 
+    function setInventoryImportStatus(message = "", level = "info") {
+      const el = $("inventoryImportStatus");
+      if (!el) return;
+      el.textContent = String(message || "");
+      if (level === "error") {
+        el.style.color = "var(--danger)";
+      } else if (level === "success") {
+        el.style.color = "var(--accent-2)";
+      } else {
+        el.style.color = "var(--muted)";
+      }
+    }
+
+    function syncInventoryImportKindCopy() {
+      const kind = normalizeInventoryImportKind($("inventoryImportSourceKind").value);
+      if (kind === "manual_git") {
+        $("inventoryImportLocatorInput").placeholder = "https://github.com/org/repo.git";
+        setInventoryImportStatus(t("inventory_import_status_ready_git"));
+      } else {
+        $("inventoryImportLocatorInput").placeholder = "/path/to/skills/root";
+        setInventoryImportStatus(t("inventory_import_status_ready_local"));
+      }
+    }
+
+    function openInventoryImportModal() {
+      $("inventoryImportSourceKind").value = "manual_local";
+      $("inventoryImportSourceScope").value = normalizeInventoryScope(state.inventorySelectedScope);
+      $("inventoryImportDisplayNameInput").value = "";
+      $("inventoryImportLocatorInput").value = "";
+      $("inventoryImportSubpathInput").value = "";
+      $("inventoryImportCompatibleIdsInput").value = state.inventorySelectedSoftwareId || "";
+      $("inventoryImportCompatibleFamiliesInput").value = "";
+      $("inventoryImportProviderKeyInput").value = "";
+      syncInventoryImportKindCopy();
+      $("inventoryImportModal").classList.remove("hidden");
+      $("inventoryImportLocatorInput").focus();
+    }
+
+    function closeInventoryImportModal() {
+      $("inventoryImportModal").classList.add("hidden");
+      setInventoryImportStatus("");
+    }
+
+    function primeInventoryDraftWithImportedSource(sourceId) {
+      const normalizedSourceId = String(sourceId || "").trim();
+      if (!normalizedSourceId) return;
+      syncInventoryDraftWithSelectedSoftware();
+      const compatibleIds = inventoryCompatibleSourceRows(
+        state.inventoryOverview || {},
+        state.inventorySelectedSoftwareId,
+      )
+        .map((item) => String(item.source_id || item.id || "").trim())
+        .filter(Boolean);
+      if (compatibleIds.includes(normalizedSourceId)) {
+        state.inventoryDraftSkillIds = [...new Set([...state.inventoryDraftSkillIds, normalizedSourceId])];
+      }
+    }
+
+    async function submitInventoryImport() {
+      if (state.inventoryImportSaving) return;
+      const sourceKind = normalizeInventoryImportKind($("inventoryImportSourceKind").value);
+      const locator = String($("inventoryImportLocatorInput").value || "").trim();
+      if (!locator) {
+        const err = new Error("locator is required");
+        setInventoryImportStatus(t("inventory_import_error", { msg: err.message }), "error");
+        throw err;
+      }
+
+      const payload = {
+        source_kind: sourceKind,
+        locator,
+        source_scope: normalizeInventoryScope($("inventoryImportSourceScope").value),
+      };
+      const displayName = String($("inventoryImportDisplayNameInput").value || "").trim();
+      const sourceSubpath = String($("inventoryImportSubpathInput").value || "").trim();
+      const providerKey = String($("inventoryImportProviderKeyInput").value || "").trim();
+      const compatibleSoftwareIds = parseInventoryDelimitedList($("inventoryImportCompatibleIdsInput").value);
+      const compatibleSoftwareFamilies = parseInventoryDelimitedList($("inventoryImportCompatibleFamiliesInput").value);
+      if (displayName) payload.display_name = displayName;
+      if (sourceSubpath) payload.source_subpath = sourceSubpath;
+      if (providerKey) payload.provider_key = providerKey;
+      if (compatibleSoftwareIds.length) payload.compatible_software_ids = compatibleSoftwareIds;
+      if (compatibleSoftwareFamilies.length) payload.compatible_software_families = compatibleSoftwareFamilies;
+
+      state.inventoryImportSaving = true;
+      applyI18nTexts();
+      try {
+        const result = await api("/api/skills/sources/register", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        const importedSource = result.source && typeof result.source === "object" ? result.source : {};
+        primeInventoryDraftWithImportedSource(importedSource.source_id);
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+        closeInventoryImportModal();
+        alert(t("inventory_import_success", {
+          name: importedSource.display_name || importedSource.source_id || displayName || locator,
+        }));
+      } catch (err) {
+        setInventoryImportStatus(t("inventory_import_error", { msg: err.message }), "error");
+        throw err;
+      } finally {
+        state.inventoryImportSaving = false;
+        applyI18nTexts();
+      }
+    }
+
     function openAiModal() {
       if (!$("aiWebuiUrl").value.trim()) {
         $("aiWebuiUrl").value = window.location.origin;
@@ -5774,6 +6034,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
         if (!$("guideModal").classList.contains("hidden")) {
           closeGuideModal();
+          return;
+        }
+        if (!$("inventoryImportModal").classList.contains("hidden")) {
+          closeInventoryImportModal();
           return;
         }
         if (!$("configModal").classList.contains("hidden")) {
@@ -6360,6 +6624,26 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
       });
 
+      $("inventoryImportSourceBtn").addEventListener("click", () => {
+        openInventoryImportModal();
+      });
+
+      $("inventoryImportCloseBtn").addEventListener("click", () => {
+        closeInventoryImportModal();
+      });
+
+      $("inventoryImportSubmitBtn").addEventListener("click", async () => {
+        try {
+          await submitInventoryImport();
+        } catch (err) {
+          alert(t("inventory_import_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryImportSourceKind").addEventListener("change", () => {
+        syncInventoryImportKindCopy();
+      });
+
       $("inventorySyncAllBtn").addEventListener("click", async () => {
         try {
           await syncAllInventorySources();
@@ -6758,6 +7042,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       $("guideModal").addEventListener("click", (evt) => {
         if (evt.target?.id === "guideModal") {
           closeGuideModal();
+        }
+      });
+
+      $("inventoryImportModal").addEventListener("click", (evt) => {
+        if (evt.target?.id === "inventoryImportModal") {
+          closeInventoryImportModal();
         }
       });
 

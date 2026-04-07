@@ -27,6 +27,19 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("target_paths", html)
         self.assertIn("inventory_summary_registry_hosts", html)
 
+    def test_inventory_panel_exposes_source_import_wizard_strings_and_hooks(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventoryImportSourceBtn"', html)
+        self.assertIn('id="inventoryImportModal"', html)
+        self.assertIn('id="inventoryImportSourceKind"', html)
+        self.assertIn('id="inventoryImportLocatorInput"', html)
+        self.assertIn('id="inventoryImportSubpathInput"', html)
+        self.assertIn("openInventoryImportModal()", html)
+        self.assertIn("submitInventoryImport()", html)
+        self.assertIn("inventory_import_open", html)
+        self.assertIn("inventory_import_subpath", html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -135,6 +135,14 @@ def _default_update_policy(kind: str, registry_package_name: str) -> str:
     return "manual"
 
 
+def _normalize_source_subpath(value: Any) -> str:
+    text = str(value or "").strip().replace("\\", "/")
+    if not text:
+        return ""
+    text = text.strip("/")
+    return text
+
+
 def _infer_source_kind(discovered_row: dict[str, Any]) -> str:
     tags = set(_to_str_list(discovered_row.get("tags", [])))
     skill_kind = str(discovered_row.get("skill_kind") or discovered_row.get("source_kind") or "").strip().lower()
@@ -166,12 +174,14 @@ def _normalize_registry_source(raw: dict[str, Any], *, generated_at: str = "") -
     source_path = str(raw.get("source_path") or "").strip()
     if not source_path and source_kind == "manual_local":
         source_path = locator
+    source_subpath = _normalize_source_subpath(raw.get("source_subpath") or raw.get("subpath"))
 
     return {
         "source_id": source_id,
         "display_name": display_name,
         "source_kind": source_kind,
         "locator": locator,
+        "source_subpath": source_subpath,
         "source_scope": source_scope,
         "provider_key": str(raw.get("provider_key") or "generic").strip() or "generic",
         "enabled": _to_bool(raw.get("enabled", True), True),

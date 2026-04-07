@@ -159,6 +159,28 @@ class SkillsSourcesCoreTests(unittest.TestCase):
         )
         self.assertEqual([], removed["sources"])
 
+    def test_register_manual_git_source_preserves_optional_subpath(self) -> None:
+        registry = normalize_skills_registry({})
+
+        created = register_registry_source(
+            registry,
+            {
+                "display_name": "Remote Git Skills",
+                "source_kind": "manual_git",
+                "locator": "https://github.com/demo/skills.git",
+                "source_scope": "global",
+                "source_subpath": "packages/codex",
+                "compatible_software_ids": ["codex"],
+            },
+            generated_at="2026-04-06T09:05:00+00:00",
+        )
+
+        self.assertEqual(1, len(created["sources"]))
+        source = created["sources"][0]
+        self.assertEqual("manual_git", source["source_kind"])
+        self.assertEqual("https://github.com/demo/skills.git", source["locator"])
+        self.assertEqual("packages/codex", source["source_subpath"])
+
 
 if __name__ == "__main__":
     unittest.main()

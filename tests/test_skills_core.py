@@ -473,6 +473,32 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("cli", codex["kind"])
         self.assertEqual(["npx_bundle", "npx_single", "manual_local", "manual_git"], codex["supports_source_kinds"])
 
+    def test_build_skills_overview_preserves_registry_source_subpath(self) -> None:
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/demo/skills.git",
+                    "source_subpath": "packages/codex",
+                    "source_scope": "global",
+                    "provider_key": "manual",
+                    "compatible_software_ids": ["codex"],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
+        manual_git = next(
+            item
+            for item in overview["source_rows"]
+            if item["source_id"] == "manual_git_demo"
+        )
+        self.assertEqual("packages/codex", manual_git["source_subpath"])
+
     def test_normalize_saved_skills_manifest_keeps_intent_only_fields(self) -> None:
         normalized = normalize_saved_skills_manifest(
             {

@@ -66,6 +66,8 @@ WebUI/API endpoints:
 - `GET /api/inventory/bindings`: read-only binding details (`binding_map` + `binding_map_by_scope`).
 - `POST /api/inventory/scan`: trigger a rescan and refresh inventory snapshot.
 - `POST /api/inventory/bindings`: save bindings with compatibility validation.
+- The Skills panel now includes an `Import Source` wizard for `manual_local` and `manual_git` sources, including optional git `source_subpath`.
+- `POST /api/skills/sources/register`: register a new source; supports local paths and git repositories with optional `source_subpath`.
 
 Notes:
 

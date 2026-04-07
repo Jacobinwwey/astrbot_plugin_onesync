@@ -1636,6 +1636,7 @@ class OneSyncPlugin(Star):
             "source_scope": str(source_row.get("source_scope") or "global"),
             "source_path": str(source_row.get("source_path") or ""),
             "locator": str(source_row.get("locator") or source_row.get("source_path") or source_row.get("registry_package_name") or ""),
+            "source_subpath": str(source_row.get("source_subpath") or ""),
             "member_count": _to_int(source_row.get("member_count", 1), 1, 1),
             "member_skill_preview": _to_str_list(source_row.get("member_skill_preview", [])),
             "member_skill_overflow": _to_int(source_row.get("member_skill_overflow", 0), 0, 0),

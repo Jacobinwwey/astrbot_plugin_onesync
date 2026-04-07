@@ -74,6 +74,7 @@ WebUI 关键能力：
 - 统一管理面板支持绑定作用域切换（`global/workspace`）与快速选择（全选兼容 / 仅已发现 / 清空选择）。
 - `global/workspace` 现已改为分段切换按钮，减少顶部控制区占用。
 - 软件速览区支持按 `CLI/GUI/CLAW/OTHER` 过滤并点击卡片快速切换当前软件。
+- Skills 面板现已提供 `导入 Source` 向导，可登记 `manual_local` 与 `manual_git` 来源，并支持为 git source 填写可选 `subpath`。
 - Deploy Targets 支持展示当前 drift 明细、generated projection diff，并可执行“重建当前投影 / 修复当前目标 / 批量修复全部漂移目标”。
 - 右侧可部署 Source package 列表现已直接使用 source-first `source_rows` 真相源，显示与下方 Source / Bundle 视图一致的 freshness、registry、sync 状态，并支持就地 `Sync Source`。
 - Source / Bundle 视图与 Deploy Targets 现已支持 `单列卡片 / 双列卡片 / 紧凑列表` 视图切换，并可在面板设置中调整字体、卡片宽度与卡片高度；这些偏好会保存在浏览器本地。
@@ -104,6 +105,7 @@ WebUI 与 API：
 - `GET /api/skills/overview`：读取当前 source-first overview 快照，包含 `manifest / lock / source_rows / deploy_rows / doctor`。
 - `GET /api/skills/deploy-targets/{target_id}`：读取单个 Deploy Target 明细，附带 `generated_projection.path / exists / payload / diff`。
 - `POST /api/skills/import`：显式刷新 inventory + skills 快照，并重建 `manifest / lock / sources / generated`。
+- `POST /api/skills/sources/register`：登记新的 source；支持 `manual_local` 路径和带可选 `source_subpath` 的 `manual_git` 仓库。
 - `POST /api/skills/deploy-targets/{target_id}`：保存当前 target 的 selected sources。
 - `POST /api/skills/deploy-targets/{target_id}/reproject`：重建单个 target 的 generated projection，用于消除缓存与落盘状态漂移。
 - `POST /api/skills/deploy-targets/repair-all`：按当前 snapshot 批量修复 repairable targets。
