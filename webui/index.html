@@ -29,11 +29,16 @@
       --row-pad-y: 8px;
       --row-pad-x: 10px;
       --font-size: 13px;
-      --inventory-card-font-size: 12px;
-      --inventory-card-title-size: 13px;
-      --inventory-card-min-height: 100px;
-      --inventory-card-max-width: 100%;
-      --inventory-card-gap: 8px;
+      --inventory-source-card-font-size: 12px;
+      --inventory-source-card-title-size: 13px;
+      --inventory-source-card-min-height: 100px;
+      --inventory-source-card-max-width: 100%;
+      --inventory-source-card-gap: 8px;
+      --inventory-deploy-card-font-size: 12px;
+      --inventory-deploy-card-title-size: 13px;
+      --inventory-deploy-card-min-height: 100px;
+      --inventory-deploy-card-max-width: 100%;
+      --inventory-deploy-card-gap: 8px;
     }
 
     [data-theme="light"] {
@@ -996,9 +1001,45 @@
 
     .inventory-display-settings-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      grid-template-columns: repeat(2, minmax(320px, 1fr));
       gap: 10px;
       padding: 10px 12px 12px;
+    }
+
+    .inventory-display-panel-group {
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel-strong) 54%, transparent);
+    }
+
+    .inventory-display-panel-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-display-panel-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .inventory-display-panel-note {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .inventory-display-panel-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 10px;
+      align-items: end;
     }
 
     .inventory-workspace-actions {
@@ -1405,20 +1446,34 @@
       white-space: pre-wrap;
     }
 
-    .inventory-source-rows,
-    .inventory-deploy-rows {
+    .inventory-source-rows {
       display: grid;
-      gap: var(--inventory-card-gap);
+      gap: var(--inventory-source-card-gap);
       grid-template-columns: 1fr;
     }
 
-    .inventory-source-item,
+    .inventory-deploy-rows {
+      display: grid;
+      gap: var(--inventory-deploy-card-gap);
+      grid-template-columns: 1fr;
+    }
+
+    .inventory-source-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 9px 10px;
+      min-height: var(--inventory-source-card-min-height);
+      max-width: var(--inventory-source-card-max-width);
+      width: 100%;
+      background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
+    }
+
     .inventory-deploy-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
       border-radius: 10px;
       padding: 9px 10px;
-      min-height: var(--inventory-card-min-height);
-      max-width: var(--inventory-card-max-width);
+      min-height: var(--inventory-deploy-card-min-height);
+      max-width: var(--inventory-deploy-card-max-width);
       width: 100%;
       background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
     }
@@ -1441,13 +1496,22 @@
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
     }
 
-    .inventory-source-item .title,
+    .inventory-source-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: var(--inventory-source-card-title-size);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
     .inventory-deploy-item .title {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: var(--inventory-card-title-size);
+      font-size: var(--inventory-deploy-card-title-size);
       font-weight: 700;
       margin-bottom: 6px;
     }
@@ -1471,32 +1535,48 @@
     .inventory-source-sync-btn {
       min-width: 0;
       padding: 4px 8px;
-      font-size: calc(var(--inventory-card-font-size) - 1px);
+      font-size: calc(var(--inventory-source-card-font-size) - 1px);
       border-radius: 999px;
     }
 
-    .inventory-source-item .meta,
-    .inventory-deploy-item .meta {
+    .inventory-source-item .meta {
       color: var(--muted);
-      font-size: var(--inventory-card-font-size);
+      font-size: var(--inventory-source-card-font-size);
       line-height: 1.5;
       white-space: pre-wrap;
     }
 
-    body[data-inventory-card-view="double"] .inventory-source-rows,
-    body[data-inventory-card-view="double"] .inventory-deploy-rows {
+    .inventory-deploy-item .meta {
+      color: var(--muted);
+      font-size: var(--inventory-deploy-card-font-size);
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    body[data-inventory-source-card-view="double"] .inventory-source-rows {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    body[data-inventory-card-view="list"] .inventory-source-rows,
-    body[data-inventory-card-view="list"] .inventory-deploy-rows {
+    body[data-inventory-deploy-card-view="double"] .inventory-deploy-rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body[data-inventory-source-card-view="list"] .inventory-source-rows {
       gap: 6px;
     }
 
-    body[data-inventory-card-view="list"] .inventory-source-item,
-    body[data-inventory-card-view="list"] .inventory-deploy-item {
+    body[data-inventory-deploy-card-view="list"] .inventory-deploy-rows {
+      gap: 6px;
+    }
+
+    body[data-inventory-source-card-view="list"] .inventory-source-item {
       padding: 7px 9px;
-      min-height: calc(var(--inventory-card-min-height) - 16px);
+      min-height: calc(var(--inventory-source-card-min-height) - 16px);
+    }
+
+    body[data-inventory-deploy-card-view="list"] .inventory-deploy-item {
+      padding: 7px 9px;
+      min-height: calc(var(--inventory-deploy-card-min-height) - 16px);
     }
 
     .skills-status-badge {
@@ -1641,7 +1721,10 @@
         grid-template-columns: 1fr;
       }
       .inventory-display-settings-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
+      }
+      .inventory-display-panel-grid {
+        grid-template-columns: 1fr;
       }
       .inventory-grid {
         grid-template-columns: 1fr;
@@ -1649,8 +1732,8 @@
       .skills-secondary-grid {
         grid-template-columns: 1fr;
       }
-      body[data-inventory-card-view="double"] .inventory-source-rows,
-      body[data-inventory-card-view="double"] .inventory-deploy-rows {
+      body[data-inventory-source-card-view="double"] .inventory-source-rows,
+      body[data-inventory-deploy-card-view="double"] .inventory-deploy-rows {
         grid-template-columns: 1fr;
       }
       .inventory-software-rows {
@@ -1768,38 +1851,84 @@
           <details class="inventory-display-settings" id="inventoryDisplaySettings">
             <summary id="inventoryDisplaySettingsSummary">面板设置</summary>
             <div class="inventory-display-settings-grid">
-              <div class="inventory-segment-block">
-                <span class="inventory-segment-label" id="inventoryViewModeLabel">面板视图</span>
-                <div class="inventory-segmented" id="inventoryPanelViewTabs">
-                  <button type="button" id="inventoryViewModeSingle" data-inventory-view="single">单列卡片</button>
-                  <button type="button" id="inventoryViewModeDouble" data-inventory-view="double">双列卡片</button>
-                  <button type="button" id="inventoryViewModeList" data-inventory-view="list">紧凑列表</button>
+              <div class="inventory-display-panel-group">
+                <div class="inventory-display-panel-head">
+                  <p class="inventory-display-panel-title" id="inventorySourceDisplayTitle">Source / Bundle 视图</p>
+                </div>
+                <div class="inventory-segment-block">
+                  <span class="inventory-segment-label" id="inventorySourceViewModeLabel">面板视图</span>
+                  <div class="inventory-segmented" id="inventorySourcePanelViewTabs">
+                    <button type="button" id="inventorySourceViewModeSingle" data-inventory-source-view="single">单列卡片</button>
+                    <button type="button" id="inventorySourceViewModeDouble" data-inventory-source-view="double">双列卡片</button>
+                    <button type="button" id="inventorySourceViewModeList" data-inventory-source-view="list">紧凑列表</button>
+                  </div>
+                </div>
+                <div class="inventory-display-panel-grid">
+                  <label class="cfg-label">
+                    <span id="inventorySourceCardFontSizeLabel">字体大小</span>
+                    <select id="inventorySourceCardFontSizeSelect">
+                      <option value="sm" id="inventorySourceCardFontOptSm">小</option>
+                      <option value="md" id="inventorySourceCardFontOptMd" selected>标准</option>
+                      <option value="lg" id="inventorySourceCardFontOptLg">大</option>
+                    </select>
+                  </label>
+                  <label class="cfg-label">
+                    <span id="inventorySourceCardWidthLabel">卡片宽度</span>
+                    <select id="inventorySourceCardWidthSelect">
+                      <option value="narrow" id="inventorySourceCardWidthOptNarrow">紧凑</option>
+                      <option value="standard" id="inventorySourceCardWidthOptStandard" selected>标准</option>
+                      <option value="wide" id="inventorySourceCardWidthOptWide">宽展</option>
+                    </select>
+                  </label>
+                  <label class="cfg-label">
+                    <span id="inventorySourceCardHeightLabel">卡片高度</span>
+                    <select id="inventorySourceCardHeightSelect">
+                      <option value="compact" id="inventorySourceCardHeightOptCompact">紧凑</option>
+                      <option value="standard" id="inventorySourceCardHeightOptStandard" selected>标准</option>
+                      <option value="tall" id="inventorySourceCardHeightOptTall">舒展</option>
+                    </select>
+                  </label>
                 </div>
               </div>
-              <label class="cfg-label">
-                <span id="inventoryCardFontSizeLabel">字体大小</span>
-                <select id="inventoryCardFontSizeSelect">
-                  <option value="sm" id="inventoryCardFontOptSm">小</option>
-                  <option value="md" id="inventoryCardFontOptMd" selected>标准</option>
-                  <option value="lg" id="inventoryCardFontOptLg">大</option>
-                </select>
-              </label>
-              <label class="cfg-label">
-                <span id="inventoryCardWidthLabel">卡片宽度</span>
-                <select id="inventoryCardWidthSelect">
-                  <option value="narrow" id="inventoryCardWidthOptNarrow">紧凑</option>
-                  <option value="standard" id="inventoryCardWidthOptStandard" selected>标准</option>
-                  <option value="wide" id="inventoryCardWidthOptWide">宽展</option>
-                </select>
-              </label>
-              <label class="cfg-label">
-                <span id="inventoryCardHeightLabel">卡片高度</span>
-                <select id="inventoryCardHeightSelect">
-                  <option value="compact" id="inventoryCardHeightOptCompact">紧凑</option>
-                  <option value="standard" id="inventoryCardHeightOptStandard" selected>标准</option>
-                  <option value="tall" id="inventoryCardHeightOptTall">舒展</option>
-                </select>
-              </label>
+              <div class="inventory-display-panel-group">
+                <div class="inventory-display-panel-head">
+                  <p class="inventory-display-panel-title" id="inventoryDeployDisplayTitle">Deploy Targets</p>
+                </div>
+                <div class="inventory-segment-block">
+                  <span class="inventory-segment-label" id="inventoryDeployViewModeLabel">面板视图</span>
+                  <div class="inventory-segmented" id="inventoryDeployPanelViewTabs">
+                    <button type="button" id="inventoryDeployViewModeSingle" data-inventory-deploy-view="single">单列卡片</button>
+                    <button type="button" id="inventoryDeployViewModeDouble" data-inventory-deploy-view="double">双列卡片</button>
+                    <button type="button" id="inventoryDeployViewModeList" data-inventory-deploy-view="list">紧凑列表</button>
+                  </div>
+                </div>
+                <div class="inventory-display-panel-grid">
+                  <label class="cfg-label">
+                    <span id="inventoryDeployCardFontSizeLabel">字体大小</span>
+                    <select id="inventoryDeployCardFontSizeSelect">
+                      <option value="sm" id="inventoryDeployCardFontOptSm">小</option>
+                      <option value="md" id="inventoryDeployCardFontOptMd" selected>标准</option>
+                      <option value="lg" id="inventoryDeployCardFontOptLg">大</option>
+                    </select>
+                  </label>
+                  <label class="cfg-label">
+                    <span id="inventoryDeployCardWidthLabel">卡片宽度</span>
+                    <select id="inventoryDeployCardWidthSelect">
+                      <option value="narrow" id="inventoryDeployCardWidthOptNarrow">紧凑</option>
+                      <option value="standard" id="inventoryDeployCardWidthOptStandard" selected>标准</option>
+                      <option value="wide" id="inventoryDeployCardWidthOptWide">宽展</option>
+                    </select>
+                  </label>
+                  <label class="cfg-label">
+                    <span id="inventoryDeployCardHeightLabel">卡片高度</span>
+                    <select id="inventoryDeployCardHeightSelect">
+                      <option value="compact" id="inventoryDeployCardHeightOptCompact">紧凑</option>
+                      <option value="standard" id="inventoryDeployCardHeightOptStandard" selected>标准</option>
+                      <option value="tall" id="inventoryDeployCardHeightOptTall">舒展</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
             </div>
           </details>
           <div class="inventory-grid">
@@ -2339,10 +2468,14 @@
       inventoryOverview: null,
       inventorySelectedSoftwareId: "",
       inventorySelectedScope: "global",
-      inventoryCardView: "double",
-      inventoryCardFontSize: "md",
-      inventoryCardWidth: "standard",
-      inventoryCardHeight: "compact",
+      inventorySourceCardView: "double",
+      inventorySourceCardFontSize: "md",
+      inventorySourceCardWidth: "standard",
+      inventorySourceCardHeight: "compact",
+      inventoryDeployCardView: "list",
+      inventoryDeployCardFontSize: "md",
+      inventoryDeployCardWidth: "standard",
+      inventoryDeployCardHeight: "compact",
       inventoryDeployScopeFilter: "global",
       inventoryDeployInstallFilter: "installed",
       inventoryKindFilter: "all",
@@ -3184,7 +3317,7 @@
       return ["compact", "standard", "tall"].includes(height) ? height : "compact";
     }
 
-    function applyInventoryDisplayPreferences() {
+    function resolveInventoryCardStylePrefs(view, fontSize, width, height) {
       const fontMap = {
         sm: { meta: "11px", title: "12px" },
         md: { meta: "12px", title: "13px" },
@@ -3205,18 +3338,45 @@
         single: "8px",
         double: "8px",
       };
+      const normalizedView = normalizeInventoryCardView(view);
+      const normalizedFont = normalizeInventoryCardFontSize(fontSize);
+      const normalizedWidth = normalizeInventoryCardWidth(width);
+      const normalizedHeight = normalizeInventoryCardHeight(height);
+      return {
+        view: normalizedView,
+        font: fontMap[normalizedFont] || fontMap.md,
+        width: widthMap[normalizedWidth] || widthMap.standard,
+        height: heightMap[normalizedHeight] || heightMap.compact,
+        gap: gapMap[normalizedView] || "8px",
+      };
+    }
 
-      const font = fontMap[normalizeInventoryCardFontSize(state.inventoryCardFontSize)] || fontMap.md;
-      const width = widthMap[normalizeInventoryCardWidth(state.inventoryCardWidth)] || widthMap.standard;
-      const height = heightMap[normalizeInventoryCardHeight(state.inventoryCardHeight)] || heightMap.compact;
-      const view = normalizeInventoryCardView(state.inventoryCardView);
+    function applyInventoryDisplayPreferences() {
+      const sourcePrefs = resolveInventoryCardStylePrefs(
+        state.inventorySourceCardView,
+        state.inventorySourceCardFontSize,
+        state.inventorySourceCardWidth,
+        state.inventorySourceCardHeight,
+      );
+      const deployPrefs = resolveInventoryCardStylePrefs(
+        state.inventoryDeployCardView,
+        state.inventoryDeployCardFontSize,
+        state.inventoryDeployCardWidth,
+        state.inventoryDeployCardHeight,
+      );
 
-      document.body.dataset.inventoryCardView = view;
-      document.body.style.setProperty("--inventory-card-font-size", font.meta);
-      document.body.style.setProperty("--inventory-card-title-size", font.title);
-      document.body.style.setProperty("--inventory-card-min-height", height);
-      document.body.style.setProperty("--inventory-card-max-width", width);
-      document.body.style.setProperty("--inventory-card-gap", gapMap[view] || "8px");
+      document.body.dataset.inventorySourceCardView = sourcePrefs.view;
+      document.body.dataset.inventoryDeployCardView = deployPrefs.view;
+      document.body.style.setProperty("--inventory-source-card-font-size", sourcePrefs.font.meta);
+      document.body.style.setProperty("--inventory-source-card-title-size", sourcePrefs.font.title);
+      document.body.style.setProperty("--inventory-source-card-min-height", sourcePrefs.height);
+      document.body.style.setProperty("--inventory-source-card-max-width", sourcePrefs.width);
+      document.body.style.setProperty("--inventory-source-card-gap", sourcePrefs.gap);
+      document.body.style.setProperty("--inventory-deploy-card-font-size", deployPrefs.font.meta);
+      document.body.style.setProperty("--inventory-deploy-card-title-size", deployPrefs.font.title);
+      document.body.style.setProperty("--inventory-deploy-card-min-height", deployPrefs.height);
+      document.body.style.setProperty("--inventory-deploy-card-max-width", deployPrefs.width);
+      document.body.style.setProperty("--inventory-deploy-card-gap", deployPrefs.gap);
     }
 
     function syncInventoryScopeTabs() {
@@ -3227,10 +3387,18 @@
       });
     }
 
-    function syncInventoryViewModeTabs() {
-      const activeView = normalizeInventoryCardView(state.inventoryCardView);
-      document.querySelectorAll("#inventoryPanelViewTabs [data-inventory-view]").forEach((el) => {
-        const view = normalizeInventoryCardView(el.getAttribute("data-inventory-view"));
+    function syncInventorySourceViewModeTabs() {
+      const activeView = normalizeInventoryCardView(state.inventorySourceCardView);
+      document.querySelectorAll("#inventorySourcePanelViewTabs [data-inventory-source-view]").forEach((el) => {
+        const view = normalizeInventoryCardView(el.getAttribute("data-inventory-source-view"));
+        el.classList.toggle("active", view === activeView);
+      });
+    }
+
+    function syncInventoryDeployViewModeTabs() {
+      const activeView = normalizeInventoryCardView(state.inventoryDeployCardView);
+      document.querySelectorAll("#inventoryDeployPanelViewTabs [data-inventory-deploy-view]").forEach((el) => {
+        const view = normalizeInventoryCardView(el.getAttribute("data-inventory-deploy-view"));
         el.classList.toggle("active", view === activeView);
       });
     }
@@ -3293,17 +3461,57 @@
         if (typeof parsed.inventoryScope === "string") {
           state.inventorySelectedScope = normalizeInventoryScope(parsed.inventoryScope);
         }
-        if (typeof parsed.inventoryCardView === "string") {
-          state.inventoryCardView = normalizeInventoryCardView(parsed.inventoryCardView);
+        const legacyCardView = typeof parsed.inventoryCardView === "string"
+          ? normalizeInventoryCardView(parsed.inventoryCardView)
+          : null;
+        const legacyCardFontSize = typeof parsed.inventoryCardFontSize === "string"
+          ? normalizeInventoryCardFontSize(parsed.inventoryCardFontSize)
+          : null;
+        const legacyCardWidth = typeof parsed.inventoryCardWidth === "string"
+          ? normalizeInventoryCardWidth(parsed.inventoryCardWidth)
+          : null;
+        const legacyCardHeight = typeof parsed.inventoryCardHeight === "string"
+          ? normalizeInventoryCardHeight(parsed.inventoryCardHeight)
+          : null;
+        if (typeof parsed.inventorySourceCardView === "string") {
+          state.inventorySourceCardView = normalizeInventoryCardView(parsed.inventorySourceCardView);
+        } else if (legacyCardView) {
+          state.inventorySourceCardView = legacyCardView;
         }
-        if (typeof parsed.inventoryCardFontSize === "string") {
-          state.inventoryCardFontSize = normalizeInventoryCardFontSize(parsed.inventoryCardFontSize);
+        if (typeof parsed.inventorySourceCardFontSize === "string") {
+          state.inventorySourceCardFontSize = normalizeInventoryCardFontSize(parsed.inventorySourceCardFontSize);
+        } else if (legacyCardFontSize) {
+          state.inventorySourceCardFontSize = legacyCardFontSize;
         }
-        if (typeof parsed.inventoryCardWidth === "string") {
-          state.inventoryCardWidth = normalizeInventoryCardWidth(parsed.inventoryCardWidth);
+        if (typeof parsed.inventorySourceCardWidth === "string") {
+          state.inventorySourceCardWidth = normalizeInventoryCardWidth(parsed.inventorySourceCardWidth);
+        } else if (legacyCardWidth) {
+          state.inventorySourceCardWidth = legacyCardWidth;
         }
-        if (typeof parsed.inventoryCardHeight === "string") {
-          state.inventoryCardHeight = normalizeInventoryCardHeight(parsed.inventoryCardHeight);
+        if (typeof parsed.inventorySourceCardHeight === "string") {
+          state.inventorySourceCardHeight = normalizeInventoryCardHeight(parsed.inventorySourceCardHeight);
+        } else if (legacyCardHeight) {
+          state.inventorySourceCardHeight = legacyCardHeight;
+        }
+        if (typeof parsed.inventoryDeployCardView === "string") {
+          state.inventoryDeployCardView = normalizeInventoryCardView(parsed.inventoryDeployCardView);
+        } else if (legacyCardView) {
+          state.inventoryDeployCardView = legacyCardView;
+        }
+        if (typeof parsed.inventoryDeployCardFontSize === "string") {
+          state.inventoryDeployCardFontSize = normalizeInventoryCardFontSize(parsed.inventoryDeployCardFontSize);
+        } else if (legacyCardFontSize) {
+          state.inventoryDeployCardFontSize = legacyCardFontSize;
+        }
+        if (typeof parsed.inventoryDeployCardWidth === "string") {
+          state.inventoryDeployCardWidth = normalizeInventoryCardWidth(parsed.inventoryDeployCardWidth);
+        } else if (legacyCardWidth) {
+          state.inventoryDeployCardWidth = legacyCardWidth;
+        }
+        if (typeof parsed.inventoryDeployCardHeight === "string") {
+          state.inventoryDeployCardHeight = normalizeInventoryCardHeight(parsed.inventoryDeployCardHeight);
+        } else if (legacyCardHeight) {
+          state.inventoryDeployCardHeight = legacyCardHeight;
         }
         if (typeof parsed.inventoryDeployScopeFilter === "string") {
           state.inventoryDeployScopeFilter = normalizeInventoryDeployScopeFilter(parsed.inventoryDeployScopeFilter);
@@ -3332,10 +3540,14 @@
         lang: state.lang,
         aiAutogenAfterLoad: Boolean(state.aiAutogenAfterLoad),
         inventoryScope: normalizeInventoryScope(state.inventorySelectedScope),
-        inventoryCardView: normalizeInventoryCardView(state.inventoryCardView),
-        inventoryCardFontSize: normalizeInventoryCardFontSize(state.inventoryCardFontSize),
-        inventoryCardWidth: normalizeInventoryCardWidth(state.inventoryCardWidth),
-        inventoryCardHeight: normalizeInventoryCardHeight(state.inventoryCardHeight),
+        inventorySourceCardView: normalizeInventoryCardView(state.inventorySourceCardView),
+        inventorySourceCardFontSize: normalizeInventoryCardFontSize(state.inventorySourceCardFontSize),
+        inventorySourceCardWidth: normalizeInventoryCardWidth(state.inventorySourceCardWidth),
+        inventorySourceCardHeight: normalizeInventoryCardHeight(state.inventorySourceCardHeight),
+        inventoryDeployCardView: normalizeInventoryCardView(state.inventoryDeployCardView),
+        inventoryDeployCardFontSize: normalizeInventoryCardFontSize(state.inventoryDeployCardFontSize),
+        inventoryDeployCardWidth: normalizeInventoryCardWidth(state.inventoryDeployCardWidth),
+        inventoryDeployCardHeight: normalizeInventoryCardHeight(state.inventoryDeployCardHeight),
         inventoryDeployScopeFilter: normalizeInventoryDeployScopeFilter(state.inventoryDeployScopeFilter),
         inventoryDeployInstallFilter: normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter),
         inventoryKindFilter: normalizeInventoryKindFilter(state.inventoryKindFilter),
@@ -3404,22 +3616,40 @@
       $("inventoryScopeTabGlobal").textContent = t("inventory_scope_global");
       $("inventoryScopeTabWorkspace").textContent = t("inventory_scope_workspace");
       $("inventoryDisplaySettingsSummary").textContent = t("inventory_display_settings_summary");
-      $("inventoryViewModeLabel").textContent = t("inventory_view_mode_label");
-      $("inventoryViewModeSingle").textContent = t("inventory_view_mode_single");
-      $("inventoryViewModeDouble").textContent = t("inventory_view_mode_double");
-      $("inventoryViewModeList").textContent = t("inventory_view_mode_list");
-      $("inventoryCardFontSizeLabel").textContent = t("inventory_card_font_size_label");
-      $("inventoryCardFontOptSm").textContent = t("inventory_card_font_sm");
-      $("inventoryCardFontOptMd").textContent = t("inventory_card_font_md");
-      $("inventoryCardFontOptLg").textContent = t("inventory_card_font_lg");
-      $("inventoryCardWidthLabel").textContent = t("inventory_card_width_label");
-      $("inventoryCardWidthOptNarrow").textContent = t("inventory_card_width_narrow");
-      $("inventoryCardWidthOptStandard").textContent = t("inventory_card_width_standard");
-      $("inventoryCardWidthOptWide").textContent = t("inventory_card_width_wide");
-      $("inventoryCardHeightLabel").textContent = t("inventory_card_height_label");
-      $("inventoryCardHeightOptCompact").textContent = t("inventory_card_height_compact");
-      $("inventoryCardHeightOptStandard").textContent = t("inventory_card_height_standard");
-      $("inventoryCardHeightOptTall").textContent = t("inventory_card_height_tall");
+      $("inventorySourceDisplayTitle").textContent = t("inventory_sources_title");
+      $("inventorySourceViewModeLabel").textContent = t("inventory_view_mode_label");
+      $("inventorySourceViewModeSingle").textContent = t("inventory_view_mode_single");
+      $("inventorySourceViewModeDouble").textContent = t("inventory_view_mode_double");
+      $("inventorySourceViewModeList").textContent = t("inventory_view_mode_list");
+      $("inventorySourceCardFontSizeLabel").textContent = t("inventory_card_font_size_label");
+      $("inventorySourceCardFontOptSm").textContent = t("inventory_card_font_sm");
+      $("inventorySourceCardFontOptMd").textContent = t("inventory_card_font_md");
+      $("inventorySourceCardFontOptLg").textContent = t("inventory_card_font_lg");
+      $("inventorySourceCardWidthLabel").textContent = t("inventory_card_width_label");
+      $("inventorySourceCardWidthOptNarrow").textContent = t("inventory_card_width_narrow");
+      $("inventorySourceCardWidthOptStandard").textContent = t("inventory_card_width_standard");
+      $("inventorySourceCardWidthOptWide").textContent = t("inventory_card_width_wide");
+      $("inventorySourceCardHeightLabel").textContent = t("inventory_card_height_label");
+      $("inventorySourceCardHeightOptCompact").textContent = t("inventory_card_height_compact");
+      $("inventorySourceCardHeightOptStandard").textContent = t("inventory_card_height_standard");
+      $("inventorySourceCardHeightOptTall").textContent = t("inventory_card_height_tall");
+      $("inventoryDeployDisplayTitle").textContent = t("inventory_deploy_title");
+      $("inventoryDeployViewModeLabel").textContent = t("inventory_view_mode_label");
+      $("inventoryDeployViewModeSingle").textContent = t("inventory_view_mode_single");
+      $("inventoryDeployViewModeDouble").textContent = t("inventory_view_mode_double");
+      $("inventoryDeployViewModeList").textContent = t("inventory_view_mode_list");
+      $("inventoryDeployCardFontSizeLabel").textContent = t("inventory_card_font_size_label");
+      $("inventoryDeployCardFontOptSm").textContent = t("inventory_card_font_sm");
+      $("inventoryDeployCardFontOptMd").textContent = t("inventory_card_font_md");
+      $("inventoryDeployCardFontOptLg").textContent = t("inventory_card_font_lg");
+      $("inventoryDeployCardWidthLabel").textContent = t("inventory_card_width_label");
+      $("inventoryDeployCardWidthOptNarrow").textContent = t("inventory_card_width_narrow");
+      $("inventoryDeployCardWidthOptStandard").textContent = t("inventory_card_width_standard");
+      $("inventoryDeployCardWidthOptWide").textContent = t("inventory_card_width_wide");
+      $("inventoryDeployCardHeightLabel").textContent = t("inventory_card_height_label");
+      $("inventoryDeployCardHeightOptCompact").textContent = t("inventory_card_height_compact");
+      $("inventoryDeployCardHeightOptStandard").textContent = t("inventory_card_height_standard");
+      $("inventoryDeployCardHeightOptTall").textContent = t("inventory_card_height_tall");
       $("inventorySelectAllBtn").textContent = t("inventory_select_all");
       $("inventorySelectDiscoveredBtn").textContent = t("inventory_select_discovered");
       $("inventoryClearSelectionBtn").textContent = t("inventory_select_clear");
@@ -4016,9 +4246,12 @@
       const summaryEl = $("inventorySummary");
       const selectEl = $("inventorySoftwareSelect");
       const scopeEl = $("inventoryScopeSelect");
-      const cardFontEl = $("inventoryCardFontSizeSelect");
-      const cardWidthEl = $("inventoryCardWidthSelect");
-      const cardHeightEl = $("inventoryCardHeightSelect");
+      const sourceCardFontEl = $("inventorySourceCardFontSizeSelect");
+      const sourceCardWidthEl = $("inventorySourceCardWidthSelect");
+      const sourceCardHeightEl = $("inventorySourceCardHeightSelect");
+      const deployCardFontEl = $("inventoryDeployCardFontSizeSelect");
+      const deployCardWidthEl = $("inventoryDeployCardWidthSelect");
+      const deployCardHeightEl = $("inventoryDeployCardHeightSelect");
       const kindFilterEl = $("inventoryKindFilterSelect");
       const showUninstalledEl = $("inventoryShowUninstalledToggle");
       const metaEl = $("inventorySoftwareMeta");
@@ -4038,19 +4271,27 @@
       const selectDiscoveredBtn = $("inventorySelectDiscoveredBtn");
       const clearSelectionBtn = $("inventoryClearSelectionBtn");
       const bindingScope = normalizeInventoryScope(state.inventorySelectedScope);
-      const cardView = normalizeInventoryCardView(state.inventoryCardView);
-      const cardFontSize = normalizeInventoryCardFontSize(state.inventoryCardFontSize);
-      const cardWidth = normalizeInventoryCardWidth(state.inventoryCardWidth);
-      const cardHeight = normalizeInventoryCardHeight(state.inventoryCardHeight);
+      const sourceCardView = normalizeInventoryCardView(state.inventorySourceCardView);
+      const sourceCardFontSize = normalizeInventoryCardFontSize(state.inventorySourceCardFontSize);
+      const sourceCardWidth = normalizeInventoryCardWidth(state.inventorySourceCardWidth);
+      const sourceCardHeight = normalizeInventoryCardHeight(state.inventorySourceCardHeight);
+      const deployCardView = normalizeInventoryCardView(state.inventoryDeployCardView);
+      const deployCardFontSize = normalizeInventoryCardFontSize(state.inventoryDeployCardFontSize);
+      const deployCardWidth = normalizeInventoryCardWidth(state.inventoryDeployCardWidth);
+      const deployCardHeight = normalizeInventoryCardHeight(state.inventoryDeployCardHeight);
       const deployScopeFilter = normalizeInventoryDeployScopeFilter(state.inventoryDeployScopeFilter);
       const deployInstallFilter = normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter);
       const kindFilter = normalizeInventoryKindFilter(state.inventoryKindFilter);
       const showUninstalled = Boolean(state.inventoryShowUninstalled);
       state.inventorySelectedScope = bindingScope;
-      state.inventoryCardView = cardView;
-      state.inventoryCardFontSize = cardFontSize;
-      state.inventoryCardWidth = cardWidth;
-      state.inventoryCardHeight = cardHeight;
+      state.inventorySourceCardView = sourceCardView;
+      state.inventorySourceCardFontSize = sourceCardFontSize;
+      state.inventorySourceCardWidth = sourceCardWidth;
+      state.inventorySourceCardHeight = sourceCardHeight;
+      state.inventoryDeployCardView = deployCardView;
+      state.inventoryDeployCardFontSize = deployCardFontSize;
+      state.inventoryDeployCardWidth = deployCardWidth;
+      state.inventoryDeployCardHeight = deployCardHeight;
       state.inventoryDeployScopeFilter = deployScopeFilter;
       state.inventoryDeployInstallFilter = deployInstallFilter;
       state.inventoryKindFilter = kindFilter;
@@ -4058,14 +4299,23 @@
       if (scopeEl && scopeEl.value !== bindingScope) {
         scopeEl.value = bindingScope;
       }
-      if (cardFontEl && cardFontEl.value !== cardFontSize) {
-        cardFontEl.value = cardFontSize;
+      if (sourceCardFontEl && sourceCardFontEl.value !== sourceCardFontSize) {
+        sourceCardFontEl.value = sourceCardFontSize;
       }
-      if (cardWidthEl && cardWidthEl.value !== cardWidth) {
-        cardWidthEl.value = cardWidth;
+      if (sourceCardWidthEl && sourceCardWidthEl.value !== sourceCardWidth) {
+        sourceCardWidthEl.value = sourceCardWidth;
       }
-      if (cardHeightEl && cardHeightEl.value !== cardHeight) {
-        cardHeightEl.value = cardHeight;
+      if (sourceCardHeightEl && sourceCardHeightEl.value !== sourceCardHeight) {
+        sourceCardHeightEl.value = sourceCardHeight;
+      }
+      if (deployCardFontEl && deployCardFontEl.value !== deployCardFontSize) {
+        deployCardFontEl.value = deployCardFontSize;
+      }
+      if (deployCardWidthEl && deployCardWidthEl.value !== deployCardWidth) {
+        deployCardWidthEl.value = deployCardWidth;
+      }
+      if (deployCardHeightEl && deployCardHeightEl.value !== deployCardHeight) {
+        deployCardHeightEl.value = deployCardHeight;
       }
       if (kindFilterEl && kindFilterEl.value !== kindFilter) {
         kindFilterEl.value = kindFilter;
@@ -4075,7 +4325,8 @@
       }
       applyInventoryDisplayPreferences();
       syncInventoryScopeTabs();
-      syncInventoryViewModeTabs();
+      syncInventorySourceViewModeTabs();
+      syncInventoryDeployViewModeTabs();
       syncInventoryDeployFilterTabs();
 
       const overview = state.inventoryOverview || {};
@@ -6155,12 +6406,23 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         await refreshSelectedDeployTargetDetail();
       });
 
-      $("inventoryPanelViewTabs").addEventListener("click", (evt) => {
+      $("inventorySourcePanelViewTabs").addEventListener("click", (evt) => {
         const el = evt.target && typeof evt.target.closest === "function"
-          ? evt.target.closest("[data-inventory-view]")
+          ? evt.target.closest("[data-inventory-source-view]")
           : null;
         if (!el) return;
-        state.inventoryCardView = normalizeInventoryCardView(el.getAttribute("data-inventory-view"));
+        state.inventorySourceCardView = normalizeInventoryCardView(el.getAttribute("data-inventory-source-view"));
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryDeployPanelViewTabs").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-deploy-view]")
+          : null;
+        if (!el) return;
+        state.inventoryDeployCardView = normalizeInventoryCardView(el.getAttribute("data-inventory-deploy-view"));
         applyInventoryDisplayPreferences();
         persistPreferences();
         renderInventoryPanel();
@@ -6186,22 +6448,43 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         renderInventoryPanel();
       });
 
-      $("inventoryCardFontSizeSelect").addEventListener("change", (evt) => {
-        state.inventoryCardFontSize = normalizeInventoryCardFontSize(evt.target.value);
+      $("inventorySourceCardFontSizeSelect").addEventListener("change", (evt) => {
+        state.inventorySourceCardFontSize = normalizeInventoryCardFontSize(evt.target.value);
         applyInventoryDisplayPreferences();
         persistPreferences();
         renderInventoryPanel();
       });
 
-      $("inventoryCardWidthSelect").addEventListener("change", (evt) => {
-        state.inventoryCardWidth = normalizeInventoryCardWidth(evt.target.value);
+      $("inventorySourceCardWidthSelect").addEventListener("change", (evt) => {
+        state.inventorySourceCardWidth = normalizeInventoryCardWidth(evt.target.value);
         applyInventoryDisplayPreferences();
         persistPreferences();
         renderInventoryPanel();
       });
 
-      $("inventoryCardHeightSelect").addEventListener("change", (evt) => {
-        state.inventoryCardHeight = normalizeInventoryCardHeight(evt.target.value);
+      $("inventorySourceCardHeightSelect").addEventListener("change", (evt) => {
+        state.inventorySourceCardHeight = normalizeInventoryCardHeight(evt.target.value);
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryDeployCardFontSizeSelect").addEventListener("change", (evt) => {
+        state.inventoryDeployCardFontSize = normalizeInventoryCardFontSize(evt.target.value);
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryDeployCardWidthSelect").addEventListener("change", (evt) => {
+        state.inventoryDeployCardWidth = normalizeInventoryCardWidth(evt.target.value);
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryDeployCardHeightSelect").addEventListener("change", (evt) => {
+        state.inventoryDeployCardHeight = normalizeInventoryCardHeight(evt.target.value);
         applyInventoryDisplayPreferences();
         persistPreferences();
         renderInventoryPanel();

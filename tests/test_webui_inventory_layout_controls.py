@@ -9,30 +9,39 @@ WEBUI_HTML = REPO_ROOT / "webui" / "index.html"
 
 
 class WebUIInventoryLayoutControlsTests(unittest.TestCase):
-    def test_inventory_panel_exposes_layout_and_card_controls(self) -> None:
+    def test_inventory_panel_exposes_independent_source_and_deploy_layout_controls(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
         self.assertIn('id="inventoryScopeTabs"', html)
-        self.assertIn('id="inventoryPanelViewTabs"', html)
+        self.assertIn('id="inventorySourcePanelViewTabs"', html)
+        self.assertIn('id="inventoryDeployPanelViewTabs"', html)
         self.assertIn('id="inventoryDeployScopeTabs"', html)
         self.assertIn('id="inventoryDeployInstallTabs"', html)
-        self.assertIn('id="inventoryCardFontSizeSelect"', html)
-        self.assertIn('id="inventoryCardWidthSelect"', html)
-        self.assertIn('id="inventoryCardHeightSelect"', html)
+        self.assertIn('id="inventorySourceCardFontSizeSelect"', html)
+        self.assertIn('id="inventorySourceCardWidthSelect"', html)
+        self.assertIn('id="inventorySourceCardHeightSelect"', html)
+        self.assertIn('id="inventoryDeployCardFontSizeSelect"', html)
+        self.assertIn('id="inventoryDeployCardWidthSelect"', html)
+        self.assertIn('id="inventoryDeployCardHeightSelect"', html)
 
-    def test_inventory_panel_scripts_persist_layout_preferences(self) -> None:
+    def test_inventory_panel_scripts_persist_independent_layout_preferences(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
-        self.assertIn("inventoryCardView", html)
-        self.assertIn("inventoryCardFontSize", html)
-        self.assertIn("inventoryCardWidth", html)
-        self.assertIn("inventoryCardHeight", html)
+        self.assertIn("inventorySourceCardView", html)
+        self.assertIn("inventorySourceCardFontSize", html)
+        self.assertIn("inventorySourceCardWidth", html)
+        self.assertIn("inventorySourceCardHeight", html)
+        self.assertIn("inventoryDeployCardView", html)
+        self.assertIn("inventoryDeployCardFontSize", html)
+        self.assertIn("inventoryDeployCardWidth", html)
+        self.assertIn("inventoryDeployCardHeight", html)
         self.assertIn("inventoryDeployScopeFilter", html)
         self.assertIn("inventoryDeployInstallFilter", html)
         self.assertIn("syncInventoryDeployFilterTabs", html)
         self.assertIn('$("inventoryDeployScopeTabs").addEventListener("click"', html)
         self.assertIn('$("inventoryDeployInstallTabs").addEventListener("click"', html)
-        self.assertIn("--inventory-card-font-size", html)
+        self.assertIn("--inventory-source-card-font-size", html)
+        self.assertIn("--inventory-deploy-card-font-size", html)
 
 
 if __name__ == "__main__":
