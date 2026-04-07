@@ -244,10 +244,11 @@ collection group 不能替代 install unit 成为唯一真相。
 
 - 已完成 install-unit 级 `refresh` / `sync` / `deploy`
 - 已补 collection-group 级批量 `refresh` / `sync` / `deploy`
+- 已补 install-unit / collection-group 级 repair orchestration
 - 前端动作栏已从 “单 install unit” 升级为 “按当前 aggregate 自动路由”
 - 已补 install unit / collection group 级 doctor 汇总
 - 前端 doctor summary 已切到 aggregate-aware 统计
-- 下一步应补足 update/repair 的 aggregate-first 编排
+- 下一步应补足 update 的 aggregate-first 编排
 
 ## Phase E：扩展到 manual_git 与 manual_local
 

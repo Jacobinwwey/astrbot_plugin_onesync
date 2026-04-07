@@ -2034,6 +2034,7 @@
                   <div class="inventory-repair-buttons">
                     <button id="inventoryRefreshInstallUnitBtn" type="button">刷新当前 Unit</button>
                     <button id="inventorySyncInstallUnitBtn" type="button">同步当前 Unit</button>
+                    <button id="inventoryRepairInstallUnitBtn" class="warn" type="button">修复当前聚合</button>
                     <button id="inventoryDeployInstallUnitBtn" class="success" type="button">部署当前 Unit</button>
                   </div>
                 </div>
@@ -2580,6 +2581,7 @@
       inventorySourceDetail: null,
       inventoryRefreshingInstallUnit: false,
       inventorySyncingInstallUnit: false,
+      inventoryRepairingInstallUnit: false,
       inventoryDeployingInstallUnit: false,
       inventoryRepairing: false,
       inventoryRepairAllRunning: false,
@@ -2881,6 +2883,8 @@
         inventory_install_unit_refreshing: "刷新中",
         inventory_install_unit_sync: "同步当前聚合",
         inventory_install_unit_syncing: "同步中",
+        inventory_install_unit_repair: "修复当前聚合",
+        inventory_install_unit_repairing: "修复中",
         inventory_install_unit_deploy: "部署当前聚合",
         inventory_install_unit_deploying: "部署中",
         inventory_target_empty: "等待选择宿主软件...",
@@ -2998,6 +3002,9 @@
         inventory_sync_all_error: "批量同步 Source 失败: {msg}",
         inventory_install_unit_refresh_error: "刷新当前聚合失败: {msg}",
         inventory_install_unit_sync_error: "同步当前聚合失败: {msg}",
+        inventory_install_unit_repair_error: "修复当前聚合失败: {msg}",
+        inventory_install_unit_repair_success: "当前聚合修复完成: 已处理 {count} 个目标，剩余 {remaining} 个待修复。",
+        inventory_install_unit_repair_noop: "当前聚合下没有可修复的 deploy target。",
         inventory_install_unit_deploy_error: "部署当前聚合失败: {msg}",
         inventory_save_error: "保存部署选择失败: {msg}",
         inventory_sync_error: "同步 Source 失败: {msg}",
@@ -3302,6 +3309,8 @@
         inventory_install_unit_refreshing: "Refreshing",
         inventory_install_unit_sync: "Sync Aggregate",
         inventory_install_unit_syncing: "Syncing",
+        inventory_install_unit_repair: "Repair Aggregate",
+        inventory_install_unit_repairing: "Repairing",
         inventory_install_unit_deploy: "Deploy Aggregate",
         inventory_install_unit_deploying: "Deploying",
         inventory_target_empty: "Select a host to inspect the current deploy target.",
@@ -3419,6 +3428,9 @@
         inventory_sync_all_error: "Failed to sync all sources: {msg}",
         inventory_install_unit_refresh_error: "Failed to refresh the current aggregate: {msg}",
         inventory_install_unit_sync_error: "Failed to sync the current aggregate: {msg}",
+        inventory_install_unit_repair_error: "Failed to repair the current aggregate: {msg}",
+        inventory_install_unit_repair_success: "Current aggregate repair finished: processed {count} targets, {remaining} still repairable.",
+        inventory_install_unit_repair_noop: "No repairable deploy target was found for the current aggregate.",
         inventory_install_unit_deploy_error: "Failed to deploy the current aggregate: {msg}",
         inventory_doctor_error: "Doctor check failed: {msg}",
         inventory_deploy_meta_scope: "scope",
@@ -3892,6 +3904,9 @@
       $("inventorySyncInstallUnitBtn").textContent = state.inventorySyncingInstallUnit
         ? t("inventory_install_unit_syncing")
         : t("inventory_install_unit_sync");
+      $("inventoryRepairInstallUnitBtn").textContent = state.inventoryRepairingInstallUnit
+        ? t("inventory_install_unit_repairing")
+        : t("inventory_install_unit_repair");
       $("inventoryDeployInstallUnitBtn").textContent = state.inventoryDeployingInstallUnit
         ? t("inventory_install_unit_deploying")
         : t("inventory_install_unit_deploy");
@@ -4539,6 +4554,20 @@
       return null;
     }
 
+    function getSelectedSourceAggregateRepairableTargetIds() {
+      const detail = state.inventorySourceDetail && typeof state.inventorySourceDetail === "object"
+        ? state.inventorySourceDetail
+        : {};
+      const deployRows = Array.isArray(detail.deploy_rows) ? detail.deploy_rows : [];
+      return [...new Set(
+        deployRows
+          .filter((item) => item && typeof item === "object")
+          .filter((item) => Array.isArray(item.repair_actions) && item.repair_actions.map((entry) => String(entry || "").trim()).filter(Boolean).length)
+          .map((item) => String(item.target_id || "").trim())
+          .filter(Boolean),
+      )];
+    }
+
     function resolveInventorySourceDetailEndpoint(sourceKey, overview = state.inventoryOverview) {
       const normalizedSourceKey = String(sourceKey || "").trim();
       if (!normalizedSourceKey) {
@@ -4791,6 +4820,52 @@
       }
     }
 
+    async function repairSelectedSourceAggregate() {
+      const aggregateContext = getSelectedSourceAggregateActionContext();
+      const targetIds = getSelectedSourceAggregateRepairableTargetIds();
+      if (!aggregateContext || !aggregateContext.id) {
+        return null;
+      }
+      if (!targetIds.length) {
+        alert(t("inventory_install_unit_repair_noop"));
+        return null;
+      }
+      if (state.inventoryRepairingInstallUnit) {
+        return null;
+      }
+      state.inventoryRepairingInstallUnit = true;
+      renderInventoryPanel();
+      try {
+        const result = await api(`${aggregateContext.endpointBase}/repair`, {
+          method: "POST",
+          body: JSON.stringify({
+            target_ids: targetIds,
+          }),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventorySourceDetail = null;
+        state.inventoryTargetDetail = null;
+        renderInventoryPanel();
+        await refreshSelectedInventorySourceDetail();
+        await refreshSelectedDeployTargetDetail();
+        const repairedTargetIds = Array.isArray(result.repaired_target_ids)
+          ? result.repaired_target_ids.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        if (repairedTargetIds.length) {
+          alert(t("inventory_install_unit_repair_success", {
+            count: repairedTargetIds.length,
+            remaining: Number(result.remaining_repairable_total) || 0,
+          }));
+        } else {
+          alert(t("inventory_install_unit_repair_noop"));
+        }
+        return result;
+      } finally {
+        state.inventoryRepairingInstallUnit = false;
+        renderInventoryPanel();
+      }
+    }
+
     async function refreshSelectedInstallUnit() {
       return refreshSelectedSourceAggregate();
     }
@@ -4801,6 +4876,10 @@
 
     async function deploySelectedInstallUnit() {
       return deploySelectedSourceAggregate();
+    }
+
+    async function repairSelectedInstallUnit() {
+      return repairSelectedSourceAggregate();
     }
 
     function renderInventoryPanel() {
@@ -4823,6 +4902,7 @@
       const installUnitNoteEl = $("inventoryInstallUnitNote");
       const refreshInstallUnitBtn = $("inventoryRefreshInstallUnitBtn");
       const syncInstallUnitBtn = $("inventorySyncInstallUnitBtn");
+      const repairInstallUnitBtn = $("inventoryRepairInstallUnitBtn");
       const deployInstallUnitBtn = $("inventoryDeployInstallUnitBtn");
       const sourceRowsEl = $("inventorySourceRows");
       const deployRowsEl = $("inventoryDeployRows");
@@ -5317,6 +5397,9 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       syncInstallUnitBtn.textContent = state.inventorySyncingInstallUnit
         ? t("inventory_install_unit_syncing")
         : t("inventory_install_unit_sync");
+      repairInstallUnitBtn.textContent = state.inventoryRepairingInstallUnit
+        ? t("inventory_install_unit_repairing")
+        : t("inventory_install_unit_repair");
       deployInstallUnitBtn.textContent = state.inventoryDeployingInstallUnit
         ? t("inventory_install_unit_deploying")
         : t("inventory_install_unit_deploy");
@@ -5344,6 +5427,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         saveBtn.disabled = true;
         refreshInstallUnitBtn.disabled = true;
         syncInstallUnitBtn.disabled = true;
+        repairInstallUnitBtn.disabled = true;
         deployInstallUnitBtn.disabled = true;
         reprojectBtn.disabled = true;
         repairBtn.disabled = true;
@@ -5378,6 +5462,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const actionableAggregateKind = String(actionableAggregate && actionableAggregate.kind || "").trim();
       const actionableInstallUnitId = actionableAggregateKind === "install_unit" ? actionableAggregateId : "";
       const actionableCollectionGroupId = actionableAggregateKind === "collection_group" ? actionableAggregateId : "";
+      const aggregateRepairableTargetIds = getSelectedSourceAggregateRepairableTargetIds();
       const detailInstallUnitRows = state.inventorySourceDetail && Array.isArray(state.inventorySourceDetail.install_unit_rows)
         ? state.inventorySourceDetail.install_unit_rows
         : [];
@@ -5403,15 +5488,24 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       refreshInstallUnitBtn.disabled = !actionableAggregateId
         || state.inventoryRefreshingInstallUnit
         || state.inventorySyncingInstallUnit
+        || state.inventoryRepairingInstallUnit
         || state.inventoryDeployingInstallUnit;
       syncInstallUnitBtn.disabled = !actionableAggregateId
         || state.inventoryRefreshingInstallUnit
         || state.inventorySyncingInstallUnit
+        || state.inventoryRepairingInstallUnit
+        || state.inventoryDeployingInstallUnit;
+      repairInstallUnitBtn.disabled = !actionableAggregateId
+        || !aggregateRepairableTargetIds.length
+        || state.inventoryRefreshingInstallUnit
+        || state.inventorySyncingInstallUnit
+        || state.inventoryRepairingInstallUnit
         || state.inventoryDeployingInstallUnit;
       deployInstallUnitBtn.disabled = !actionableAggregateId
         || !selectedSoftwareId
         || state.inventoryRefreshingInstallUnit
         || state.inventorySyncingInstallUnit
+        || state.inventoryRepairingInstallUnit
         || state.inventoryDeployingInstallUnit;
       const compatibleSources = inventoryCompatibleSelectionRows(overview, selectedSoftwareId);
       state.inventoryVisibleCompatibleSkillIds = [...new Set(
@@ -7414,6 +7508,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           await syncSelectedSourceAggregate();
         } catch (err) {
           alert(t("inventory_install_unit_sync_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryRepairInstallUnitBtn").addEventListener("click", async () => {
+        try {
+          await repairSelectedSourceAggregate();
+        } catch (err) {
+          alert(t("inventory_install_unit_repair_error", { msg: err.message }));
         }
       });
 

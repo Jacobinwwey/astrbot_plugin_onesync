@@ -1448,6 +1448,32 @@ class OneSyncPlugin(Star):
             response.update(extra)
         return response
 
+    def _summarize_related_deploy_targets(self, detail: dict[str, Any] | None) -> dict[str, list[str]]:
+        deploy_rows = [
+            item
+            for item in (detail or {}).get("deploy_rows", [])
+            if isinstance(item, dict)
+        ]
+        target_ids = _dedupe_keep_order(
+            [
+                str(item.get("target_id", "")).strip()
+                for item in deploy_rows
+                if str(item.get("target_id", "")).strip()
+            ],
+        )
+        repairable_target_ids = _dedupe_keep_order(
+            [
+                str(item.get("target_id", "")).strip()
+                for item in deploy_rows
+                if str(item.get("target_id", "")).strip()
+                and _to_str_list(item.get("repair_actions", []))
+            ],
+        )
+        return {
+            "target_ids": target_ids,
+            "repairable_target_ids": repairable_target_ids,
+        }
+
     def webui_get_deploy_target_payload(self, target_id: str) -> dict[str, Any]:
         normalized_target_id = str(target_id or "").strip()
         if not normalized_target_id:
@@ -1946,6 +1972,148 @@ class OneSyncPlugin(Star):
                 "registry": registry,
                 "synced_source_ids": synced_source_ids,
                 "failed_sources": failed_sources,
+            },
+        )
+
+    def webui_repair_install_unit(
+        self,
+        install_unit_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        repair_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_install_unit_action_context(install_unit_id)
+        if not context.get("ok"):
+            return context
+
+        target_summary = self._summarize_related_deploy_targets(context.get("detail", {}))
+        related_target_ids = _to_str_list(target_summary.get("target_ids", []))
+        requested_target_ids = [
+            target_id
+            for target_id in _to_str_list(repair_payload.get("target_ids", []))
+            if target_id in related_target_ids
+        ]
+        target_ids = requested_target_ids or related_target_ids
+
+        normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        if not target_ids:
+            inventory_snapshot = self.webui_get_inventory_payload()
+            skills_snapshot = self.webui_get_skills_payload()
+            return self._build_install_unit_mutation_response(
+                normalized_install_unit_id,
+                inventory_snapshot=inventory_snapshot,
+                skills_snapshot=skills_snapshot,
+                extra={
+                    "target_ids": [],
+                    "repaired_target_ids": [],
+                    "repair_results": [],
+                    "failed_targets": [],
+                    "remaining_repairable_total": 0,
+                    "remaining_repairable_target_ids": [],
+                },
+            )
+
+        repair_result = self.webui_repair_all_deploy_targets(
+            {
+                **repair_payload,
+                "target_ids": target_ids,
+            },
+        )
+        if not repair_result.get("ok"):
+            return repair_result
+
+        refreshed_detail = self.webui_get_install_unit_payload(normalized_install_unit_id)
+        refreshed_target_summary = self._summarize_related_deploy_targets(refreshed_detail)
+        self._push_debug_log(
+            "info",
+            (
+                "install unit repaired: "
+                f"install_unit={normalized_install_unit_id} targets={','.join(target_ids)} "
+                f"repaired={len(_to_str_list(repair_result.get('repaired_target_ids', [])))}"
+            ),
+            source="webui",
+        )
+        return self._build_install_unit_mutation_response(
+            normalized_install_unit_id,
+            inventory_snapshot=repair_result.get("inventory", {}),
+            skills_snapshot=repair_result.get("skills", {}),
+            extra={
+                "target_ids": target_ids,
+                "repaired_target_ids": _to_str_list(repair_result.get("repaired_target_ids", [])),
+                "repair_results": repair_result.get("results", []),
+                "failed_targets": repair_result.get("failed_targets", []),
+                "remaining_repairable_total": len(_to_str_list(refreshed_target_summary.get("repairable_target_ids", []))),
+                "remaining_repairable_target_ids": _to_str_list(refreshed_target_summary.get("repairable_target_ids", [])),
+            },
+        )
+
+    def webui_repair_collection_group(
+        self,
+        collection_group_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        repair_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_collection_group_action_context(collection_group_id)
+        if not context.get("ok"):
+            return context
+
+        target_summary = self._summarize_related_deploy_targets(context.get("detail", {}))
+        related_target_ids = _to_str_list(target_summary.get("target_ids", []))
+        requested_target_ids = [
+            target_id
+            for target_id in _to_str_list(repair_payload.get("target_ids", []))
+            if target_id in related_target_ids
+        ]
+        target_ids = requested_target_ids or related_target_ids
+
+        normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        if not target_ids:
+            inventory_snapshot = self.webui_get_inventory_payload()
+            skills_snapshot = self.webui_get_skills_payload()
+            return self._build_collection_group_mutation_response(
+                normalized_collection_group_id,
+                inventory_snapshot=inventory_snapshot,
+                skills_snapshot=skills_snapshot,
+                extra={
+                    "target_ids": [],
+                    "repaired_target_ids": [],
+                    "repair_results": [],
+                    "failed_targets": [],
+                    "remaining_repairable_total": 0,
+                    "remaining_repairable_target_ids": [],
+                },
+            )
+
+        repair_result = self.webui_repair_all_deploy_targets(
+            {
+                **repair_payload,
+                "target_ids": target_ids,
+            },
+        )
+        if not repair_result.get("ok"):
+            return repair_result
+
+        refreshed_detail = self.webui_get_collection_group_payload(normalized_collection_group_id)
+        refreshed_target_summary = self._summarize_related_deploy_targets(refreshed_detail)
+        self._push_debug_log(
+            "info",
+            (
+                "collection group repaired: "
+                f"collection_group={normalized_collection_group_id} targets={','.join(target_ids)} "
+                f"repaired={len(_to_str_list(repair_result.get('repaired_target_ids', [])))}"
+            ),
+            source="webui",
+        )
+        return self._build_collection_group_mutation_response(
+            normalized_collection_group_id,
+            inventory_snapshot=repair_result.get("inventory", {}),
+            skills_snapshot=repair_result.get("skills", {}),
+            extra={
+                "target_ids": target_ids,
+                "repaired_target_ids": _to_str_list(repair_result.get("repaired_target_ids", [])),
+                "repair_results": repair_result.get("results", []),
+                "failed_targets": repair_result.get("failed_targets", []),
+                "remaining_repairable_total": len(_to_str_list(refreshed_target_summary.get("repairable_target_ids", []))),
+                "remaining_repairable_target_ids": _to_str_list(refreshed_target_summary.get("repairable_target_ids", [])),
             },
         )
 

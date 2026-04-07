@@ -248,9 +248,25 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=status_code)
             return ret
 
+        @self.app.post("/api/skills/install-units/{install_unit_id}/repair")
+        async def skill_install_unit_repair(install_unit_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_repair_install_unit(install_unit_id, payload)
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(ret, status_code=status_code)
+            return ret
+
         @self.app.post("/api/skills/collections/{collection_group_id}/deploy")
         async def skill_collection_group_deploy(collection_group_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_deploy_collection_group(collection_group_id, payload)
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(ret, status_code=status_code)
+            return ret
+
+        @self.app.post("/api/skills/collections/{collection_group_id}/repair")
+        async def skill_collection_group_repair(collection_group_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_repair_collection_group(collection_group_id, payload)
             if not ret.get("ok"):
                 status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
                 return JSONResponse(ret, status_code=status_code)

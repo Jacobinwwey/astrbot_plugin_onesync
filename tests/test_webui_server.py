@@ -322,6 +322,32 @@ class _FakePlugin:
             "inventory": self.inventory_snapshot,
         }
 
+    def webui_repair_install_unit(self, install_unit_id: str, payload: dict) -> dict:
+        _ = payload
+        if install_unit_id != "install:skill_cli":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "repaired_target_ids": ["claude_code:global"],
+            "remaining_repairable_total": 0,
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_repair_collection_group(self, collection_group_id: str, payload: dict) -> dict:
+        _ = payload
+        if collection_group_id != "collection:cli_tools":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "repaired_target_ids": ["claude_code:global"],
+            "remaining_repairable_total": 0,
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
     def webui_get_skills_registry_payload(self) -> dict:
         return {
             "ok": True,
@@ -681,6 +707,16 @@ class WebUIServerTests(unittest.TestCase):
         self.assertTrue(group_deploy_resp.json()["ok"])
         self.assertEqual(["claude_code:global"], group_deploy_resp.json()["target_ids"])
 
+        unit_repair_resp = self.client.post("/api/skills/install-units/install%3Askill_cli/repair", json={})
+        self.assertEqual(200, unit_repair_resp.status_code)
+        self.assertTrue(unit_repair_resp.json()["ok"])
+        self.assertEqual(["claude_code:global"], unit_repair_resp.json()["repaired_target_ids"])
+
+        group_repair_resp = self.client.post("/api/skills/collections/collection%3Acli_tools/repair", json={})
+        self.assertEqual(200, group_repair_resp.status_code)
+        self.assertTrue(group_repair_resp.json()["ok"])
+        self.assertEqual(["claude_code:global"], group_repair_resp.json()["repaired_target_ids"])
+
         missing_unit_refresh_resp = self.client.post("/api/skills/install-units/missing/refresh", json={})
         self.assertEqual(404, missing_unit_refresh_resp.status_code)
         self.assertFalse(missing_unit_refresh_resp.json()["ok"])
@@ -696,6 +732,14 @@ class WebUIServerTests(unittest.TestCase):
         missing_group_sync_resp = self.client.post("/api/skills/collections/missing/sync", json={})
         self.assertEqual(404, missing_group_sync_resp.status_code)
         self.assertFalse(missing_group_sync_resp.json()["ok"])
+
+        missing_unit_repair_resp = self.client.post("/api/skills/install-units/missing/repair", json={})
+        self.assertEqual(404, missing_unit_repair_resp.status_code)
+        self.assertFalse(missing_unit_repair_resp.json()["ok"])
+
+        missing_group_repair_resp = self.client.post("/api/skills/collections/missing/repair", json={})
+        self.assertEqual(404, missing_group_repair_resp.status_code)
+        self.assertFalse(missing_group_repair_resp.json()["ok"])
 
         bad_unit_deploy_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/deploy",
