@@ -127,6 +127,19 @@ def _dedupe_keep_order(values: list[str]) -> list[str]:
     return result
 
 
+def _count_rows_by_field(rows: list[dict[str, Any]], field: str, expected: str) -> int:
+    return sum(1 for item in rows if str(item.get(field, "")).strip() == expected)
+
+
+def _count_syncable_rows(rows: list[dict[str, Any]]) -> int:
+    return sum(
+        1
+        for item in rows
+        if str(item.get("registry_package_name", "")).strip()
+        and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+    )
+
+
 def _stable_hash(payload: Any) -> str:
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
@@ -1242,14 +1255,9 @@ def build_skills_overview(
             "source_fresh_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "fresh"),
             "source_aging_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "aging"),
             "source_stale_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "stale"),
-            "source_syncable_total": sum(
-                1
-                for item in source_rows
-                if str(item.get("registry_package_name", "")).strip()
-                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
-            ),
-            "source_synced_total": sum(1 for item in source_rows if str(item.get("sync_status", "")) == "ok"),
-            "source_sync_error_total": sum(1 for item in source_rows if str(item.get("sync_status", "")) == "error"),
+            "source_syncable_total": _count_syncable_rows(source_rows),
+            "source_synced_total": _count_rows_by_field(source_rows, "sync_status", "ok"),
+            "source_sync_error_total": _count_rows_by_field(source_rows, "sync_status", "error"),
             "source_sync_pending_total": sum(
                 1
                 for item in source_rows
@@ -1259,7 +1267,37 @@ def build_skills_overview(
             ),
             "registry_total": len(registry.get("sources", [])),
             "install_unit_total": len(install_unit_rows),
+            "install_unit_ready_total": _count_rows_by_field(install_unit_rows, "status", "ready"),
+            "install_unit_missing_total": _count_rows_by_field(install_unit_rows, "status", "missing"),
+            "install_unit_fresh_total": _count_rows_by_field(install_unit_rows, "freshness_status", "fresh"),
+            "install_unit_aging_total": _count_rows_by_field(install_unit_rows, "freshness_status", "aging"),
+            "install_unit_stale_total": _count_rows_by_field(install_unit_rows, "freshness_status", "stale"),
+            "install_unit_syncable_total": _count_syncable_rows(install_unit_rows),
+            "install_unit_synced_total": _count_rows_by_field(install_unit_rows, "sync_status", "ok"),
+            "install_unit_sync_error_total": _count_rows_by_field(install_unit_rows, "sync_status", "error"),
+            "install_unit_sync_pending_total": sum(
+                1
+                for item in install_unit_rows
+                if str(item.get("registry_package_name", "")).strip()
+                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+                and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
+            ),
             "collection_group_total": len(collection_group_rows),
+            "collection_group_ready_total": _count_rows_by_field(collection_group_rows, "status", "ready"),
+            "collection_group_missing_total": _count_rows_by_field(collection_group_rows, "status", "missing"),
+            "collection_group_fresh_total": _count_rows_by_field(collection_group_rows, "freshness_status", "fresh"),
+            "collection_group_aging_total": _count_rows_by_field(collection_group_rows, "freshness_status", "aging"),
+            "collection_group_stale_total": _count_rows_by_field(collection_group_rows, "freshness_status", "stale"),
+            "collection_group_syncable_total": _count_syncable_rows(collection_group_rows),
+            "collection_group_synced_total": _count_rows_by_field(collection_group_rows, "sync_status", "ok"),
+            "collection_group_sync_error_total": _count_rows_by_field(collection_group_rows, "sync_status", "error"),
+            "collection_group_sync_pending_total": sum(
+                1
+                for item in collection_group_rows
+                if str(item.get("registry_package_name", "")).strip()
+                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+                and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
+            ),
             "host_total": len(software_hosts),
             "deploy_target_total": len(deploy_rows),
             "deploy_ready_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "ready"),
@@ -1288,6 +1326,26 @@ def build_skills_overview(
             "ok": counts.get("source_synced_total", 0),
             "error": counts.get("source_sync_error_total", 0),
             "pending": counts.get("source_sync_pending_total", 0),
+        },
+        "install_unit_health": {
+            "ready": counts.get("install_unit_ready_total", 0),
+            "missing": counts.get("install_unit_missing_total", 0),
+        },
+        "install_unit_sync": {
+            "syncable": counts.get("install_unit_syncable_total", 0),
+            "ok": counts.get("install_unit_synced_total", 0),
+            "error": counts.get("install_unit_sync_error_total", 0),
+            "pending": counts.get("install_unit_sync_pending_total", 0),
+        },
+        "collection_group_health": {
+            "ready": counts.get("collection_group_ready_total", 0),
+            "missing": counts.get("collection_group_missing_total", 0),
+        },
+        "collection_group_sync": {
+            "syncable": counts.get("collection_group_syncable_total", 0),
+            "ok": counts.get("collection_group_synced_total", 0),
+            "error": counts.get("collection_group_sync_error_total", 0),
+            "pending": counts.get("collection_group_sync_pending_total", 0),
         },
         "deploy_health": {
             "ready": counts.get("deploy_ready_total", 0),

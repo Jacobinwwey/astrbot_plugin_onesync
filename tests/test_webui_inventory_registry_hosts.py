@@ -27,6 +27,18 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("target_paths", html)
         self.assertIn("inventory_summary_registry_hosts", html)
 
+    def test_inventory_panel_doctor_summary_reads_aggregate_health(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("install_ready", html)
+        self.assertIn("install_missing", html)
+        self.assertIn("group_ready", html)
+        self.assertIn("group_missing", html)
+        self.assertIn("doctor.install_unit_health", html)
+        self.assertIn("doctor.install_unit_sync", html)
+        self.assertIn("doctor.collection_group_health", html)
+        self.assertIn("doctor.collection_group_sync", html)
+
     def test_inventory_panel_supports_aggregate_selection_rows(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
