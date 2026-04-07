@@ -2832,6 +2832,7 @@
         inventory_summary_compatible: "可部署={total} 已选择={selected}",
         inventory_summary_bindings: "绑定(有效/无效)={valid}/{invalid}",
         inventory_summary_deploy: "Deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
+        inventory_summary_registry_hosts: "Registry={registry} Hosts={hosts}",
         inventory_summary_warnings: "告警={count}",
         inventory_meta_kind: "类型",
         inventory_meta_provider: "Provider",
@@ -2839,6 +2840,8 @@
         inventory_meta_installed: "已安装",
         inventory_meta_managed: "已纳管",
         inventory_meta_linked_target: "关联目标",
+        inventory_meta_host_paths: "目标路径",
+        inventory_meta_source_supports: "支持 Source",
         inventory_meta_version_pair: "当前/最新",
         inventory_skill_meta_id: "ID",
         inventory_skill_meta_discovered: "已发现",
@@ -2846,6 +2849,9 @@
         inventory_skill_meta_members: "数量",
         inventory_skill_meta_scope: "范围",
         inventory_skill_meta_manage: "维护",
+        inventory_skill_meta_locator: "定位",
+        inventory_skill_meta_policy: "策略",
+        inventory_skill_meta_managed_by: "管理方",
         inventory_skill_meta_deployed: "部署目标",
         inventory_skill_meta_freshness: "新鲜度",
         inventory_skill_meta_age: "年龄",
@@ -2857,6 +2863,10 @@
         inventory_skill_source_auto: "自动发现",
         inventory_skill_source_manual: "手工配置",
         inventory_skill_source_bundle: "npx 聚合包",
+        inventory_skill_source_npx_bundle: "npx 聚合包",
+        inventory_skill_source_npx_single: "npx 单包",
+        inventory_skill_source_manual_local: "本地 Source",
+        inventory_skill_source_manual_git: "Git Source",
         inventory_source_sync: "同步源",
         inventory_source_syncing: "同步中",
         inventory_sync_pending: "未同步",
@@ -3209,6 +3219,7 @@
         inventory_summary_compatible: "deployable={total} selected={selected}",
         inventory_summary_bindings: "bindings(valid/invalid)={valid}/{invalid}",
         inventory_summary_deploy: "deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
+        inventory_summary_registry_hosts: "registry={registry} hosts={hosts}",
         inventory_summary_warnings: "warnings={count}",
         inventory_meta_kind: "kind",
         inventory_meta_provider: "provider",
@@ -3216,6 +3227,8 @@
         inventory_meta_installed: "installed",
         inventory_meta_managed: "managed",
         inventory_meta_linked_target: "linked_target",
+        inventory_meta_host_paths: "target_paths",
+        inventory_meta_source_supports: "source_supports",
         inventory_meta_version_pair: "current/latest",
         inventory_skill_meta_id: "id",
         inventory_skill_meta_discovered: "discovered",
@@ -3223,6 +3236,9 @@
         inventory_skill_meta_members: "members",
         inventory_skill_meta_scope: "scope",
         inventory_skill_meta_manage: "manage",
+        inventory_skill_meta_locator: "locator",
+        inventory_skill_meta_policy: "policy",
+        inventory_skill_meta_managed_by: "managed_by",
         inventory_skill_meta_deployed: "deploy",
         inventory_skill_meta_freshness: "freshness",
         inventory_skill_meta_age: "age",
@@ -3234,6 +3250,10 @@
         inventory_skill_source_auto: "auto",
         inventory_skill_source_manual: "manual",
         inventory_skill_source_bundle: "npx bundle",
+        inventory_skill_source_npx_bundle: "npx bundle",
+        inventory_skill_source_npx_single: "npx package",
+        inventory_skill_source_manual_local: "local source",
+        inventory_skill_source_manual_git: "git source",
         inventory_source_sync: "Sync Source",
         inventory_source_syncing: "Syncing",
         inventory_sync_pending: "unsynced",
@@ -4140,6 +4160,23 @@
       return mapping[key] || key.replace(/_/g, " ");
     }
 
+    function inventorySourceKindLabel(item) {
+      const key = String(item && (item.source_kind || item.skill_kind) || "skill").trim().toLowerCase();
+      const mapping = {
+        skill_bundle: t("inventory_skill_source_npx_bundle"),
+        npx_bundle: t("inventory_skill_source_npx_bundle"),
+        npx_single: t("inventory_skill_source_npx_single"),
+        manual_local: t("inventory_skill_source_manual_local"),
+        manual_git: t("inventory_skill_source_manual_git"),
+      };
+      if (mapping[key]) {
+        return mapping[key];
+      }
+      return item && item.auto_discovered
+        ? t("inventory_skill_source_auto")
+        : t("inventory_skill_source_manual");
+    }
+
     function inventoryTargetDriftNotes(targetRow) {
       if (!targetRow || typeof targetRow !== "object") return [];
       const notes = [];
@@ -4340,6 +4377,12 @@
         : kindFilteredRows.filter((item) => Boolean(item.installed));
       const counts = overview.counts || {};
       const warnings = Array.isArray(overview.warnings) ? overview.warnings : [];
+      const hostRows = Array.isArray(overview.host_rows) ? overview.host_rows : [];
+      const hostIndex = Object.fromEntries(
+        hostRows
+          .map((item) => [String(item.host_id || item.id || "").trim(), item])
+          .filter(([hostId]) => Boolean(hostId)),
+      );
       const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
       const deployRows = Array.isArray(overview.deploy_rows) ? overview.deploy_rows : [];
       const visibleDeployRows = deployRows.filter((item) => {
@@ -4386,6 +4429,10 @@
             : [];
           const previewText = preview.length ? preview.join(", ") : (item.source_path || "-");
           const managementHint = String(item.management_hint || "").trim();
+          const sourceKind = inventorySourceKindLabel(item);
+          const locator = String(item.locator || item.source_path || "-").trim() || "-";
+          const updatePolicy = String(item.update_policy || "-").trim() || "-";
+          const managedBy = String(item.managed_by || "-").trim() || "-";
           return `
             <div class="inventory-source-item">
               <div class="title">
@@ -4410,6 +4457,12 @@ ${escapeHtml(t("inventory_skill_meta_id"))}: ${escapeHtml(sourceId)}
  | ${escapeHtml(t("inventory_skill_meta_members"))}: ${escapeHtml(memberCount)}
  | ${escapeHtml(t("inventory_skill_meta_scope"))}: ${escapeHtml(item.source_scope || "-")}
  | ${escapeHtml(t("inventory_skill_meta_deployed"))}: ${escapeHtml(deployedCount)}
+              </div>
+              <div class="meta">
+${escapeHtml(t("inventory_skill_meta_source"))}: ${escapeHtml(sourceKind)}
+ | ${escapeHtml(t("inventory_skill_meta_locator"))}: ${escapeHtml(locator)}
+ | ${escapeHtml(t("inventory_skill_meta_policy"))}: ${escapeHtml(updatePolicy)}
+ | ${escapeHtml(t("inventory_skill_meta_managed_by"))}: ${escapeHtml(managedBy)}
               </div>
               <div class="meta">
 ${escapeHtml(t("inventory_skill_meta_freshness"))}: ${escapeHtml(freshnessStatus)}
@@ -4531,6 +4584,9 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
 
       const selectedSoftware = softwareRows.find((item) => item.id === state.inventorySelectedSoftwareId) || softwareRows[0];
       const selectedSoftwareId = String(selectedSoftware.id || "");
+      const selectedHost = hostIndex[selectedSoftwareId] && typeof hostIndex[selectedSoftwareId] === "object"
+        ? hostIndex[selectedSoftwareId]
+        : {};
       const currentTargetId = `${selectedSoftwareId}:${bindingScope}`;
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
@@ -4581,6 +4637,17 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         `;
       }).join("");
 
+      const hostTargetPaths = selectedHost.target_paths && typeof selectedHost.target_paths === "object"
+        ? Object.entries(selectedHost.target_paths)
+          .map(([scope, path]) => {
+            const pathText = String(path || "").trim();
+            return pathText ? `${scope}=${pathText}` : "";
+          })
+          .filter(Boolean)
+        : [];
+      const supportedSourceKinds = Array.isArray(selectedHost.supports_source_kinds)
+        ? selectedHost.supports_source_kinds.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
       const softMetaLines = [
         `${t("inventory_meta_kind")}: ${selectedSoftware.software_kind || "-"}`,
         `${t("inventory_meta_provider")}: ${selectedSoftware.provider_key || "-"}`,
@@ -4589,6 +4656,8 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         `${t("inventory_meta_managed")}: ${selectedSoftware.managed ? t("yes") : t("no")}`,
         `${t("inventory_meta_linked_target")}: ${selectedSoftware.linked_target_name || "-"}`,
         `${t("inventory_meta_version_pair")}: ${selectedSoftware.current_version || "-"} / ${selectedSoftware.latest_version || "-"}`,
+        `${t("inventory_meta_host_paths")}: ${hostTargetPaths.length ? hostTargetPaths.join(" | ") : "-"}`,
+        `${t("inventory_meta_source_supports")}: ${supportedSourceKinds.length ? supportedSourceKinds.join(", ") : "-"}`,
       ];
       metaEl.textContent = softMetaLines.join("\n");
 
@@ -4718,13 +4787,11 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const syncCheckedAt = String(item.sync_checked_at || "-").trim() || "-";
           const syncMessage = String(item.sync_message || "").trim();
           const syncing = Array.isArray(state.inventorySyncingSourceIds) && state.inventorySyncingSourceIds.includes(sourceId);
-          const sourceKindValue = String(item.source_kind || item.skill_kind || "skill").trim().toLowerCase();
-          const sourceKind = sourceKindValue === "skill_bundle"
-            ? t("inventory_skill_source_bundle")
-            : item.auto_discovered
-            ? t("inventory_skill_source_auto")
-            : t("inventory_skill_source_manual");
+          const sourceKind = inventorySourceKindLabel(item);
           const sourcePath = item.source_path || "-";
+          const locator = String(item.locator || sourcePath || "-").trim() || "-";
+          const updatePolicy = String(item.update_policy || "-").trim() || "-";
+          const managedBy = String(item.managed_by || "-").trim() || "-";
           const memberCount = Number(item.member_count) || 1;
           const scope = String(item.source_scope || "-");
           const managementHint = String(item.management_hint || "").trim();
@@ -4760,6 +4827,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
               </div>
               <div class="meta">
                 ${t("inventory_skill_meta_id")}=${escapeHtml(sourceId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
+              </div>
+              <div class="meta">
+                ${t("inventory_skill_meta_locator")}=${escapeHtml(locator)} | ${t("inventory_skill_meta_policy")}=${escapeHtml(updatePolicy)} | ${t("inventory_skill_meta_managed_by")}=${escapeHtml(managedBy)}
               </div>
               <div class="meta">
                 ${t("inventory_skill_meta_freshness")}=${escapeHtml(freshnessStatus)} | ${t("inventory_skill_meta_age")}=${escapeHtml(sourceAge)} | ${t("inventory_skill_meta_last_seen")}=${escapeHtml(lastSeen)}
@@ -4805,6 +4875,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           ok: counts.source_synced_total || 0,
           error: counts.source_sync_error_total || 0,
           pending: counts.source_sync_pending_total || 0,
+        }),
+        t("inventory_summary_registry_hosts", {
+          registry: counts.registry_total || sourceRows.length,
+          hosts: counts.host_total || hostRows.length,
         }),
         t("inventory_summary_compatible", {
           total: state.inventoryVisibleCompatibleSkillIds.length,

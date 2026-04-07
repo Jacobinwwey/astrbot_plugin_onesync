@@ -107,6 +107,20 @@ class _FakePlugin:
         self.skills_snapshot = {
             "ok": True,
             "generated_at": "2026-04-06T08:00:00+00:00",
+            "registry": {
+                "version": 1,
+                "generated_at": "2026-04-06T08:00:00+00:00",
+                "sources": [
+                    {
+                        "source_id": "skill_cli",
+                        "display_name": "CLI Skill",
+                        "source_kind": "manual_local",
+                        "locator": "/tmp/skill_cli",
+                        "source_scope": "global",
+                        "last_refresh_at": "2026-04-06T08:00:00+00:00",
+                    },
+                ],
+            },
             "source_rows": [
                 {
                     "source_id": "skill_cli",
@@ -137,6 +151,14 @@ class _FakePlugin:
                 {
                     "id": "claude_code",
                     "display_name": "Claude Code",
+                },
+            ],
+            "host_rows": [
+                {
+                    "host_id": "claude_code",
+                    "display_name": "Claude Code",
+                    "kind": "cli",
+                    "supports_source_kinds": ["npx_bundle", "npx_single", "manual_local", "manual_git"],
                 },
             ],
             "doctor": {"ok": True, "warning_count": 0, "warnings": []},
@@ -174,6 +196,24 @@ class _FakePlugin:
             "warnings": [],
         }
 
+    def webui_get_skills_registry_payload(self) -> dict:
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "counts": {"registry_total": 1},
+            "items": self.skills_snapshot["registry"]["sources"],
+            "warnings": [],
+        }
+
+    def webui_get_skills_hosts_payload(self) -> dict:
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "counts": {"host_total": 1},
+            "items": self.skills_snapshot["host_rows"],
+            "warnings": [],
+        }
+
     async def webui_scan_inventory(self) -> dict:
         return self.inventory_snapshot
 
@@ -182,6 +222,46 @@ class _FakePlugin:
 
     def webui_sync_skill_source(self, source_id: str) -> dict:
         return self.webui_get_skill_source_payload(source_id)
+
+    def webui_register_skill_source(self, payload: dict) -> dict:
+        if not str(payload.get("locator", "")).strip():
+            return {"ok": False, "message": "locator is required"}
+        return {
+            "ok": True,
+            "source": {
+                "source_id": "manual_local_demo",
+                "display_name": "Manual Local Demo",
+                "source_kind": "manual_local",
+                "locator": str(payload.get("locator")),
+            },
+            "registry": self.skills_snapshot["registry"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_refresh_skill_registry_source(self, source_id: str, payload: dict) -> dict:
+        _ = payload
+        if source_id != "skill_cli":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "source": self.skills_snapshot["registry"]["sources"][0],
+            "registry": self.skills_snapshot["registry"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_remove_skill_source(self, source_id: str, payload: dict) -> dict:
+        _ = payload
+        if source_id != "skill_cli":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "removed_source_id": source_id,
+            "registry": {"version": 1, "generated_at": self.skills_snapshot["generated_at"], "sources": []},
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
 
     def webui_sync_all_skill_sources(self) -> dict:
         return {
@@ -374,6 +454,14 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, overview_resp.status_code)
         self.assertEqual(1, overview_resp.json()["counts"]["source_total"])
 
+        registry_resp = self.client.get("/api/skills/registry")
+        self.assertEqual(200, registry_resp.status_code)
+        self.assertEqual("skill_cli", registry_resp.json()["items"][0]["source_id"])
+
+        hosts_resp = self.client.get("/api/skills/hosts")
+        self.assertEqual(200, hosts_resp.status_code)
+        self.assertEqual("claude_code", hosts_resp.json()["items"][0]["host_id"])
+
         sources_resp = self.client.get("/api/skills/sources")
         self.assertEqual(200, sources_resp.status_code)
         self.assertEqual("skill_cli", sources_resp.json()["items"][0]["source_id"])
@@ -396,9 +484,41 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, import_resp.status_code)
         self.assertTrue(import_resp.json()["ok"])
 
+        register_resp = self.client.post(
+            "/api/skills/sources/register",
+            json={"source_kind": "manual_local", "locator": "/tmp/demo-skills"},
+        )
+        self.assertEqual(200, register_resp.status_code)
+        self.assertTrue(register_resp.json()["ok"])
+        self.assertEqual("manual_local_demo", register_resp.json()["source"]["source_id"])
+
+        bad_register_resp = self.client.post(
+            "/api/skills/sources/register",
+            json={"source_kind": "manual_local"},
+        )
+        self.assertEqual(400, bad_register_resp.status_code)
+        self.assertFalse(bad_register_resp.json()["ok"])
+
         sync_resp = self.client.post("/api/skills/sources/skill_cli/sync", json={})
         self.assertEqual(200, sync_resp.status_code)
         self.assertTrue(sync_resp.json()["ok"])
+
+        refresh_resp = self.client.post("/api/skills/sources/skill_cli/refresh", json={})
+        self.assertEqual(200, refresh_resp.status_code)
+        self.assertTrue(refresh_resp.json()["ok"])
+
+        bad_refresh_resp = self.client.post("/api/skills/sources/missing/refresh", json={})
+        self.assertEqual(404, bad_refresh_resp.status_code)
+        self.assertFalse(bad_refresh_resp.json()["ok"])
+
+        remove_resp = self.client.post("/api/skills/sources/skill_cli/remove", json={})
+        self.assertEqual(200, remove_resp.status_code)
+        self.assertTrue(remove_resp.json()["ok"])
+        self.assertEqual("skill_cli", remove_resp.json()["removed_source_id"])
+
+        bad_remove_resp = self.client.post("/api/skills/sources/missing/remove", json={})
+        self.assertEqual(404, bad_remove_resp.status_code)
+        self.assertFalse(bad_remove_resp.json()["ok"])
 
         sync_all_resp = self.client.post("/api/skills/sources/sync-all", json={})
         self.assertEqual(200, sync_all_resp.status_code)

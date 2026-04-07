@@ -8,6 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from .skills_hosts_core import build_host_adapters, resolve_host_target_path
+    from .skills_sources_core import build_skills_registry
+except ImportError:  # pragma: no cover - direct test imports
+    from skills_hosts_core import build_host_adapters, resolve_host_target_path
+    from skills_sources_core import build_skills_registry
+
 VALID_DEPLOY_SCOPES = ("global", "workspace")
 
 
@@ -95,17 +102,6 @@ def _normalize_scope(value: Any, default: str = "global") -> str:
     if scope not in VALID_DEPLOY_SCOPES:
         scope = default
     return scope
-
-
-def _preferred_target_path(software: dict[str, Any], scope: str) -> str:
-    resolved_roots = _to_str_list(software.get("resolved_skill_roots", []))
-    declared_roots = _to_str_list(software.get("declared_skill_roots", []))
-    candidates = resolved_roots or declared_roots
-    if not candidates:
-        return ""
-    if scope == "workspace" and len(candidates) > 1:
-        return candidates[1]
-    return candidates[0]
 
 
 def _target_path_exists(target_path: str) -> bool:
@@ -227,10 +223,34 @@ def manifest_to_binding_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _source_matches_host(
+    source: dict[str, Any],
+    host: dict[str, Any],
+    compatibility: dict[str, Any] | None = None,
+) -> bool:
+    host_id = str(host.get("host_id") or host.get("id") or "").strip()
+    host_family = str(host.get("family") or host.get("software_family") or host_id).strip()
+    compatible_ids = set(_dedupe_keep_order(_to_str_list(source.get("compatible_software_ids", []))))
+    if compatible_ids:
+        return host_id in compatible_ids
+
+    compatible_families = set(_dedupe_keep_order(_to_str_list(source.get("compatible_software_families", []))))
+    if compatible_families:
+        return host_family in compatible_families or host_id in compatible_families
+
+    compat_map = compatibility if isinstance(compatibility, dict) else {}
+    if host_id and host_id in compat_map:
+        return str(source.get("source_id", "")).strip() in set(_to_str_list(compat_map.get(host_id, [])))
+    return True
+
+
 def build_skills_manifest(
     inventory_snapshot: dict[str, Any],
     *,
     saved_manifest: dict[str, Any] | None = None,
+    saved_registry: dict[str, Any] | None = None,
+    registry: dict[str, Any] | None = None,
+    host_rows: list[dict[str, Any]] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
@@ -250,6 +270,11 @@ def build_skills_manifest(
     compatibility = compatibility_raw if isinstance(compatibility_raw, dict) else {}
     binding_map_by_scope_raw = inventory_snapshot.get("binding_map_by_scope", {})
     binding_map_by_scope = binding_map_by_scope_raw if isinstance(binding_map_by_scope_raw, dict) else {}
+    runtime_registry = registry if isinstance(registry, dict) else build_skills_registry(
+        skill_rows,
+        saved_registry=saved_registry,
+        generated_at=ts,
+    )
 
     compatible_hosts_by_source: dict[str, list[str]] = {}
     for software_id, skill_ids in compatibility.items():
@@ -257,52 +282,43 @@ def build_skills_manifest(
         for skill_id in _to_str_list(skill_ids):
             compatible_hosts_by_source.setdefault(skill_id, []).append(host_id)
 
-    software_hosts: list[dict[str, Any]] = []
-    for item in software_rows:
-        software_id = str(item.get("id", "")).strip()
-        if not software_id:
-            continue
-        software_hosts.append(
-            {
-                "id": software_id,
-                "display_name": str(item.get("display_name") or software_id),
-                "software_kind": str(item.get("software_kind") or "other"),
-                "software_family": str(item.get("software_family") or software_id),
-                "provider_key": str(item.get("provider_key") or "generic"),
-                "enabled": _to_bool(item.get("enabled", True), True),
-                "installed": _to_bool(item.get("installed", False), False),
-                "managed": _to_bool(item.get("managed", False), False),
-                "linked_target_name": str(item.get("linked_target_name") or ""),
-                "compatible_source_ids": _dedupe_keep_order(_to_str_list(compatibility.get(software_id, []))),
-                "declared_skill_roots": _to_str_list(item.get("declared_skill_roots", [])),
-                "resolved_skill_roots": _to_str_list(item.get("resolved_skill_roots", [])),
-            },
-        )
+    software_hosts = [
+        copy.deepcopy(item)
+        for item in (host_rows if isinstance(host_rows, list) else build_host_adapters(software_rows))
+        if isinstance(item, dict)
+    ]
 
     sources: list[dict[str, Any]] = []
-    for item in skill_rows:
-        source_id = str(item.get("id", "")).strip()
+    for item in runtime_registry.get("sources", []):
+        source_id = str(item.get("source_id", "")).strip()
         if not source_id:
             continue
-        compatible_hosts = _dedupe_keep_order(compatible_hosts_by_source.get(source_id, []))
+        compatible_hosts = _dedupe_keep_order(
+            compatible_hosts_by_source.get(source_id, [])
+            or _to_str_list(item.get("compatible_software_ids", [])),
+        )
         saved_source = saved_source_index.get(source_id, {})
         sources.append(
             {
                 "source_id": source_id,
                 "display_name": str(item.get("display_name") or saved_source.get("display_name") or source_id),
-                "source_kind": str(item.get("skill_kind") or saved_source.get("source_kind") or "skill"),
+                "source_kind": str(item.get("source_kind") or saved_source.get("source_kind") or "skill"),
                 "provider_key": str(item.get("provider_key") or saved_source.get("provider_key") or "generic"),
                 "enabled": _to_bool(saved_source.get("enabled", item.get("enabled", True)), True),
-                "discovered": _to_bool(item.get("discovered", False), False),
-                "auto_discovered": _to_bool(item.get("auto_discovered", False), False),
+                "discovered": _to_bool(item.get("discovered", saved_source.get("discovered", False)), False),
+                "auto_discovered": _to_bool(item.get("auto_discovered", saved_source.get("auto_discovered", False)), False),
                 "source_scope": str(item.get("source_scope") or saved_source.get("source_scope") or "global"),
                 "source_path": str(item.get("source_path") or saved_source.get("source_path") or ""),
+                "locator": str(item.get("locator") or saved_source.get("locator") or ""),
+                "managed_by": str(item.get("managed_by") or saved_source.get("managed_by") or ""),
+                "update_policy": str(item.get("update_policy") or saved_source.get("update_policy") or ""),
                 "member_count": _to_int(item.get("member_count", saved_source.get("member_count", 1)), 1, 1),
                 "member_skill_preview": _to_str_list(item.get("member_skill_preview", []) or saved_source.get("member_skill_preview", [])),
                 "member_skill_overflow": _to_int(item.get("member_skill_overflow", saved_source.get("member_skill_overflow", 0)), 0, 0),
                 "management_hint": str(item.get("management_hint") or saved_source.get("management_hint") or ""),
                 "source_exists": _to_bool(item.get("source_exists", saved_source.get("source_exists", False)), False),
                 "last_seen_at": str(item.get("last_seen_at") or saved_source.get("last_seen_at") or ""),
+                "last_refresh_at": str(item.get("last_refresh_at") or saved_source.get("last_refresh_at") or ""),
                 "source_age_days": (
                     _to_int(item.get("source_age_days", saved_source.get("source_age_days")), 0)
                     if item.get("source_age_days", saved_source.get("source_age_days")) is not None
@@ -340,12 +356,16 @@ def build_skills_manifest(
                 "auto_discovered": _to_bool(saved_source.get("auto_discovered", False), False),
                 "source_scope": str(saved_source.get("source_scope") or "global"),
                 "source_path": str(saved_source.get("source_path") or ""),
+                "locator": str(saved_source.get("locator") or ""),
+                "managed_by": str(saved_source.get("managed_by") or ""),
+                "update_policy": str(saved_source.get("update_policy") or ""),
                 "member_count": _to_int(saved_source.get("member_count", 1), 1, 1),
                 "member_skill_preview": _to_str_list(saved_source.get("member_skill_preview", [])),
                 "member_skill_overflow": _to_int(saved_source.get("member_skill_overflow", 0), 0, 0),
                 "management_hint": str(saved_source.get("management_hint") or ""),
                 "source_exists": _to_bool(saved_source.get("source_exists", False), False),
                 "last_seen_at": str(saved_source.get("last_seen_at") or ""),
+                "last_refresh_at": str(saved_source.get("last_refresh_at") or ""),
                 "source_age_days": (
                     _to_int(saved_source.get("source_age_days"), 0)
                     if saved_source.get("source_age_days") is not None
@@ -370,7 +390,7 @@ def build_skills_manifest(
 
     deploy_targets: list[dict[str, Any]] = []
     for host in software_hosts:
-        software_id = str(host.get("id", ""))
+        software_id = str(host.get("host_id") or host.get("id") or "")
         for scope in VALID_DEPLOY_SCOPES:
             target_id = f"{software_id}:{scope}"
             selected_from_inventory = _dedupe_keep_order(
@@ -386,14 +406,18 @@ def build_skills_manifest(
                     "target_id": target_id,
                     "software_id": software_id,
                     "software_display_name": str(host.get("display_name") or software_id),
-                    "software_family": str(host.get("software_family") or software_id),
+                    "software_family": str(host.get("family") or host.get("software_family") or software_id),
                     "provider_key": str(host.get("provider_key") or "generic"),
                     "scope": scope,
                     "installed": _to_bool(host.get("installed", False), False),
                     "managed": _to_bool(host.get("managed", False), False),
                     "linked_target_name": str(host.get("linked_target_name") or ""),
-                    "target_path": _preferred_target_path(host, scope),
-                    "available_source_ids": _dedupe_keep_order(_to_str_list(host.get("compatible_source_ids", []))),
+                    "target_path": resolve_host_target_path(host, scope),
+                    "available_source_ids": [
+                        str(source.get("source_id", "")).strip()
+                        for source in sources
+                        if _source_matches_host(source, host, compatibility)
+                    ],
                     "selected_source_ids": selected_ids,
                 },
             )
@@ -539,10 +563,30 @@ def build_skills_overview(
     inventory_snapshot: dict[str, Any],
     *,
     saved_manifest: dict[str, Any] | None = None,
+    saved_registry: dict[str, Any] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
-    manifest = build_skills_manifest(inventory_snapshot, saved_manifest=saved_manifest, generated_at=ts)
+    software_rows = [
+        copy.deepcopy(item)
+        for item in inventory_snapshot.get("software_rows", [])
+        if isinstance(item, dict)
+    ]
+    skill_rows = [
+        copy.deepcopy(item)
+        for item in inventory_snapshot.get("skill_rows", [])
+        if isinstance(item, dict)
+    ]
+    host_rows = build_host_adapters(software_rows)
+    registry = build_skills_registry(skill_rows, saved_registry=saved_registry, generated_at=ts)
+    manifest = build_skills_manifest(
+        inventory_snapshot,
+        saved_manifest=saved_manifest,
+        saved_registry=saved_registry,
+        registry=registry,
+        host_rows=host_rows,
+        generated_at=ts,
+    )
     lock = build_skills_lock(manifest, inventory_snapshot, generated_at=ts)
 
     source_rows = [
@@ -557,7 +601,7 @@ def build_skills_overview(
     ]
     software_hosts = [
         copy.deepcopy(item)
-        for item in manifest.get("software_hosts", [])
+        for item in host_rows
         if isinstance(item, dict)
     ]
 
@@ -596,14 +640,13 @@ def build_skills_overview(
     compatibility_raw = inventory_snapshot.get("compatibility", {})
     compatibility = compatibility_raw if isinstance(compatibility_raw, dict) else {}
     for host in software_hosts:
-        software_id = str(host.get("id", "")).strip()
+        software_id = str(host.get("host_id") or host.get("id", "")).strip()
         if not software_id:
             continue
-        compatible_ids = set(_to_str_list(compatibility.get(software_id, [])))
         compatible_source_rows_by_software[software_id] = [
             copy.deepcopy(item)
             for item in source_rows
-            if str(item.get("source_id", "")).strip() in compatible_ids
+            if _source_matches_host(item, host, compatibility)
         ]
 
     inventory_counts = inventory_snapshot.get("counts", {})
@@ -611,7 +654,11 @@ def build_skills_overview(
     counts.update(
         {
             "source_total": len(source_rows),
-            "source_bundle_total": sum(1 for item in source_rows if str(item.get("source_kind", "")) == "skill_bundle"),
+            "source_bundle_total": sum(
+                1
+                for item in source_rows
+                if str(item.get("source_kind", "")) in {"skill_bundle", "npx_bundle"}
+            ),
             "source_missing_total": sum(1 for item in source_rows if str(item.get("status", "")) == "missing"),
             "source_fresh_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "fresh"),
             "source_aging_total": sum(1 for item in source_rows if str(item.get("freshness_status", "")) == "aging"),
@@ -631,6 +678,8 @@ def build_skills_overview(
                 and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
+            "registry_total": len(registry.get("sources", [])),
+            "host_total": len(software_hosts),
             "deploy_target_total": len(deploy_rows),
             "deploy_ready_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "ready"),
             "deploy_idle_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "idle"),
@@ -673,6 +722,8 @@ def build_skills_overview(
         "generated_at": ts,
         "manifest": manifest,
         "lock": lock,
+        "registry": registry,
+        "host_rows": software_hosts,
         "software_hosts": software_hosts,
         "source_rows": source_rows,
         "deploy_rows": deploy_rows,

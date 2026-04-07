@@ -138,7 +138,7 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(4, len(manifest["deploy_targets"]))
 
         compound = next(item for item in manifest["sources"] if item["source_id"] == "npx_bundle_compound_engineering_global")
-        self.assertEqual("skill_bundle", compound["source_kind"])
+        self.assertEqual("npx_bundle", compound["source_kind"])
         self.assertEqual(["codex"], compound["compatible_software_ids"])
 
         codex_global = next(item for item in manifest["deploy_targets"] if item["target_id"] == "codex:global")
@@ -428,6 +428,41 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("stale", lock_target["status"])
         self.assertEqual("missing_source", lock_target["drift_status"])
         self.assertIn("retired_bundle", lock_target["missing_source_ids"])
+
+    def test_build_skills_overview_exposes_registry_and_host_rows(self) -> None:
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/demo/skills.git",
+                    "source_scope": "global",
+                    "provider_key": "manual",
+                    "compatible_software_ids": ["codex"],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
+
+        self.assertIn("registry", overview)
+        self.assertIn("host_rows", overview)
+        self.assertEqual(3, len(overview["registry"]["sources"]))
+
+        manual_git = next(
+            item
+            for item in overview["registry"]["sources"]
+            if item["source_id"] == "manual_git_demo"
+        )
+        self.assertEqual("manual_git", manual_git["source_kind"])
+        self.assertEqual(["codex"], manual_git["compatible_software_ids"])
+
+        codex = next(item for item in overview["host_rows"] if item["host_id"] == "codex")
+        self.assertEqual("cli", codex["kind"])
+        self.assertEqual(["npx_bundle", "npx_single", "manual_local", "manual_git"], codex["supports_source_kinds"])
 
     def test_manifest_to_binding_rows_projects_selected_sources(self) -> None:
         manifest = build_skills_manifest(self.inventory_snapshot)

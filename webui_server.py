@@ -122,6 +122,14 @@ class OneSyncWebUIServer:
         async def skills_overview():
             return self.plugin.webui_get_skills_payload()
 
+        @self.app.get("/api/skills/registry")
+        async def skills_registry():
+            return self.plugin.webui_get_skills_registry_payload()
+
+        @self.app.get("/api/skills/hosts")
+        async def skills_hosts():
+            return self.plugin.webui_get_skills_hosts_payload()
+
         @self.app.get("/api/skills/sources")
         async def skills_sources():
             return self.plugin.webui_get_skill_sources_payload()
@@ -143,6 +151,27 @@ class OneSyncWebUIServer:
         @self.app.post("/api/skills/import")
         async def skills_import(payload: dict[str, Any]):
             return await self.plugin.webui_import_skills(payload)
+
+        @self.app.post("/api/skills/sources/register")
+        async def skill_source_register(payload: dict[str, Any]):
+            ret = self.plugin.webui_register_skill_source(payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=400)
+            return ret
+
+        @self.app.post("/api/skills/sources/{source_id}/refresh")
+        async def skill_source_refresh(source_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_refresh_skill_registry_source(source_id, payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
+        @self.app.post("/api/skills/sources/{source_id}/remove")
+        async def skill_source_remove(source_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_remove_skill_source(source_id, payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
 
         @self.app.post("/api/skills/sources/{source_id}/sync")
         async def skill_source_sync(source_id: str, payload: dict[str, Any]):
