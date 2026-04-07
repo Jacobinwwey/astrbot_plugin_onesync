@@ -29,6 +29,11 @@
       --row-pad-y: 8px;
       --row-pad-x: 10px;
       --font-size: 13px;
+      --inventory-card-font-size: 12px;
+      --inventory-card-title-size: 13px;
+      --inventory-card-min-height: 100px;
+      --inventory-card-max-width: 100%;
+      --inventory-card-gap: 8px;
     }
 
     [data-theme="light"] {
@@ -911,6 +916,91 @@
       gap: 8px;
     }
 
+    .inventory-control-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-hidden-select {
+      display: none !important;
+    }
+
+    .inventory-segment-block {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .inventory-segment-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .inventory-segmented {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+
+    .inventory-segmented button {
+      min-width: 0;
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 10px;
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .inventory-segmented button.active {
+      background: color-mix(in srgb, var(--accent) 18%, var(--input));
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+      font-weight: 700;
+    }
+
+    .inventory-display-settings {
+      margin: 8px 0 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
+      overflow: hidden;
+    }
+
+    .inventory-display-settings summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 9px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      user-select: none;
+    }
+
+    .inventory-display-settings summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .inventory-display-settings[open] summary {
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+      background: color-mix(in srgb, var(--panel-strong) 68%, transparent);
+    }
+
+    .inventory-display-settings-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      padding: 10px 12px 12px;
+    }
+
     .inventory-workspace-actions {
       display: flex;
       align-items: center;
@@ -1311,14 +1401,18 @@
     .inventory-source-rows,
     .inventory-deploy-rows {
       display: grid;
-      gap: 8px;
+      gap: var(--inventory-card-gap);
+      grid-template-columns: 1fr;
     }
 
     .inventory-source-item,
     .inventory-deploy-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
       border-radius: 10px;
-      padding: 10px;
+      padding: 9px 10px;
+      min-height: var(--inventory-card-min-height);
+      max-width: var(--inventory-card-max-width);
+      width: 100%;
       background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
     }
 
@@ -1346,7 +1440,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 12px;
+      font-size: var(--inventory-card-title-size);
       font-weight: 700;
       margin-bottom: 6px;
     }
@@ -1370,16 +1464,32 @@
     .inventory-source-sync-btn {
       min-width: 0;
       padding: 4px 8px;
-      font-size: 11px;
+      font-size: calc(var(--inventory-card-font-size) - 1px);
       border-radius: 999px;
     }
 
     .inventory-source-item .meta,
     .inventory-deploy-item .meta {
       color: var(--muted);
-      font-size: 11px;
+      font-size: var(--inventory-card-font-size);
       line-height: 1.5;
       white-space: pre-wrap;
+    }
+
+    body[data-inventory-card-view="double"] .inventory-source-rows,
+    body[data-inventory-card-view="double"] .inventory-deploy-rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body[data-inventory-card-view="list"] .inventory-source-rows,
+    body[data-inventory-card-view="list"] .inventory-deploy-rows {
+      gap: 6px;
+    }
+
+    body[data-inventory-card-view="list"] .inventory-source-item,
+    body[data-inventory-card-view="list"] .inventory-deploy-item {
+      padding: 7px 9px;
+      min-height: calc(var(--inventory-card-min-height) - 16px);
     }
 
     .skills-status-badge {
@@ -1523,10 +1633,17 @@
       .cfg-row {
         grid-template-columns: 1fr;
       }
+      .inventory-display-settings-grid {
+        grid-template-columns: 1fr 1fr;
+      }
       .inventory-grid {
         grid-template-columns: 1fr;
       }
       .skills-secondary-grid {
+        grid-template-columns: 1fr;
+      }
+      body[data-inventory-card-view="double"] .inventory-source-rows,
+      body[data-inventory-card-view="double"] .inventory-deploy-rows {
         grid-template-columns: 1fr;
       }
       .inventory-software-rows {
@@ -1641,6 +1758,43 @@
             </div>
           </div>
           <p class="inventory-summary" id="inventorySummary">正在加载资产信息...</p>
+          <details class="inventory-display-settings" id="inventoryDisplaySettings">
+            <summary id="inventoryDisplaySettingsSummary">面板设置</summary>
+            <div class="inventory-display-settings-grid">
+              <div class="inventory-segment-block">
+                <span class="inventory-segment-label" id="inventoryViewModeLabel">面板视图</span>
+                <div class="inventory-segmented" id="inventoryPanelViewTabs">
+                  <button type="button" id="inventoryViewModeSingle" data-inventory-view="single">单列卡片</button>
+                  <button type="button" id="inventoryViewModeDouble" data-inventory-view="double">双列卡片</button>
+                  <button type="button" id="inventoryViewModeList" data-inventory-view="list">紧凑列表</button>
+                </div>
+              </div>
+              <label class="cfg-label">
+                <span id="inventoryCardFontSizeLabel">字体大小</span>
+                <select id="inventoryCardFontSizeSelect">
+                  <option value="sm" id="inventoryCardFontOptSm">小</option>
+                  <option value="md" id="inventoryCardFontOptMd" selected>标准</option>
+                  <option value="lg" id="inventoryCardFontOptLg">大</option>
+                </select>
+              </label>
+              <label class="cfg-label">
+                <span id="inventoryCardWidthLabel">卡片宽度</span>
+                <select id="inventoryCardWidthSelect">
+                  <option value="narrow" id="inventoryCardWidthOptNarrow">紧凑</option>
+                  <option value="standard" id="inventoryCardWidthOptStandard" selected>标准</option>
+                  <option value="wide" id="inventoryCardWidthOptWide">宽展</option>
+                </select>
+              </label>
+              <label class="cfg-label">
+                <span id="inventoryCardHeightLabel">卡片高度</span>
+                <select id="inventoryCardHeightSelect">
+                  <option value="compact" id="inventoryCardHeightOptCompact">紧凑</option>
+                  <option value="standard" id="inventoryCardHeightOptStandard" selected>标准</option>
+                  <option value="tall" id="inventoryCardHeightOptTall">舒展</option>
+                </select>
+              </label>
+            </div>
+          </details>
           <div class="inventory-grid">
             <div class="inventory-software-rail">
               <div class="inventory-controls">
@@ -1648,13 +1802,17 @@
                   <span id="inventorySoftwareLabel">选择软件</span>
                   <select id="inventorySoftwareSelect"></select>
                 </label>
-                <label class="cfg-label">
-                  <span id="inventoryScopeLabel">绑定范围</span>
-                  <select id="inventoryScopeSelect">
+                <div class="inventory-segment-block">
+                  <span class="inventory-segment-label" id="inventoryScopeLabel">绑定范围</span>
+                  <div class="inventory-segmented" id="inventoryScopeTabs">
+                    <button type="button" id="inventoryScopeTabGlobal" data-inventory-scope="global">全局</button>
+                    <button type="button" id="inventoryScopeTabWorkspace" data-inventory-scope="workspace">工作区</button>
+                  </div>
+                  <select id="inventoryScopeSelect" class="inventory-hidden-select" aria-hidden="true" tabindex="-1">
                     <option value="global" id="inventoryScopeOptGlobal">全局</option>
                     <option value="workspace" id="inventoryScopeOptWorkspace">工作区</option>
                   </select>
-                </label>
+                </div>
               </div>
               <div class="inventory-soft-meta" id="inventorySoftwareMeta">-</div>
               <div class="inventory-filter-tools">
@@ -2158,6 +2316,10 @@
       inventoryOverview: null,
       inventorySelectedSoftwareId: "",
       inventorySelectedScope: "global",
+      inventoryCardView: "double",
+      inventoryCardFontSize: "md",
+      inventoryCardWidth: "standard",
+      inventoryCardHeight: "compact",
       inventoryKindFilter: "all",
       inventoryShowUninstalled: false,
       inventoryDraftSkillIds: [],
@@ -2406,6 +2568,23 @@
         inventory_scope_label: "部署范围",
         inventory_scope_global: "全局",
         inventory_scope_workspace: "工作区",
+        inventory_display_settings_summary: "面板设置",
+        inventory_view_mode_label: "面板视图",
+        inventory_view_mode_single: "单列卡片",
+        inventory_view_mode_double: "双列卡片",
+        inventory_view_mode_list: "紧凑列表",
+        inventory_card_font_size_label: "字体大小",
+        inventory_card_font_sm: "小",
+        inventory_card_font_md: "标准",
+        inventory_card_font_lg: "大",
+        inventory_card_width_label: "卡片宽度",
+        inventory_card_width_narrow: "紧凑",
+        inventory_card_width_standard: "标准",
+        inventory_card_width_wide: "宽展",
+        inventory_card_height_label: "卡片高度",
+        inventory_card_height_compact: "紧凑",
+        inventory_card_height_standard: "标准",
+        inventory_card_height_tall: "舒展",
         inventory_select_all: "全选兼容 Source",
         inventory_select_discovered: "仅已发现 Source",
         inventory_select_clear: "清空部署",
@@ -2761,6 +2940,23 @@
         inventory_scope_label: "Deploy Scope",
         inventory_scope_global: "Global",
         inventory_scope_workspace: "Workspace",
+        inventory_display_settings_summary: "Panel Settings",
+        inventory_view_mode_label: "Panel View",
+        inventory_view_mode_single: "Single Column",
+        inventory_view_mode_double: "Two Columns",
+        inventory_view_mode_list: "Compact List",
+        inventory_card_font_size_label: "Font Size",
+        inventory_card_font_sm: "Small",
+        inventory_card_font_md: "Default",
+        inventory_card_font_lg: "Large",
+        inventory_card_width_label: "Card Width",
+        inventory_card_width_narrow: "Narrow",
+        inventory_card_width_standard: "Standard",
+        inventory_card_width_wide: "Wide",
+        inventory_card_height_label: "Card Height",
+        inventory_card_height_compact: "Compact",
+        inventory_card_height_standard: "Standard",
+        inventory_card_height_tall: "Tall",
         inventory_select_all: "Select All Compatible Sources",
         inventory_select_discovered: "Select Discovered Sources",
         inventory_select_clear: "Clear Deployment",
@@ -2923,6 +3119,77 @@
       return ["cli", "gui", "claw", "other"].includes(kind) ? kind : "all";
     }
 
+    function normalizeInventoryCardView(value) {
+      const mode = String(value || "double").trim().toLowerCase();
+      return ["single", "double", "list"].includes(mode) ? mode : "double";
+    }
+
+    function normalizeInventoryCardFontSize(value) {
+      const size = String(value || "md").trim().toLowerCase();
+      return ["sm", "md", "lg"].includes(size) ? size : "md";
+    }
+
+    function normalizeInventoryCardWidth(value) {
+      const width = String(value || "standard").trim().toLowerCase();
+      return ["narrow", "standard", "wide"].includes(width) ? width : "standard";
+    }
+
+    function normalizeInventoryCardHeight(value) {
+      const height = String(value || "compact").trim().toLowerCase();
+      return ["compact", "standard", "tall"].includes(height) ? height : "compact";
+    }
+
+    function applyInventoryDisplayPreferences() {
+      const fontMap = {
+        sm: { meta: "11px", title: "12px" },
+        md: { meta: "12px", title: "13px" },
+        lg: { meta: "13px", title: "14px" },
+      };
+      const widthMap = {
+        narrow: "620px",
+        standard: "860px",
+        wide: "100%",
+      };
+      const heightMap = {
+        compact: "88px",
+        standard: "104px",
+        tall: "126px",
+      };
+      const gapMap = {
+        list: "6px",
+        single: "8px",
+        double: "8px",
+      };
+
+      const font = fontMap[normalizeInventoryCardFontSize(state.inventoryCardFontSize)] || fontMap.md;
+      const width = widthMap[normalizeInventoryCardWidth(state.inventoryCardWidth)] || widthMap.standard;
+      const height = heightMap[normalizeInventoryCardHeight(state.inventoryCardHeight)] || heightMap.compact;
+      const view = normalizeInventoryCardView(state.inventoryCardView);
+
+      document.body.dataset.inventoryCardView = view;
+      document.body.style.setProperty("--inventory-card-font-size", font.meta);
+      document.body.style.setProperty("--inventory-card-title-size", font.title);
+      document.body.style.setProperty("--inventory-card-min-height", height);
+      document.body.style.setProperty("--inventory-card-max-width", width);
+      document.body.style.setProperty("--inventory-card-gap", gapMap[view] || "8px");
+    }
+
+    function syncInventoryScopeTabs() {
+      const activeScope = normalizeInventoryScope(state.inventorySelectedScope);
+      document.querySelectorAll("#inventoryScopeTabs [data-inventory-scope]").forEach((el) => {
+        const scope = normalizeInventoryScope(el.getAttribute("data-inventory-scope"));
+        el.classList.toggle("active", scope === activeScope);
+      });
+    }
+
+    function syncInventoryViewModeTabs() {
+      const activeView = normalizeInventoryCardView(state.inventoryCardView);
+      document.querySelectorAll("#inventoryPanelViewTabs [data-inventory-view]").forEach((el) => {
+        const view = normalizeInventoryCardView(el.getAttribute("data-inventory-view"));
+        el.classList.toggle("active", view === activeView);
+      });
+    }
+
     function isSkillCapableSoftware(item) {
       if (!item || typeof item !== "object") return false;
       if (Object.prototype.hasOwnProperty.call(item, "skill_capable")) {
@@ -2952,6 +3219,18 @@
         if (typeof parsed.inventoryScope === "string") {
           state.inventorySelectedScope = normalizeInventoryScope(parsed.inventoryScope);
         }
+        if (typeof parsed.inventoryCardView === "string") {
+          state.inventoryCardView = normalizeInventoryCardView(parsed.inventoryCardView);
+        }
+        if (typeof parsed.inventoryCardFontSize === "string") {
+          state.inventoryCardFontSize = normalizeInventoryCardFontSize(parsed.inventoryCardFontSize);
+        }
+        if (typeof parsed.inventoryCardWidth === "string") {
+          state.inventoryCardWidth = normalizeInventoryCardWidth(parsed.inventoryCardWidth);
+        }
+        if (typeof parsed.inventoryCardHeight === "string") {
+          state.inventoryCardHeight = normalizeInventoryCardHeight(parsed.inventoryCardHeight);
+        }
         if (typeof parsed.inventoryKindFilter === "string") {
           state.inventoryKindFilter = normalizeInventoryKindFilter(parsed.inventoryKindFilter);
         }
@@ -2963,6 +3242,7 @@
       document.body.dataset.density = state.density;
       $("densitySelect").value = state.density;
       $("langSelect").value = state.lang;
+      applyInventoryDisplayPreferences();
     }
 
     function persistPreferences() {
@@ -2972,6 +3252,10 @@
         lang: state.lang,
         aiAutogenAfterLoad: Boolean(state.aiAutogenAfterLoad),
         inventoryScope: normalizeInventoryScope(state.inventorySelectedScope),
+        inventoryCardView: normalizeInventoryCardView(state.inventoryCardView),
+        inventoryCardFontSize: normalizeInventoryCardFontSize(state.inventoryCardFontSize),
+        inventoryCardWidth: normalizeInventoryCardWidth(state.inventoryCardWidth),
+        inventoryCardHeight: normalizeInventoryCardHeight(state.inventoryCardHeight),
         inventoryKindFilter: normalizeInventoryKindFilter(state.inventoryKindFilter),
         inventoryShowUninstalled: Boolean(state.inventoryShowUninstalled)
       };
@@ -3035,6 +3319,25 @@
       $("inventoryScopeLabel").textContent = t("inventory_scope_label");
       $("inventoryScopeOptGlobal").textContent = t("inventory_scope_global");
       $("inventoryScopeOptWorkspace").textContent = t("inventory_scope_workspace");
+      $("inventoryScopeTabGlobal").textContent = t("inventory_scope_global");
+      $("inventoryScopeTabWorkspace").textContent = t("inventory_scope_workspace");
+      $("inventoryDisplaySettingsSummary").textContent = t("inventory_display_settings_summary");
+      $("inventoryViewModeLabel").textContent = t("inventory_view_mode_label");
+      $("inventoryViewModeSingle").textContent = t("inventory_view_mode_single");
+      $("inventoryViewModeDouble").textContent = t("inventory_view_mode_double");
+      $("inventoryViewModeList").textContent = t("inventory_view_mode_list");
+      $("inventoryCardFontSizeLabel").textContent = t("inventory_card_font_size_label");
+      $("inventoryCardFontOptSm").textContent = t("inventory_card_font_sm");
+      $("inventoryCardFontOptMd").textContent = t("inventory_card_font_md");
+      $("inventoryCardFontOptLg").textContent = t("inventory_card_font_lg");
+      $("inventoryCardWidthLabel").textContent = t("inventory_card_width_label");
+      $("inventoryCardWidthOptNarrow").textContent = t("inventory_card_width_narrow");
+      $("inventoryCardWidthOptStandard").textContent = t("inventory_card_width_standard");
+      $("inventoryCardWidthOptWide").textContent = t("inventory_card_width_wide");
+      $("inventoryCardHeightLabel").textContent = t("inventory_card_height_label");
+      $("inventoryCardHeightOptCompact").textContent = t("inventory_card_height_compact");
+      $("inventoryCardHeightOptStandard").textContent = t("inventory_card_height_standard");
+      $("inventoryCardHeightOptTall").textContent = t("inventory_card_height_tall");
       $("inventorySelectAllBtn").textContent = t("inventory_select_all");
       $("inventorySelectDiscoveredBtn").textContent = t("inventory_select_discovered");
       $("inventoryClearSelectionBtn").textContent = t("inventory_select_clear");
@@ -3625,6 +3928,9 @@
       const summaryEl = $("inventorySummary");
       const selectEl = $("inventorySoftwareSelect");
       const scopeEl = $("inventoryScopeSelect");
+      const cardFontEl = $("inventoryCardFontSizeSelect");
+      const cardWidthEl = $("inventoryCardWidthSelect");
+      const cardHeightEl = $("inventoryCardHeightSelect");
       const kindFilterEl = $("inventoryKindFilterSelect");
       const showUninstalledEl = $("inventoryShowUninstalledToggle");
       const metaEl = $("inventorySoftwareMeta");
@@ -3644,13 +3950,30 @@
       const selectDiscoveredBtn = $("inventorySelectDiscoveredBtn");
       const clearSelectionBtn = $("inventoryClearSelectionBtn");
       const bindingScope = normalizeInventoryScope(scopeEl ? scopeEl.value : state.inventorySelectedScope);
+      const cardView = normalizeInventoryCardView(state.inventoryCardView);
+      const cardFontSize = normalizeInventoryCardFontSize(cardFontEl ? cardFontEl.value : state.inventoryCardFontSize);
+      const cardWidth = normalizeInventoryCardWidth(cardWidthEl ? cardWidthEl.value : state.inventoryCardWidth);
+      const cardHeight = normalizeInventoryCardHeight(cardHeightEl ? cardHeightEl.value : state.inventoryCardHeight);
       const kindFilter = normalizeInventoryKindFilter(kindFilterEl ? kindFilterEl.value : state.inventoryKindFilter);
       const showUninstalled = Boolean(showUninstalledEl ? showUninstalledEl.checked : state.inventoryShowUninstalled);
       state.inventorySelectedScope = bindingScope;
+      state.inventoryCardView = cardView;
+      state.inventoryCardFontSize = cardFontSize;
+      state.inventoryCardWidth = cardWidth;
+      state.inventoryCardHeight = cardHeight;
       state.inventoryKindFilter = kindFilter;
       state.inventoryShowUninstalled = showUninstalled;
       if (scopeEl && scopeEl.value !== bindingScope) {
         scopeEl.value = bindingScope;
+      }
+      if (cardFontEl && cardFontEl.value !== cardFontSize) {
+        cardFontEl.value = cardFontSize;
+      }
+      if (cardWidthEl && cardWidthEl.value !== cardWidth) {
+        cardWidthEl.value = cardWidth;
+      }
+      if (cardHeightEl && cardHeightEl.value !== cardHeight) {
+        cardHeightEl.value = cardHeight;
       }
       if (kindFilterEl && kindFilterEl.value !== kindFilter) {
         kindFilterEl.value = kindFilter;
@@ -3658,6 +3981,9 @@
       if (showUninstalledEl && showUninstalledEl.checked !== showUninstalled) {
         showUninstalledEl.checked = showUninstalled;
       }
+      applyInventoryDisplayPreferences();
+      syncInventoryScopeTabs();
+      syncInventoryViewModeTabs();
 
       const overview = state.inventoryOverview || {};
       const allSoftwareRows = Array.isArray(overview.software_rows) ? overview.software_rows : [];
@@ -3668,10 +3994,6 @@
       const softwareRows = showUninstalled
         ? kindFilteredRows
         : kindFilteredRows.filter((item) => Boolean(item.installed));
-      const skillRows = Array.isArray(overview.skill_rows) ? overview.skill_rows : [];
-      const compatibility = overview.compatibility && typeof overview.compatibility === "object"
-        ? overview.compatibility
-        : {};
       const counts = overview.counts || {};
       const warnings = Array.isArray(overview.warnings) ? overview.warnings : [];
       const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
@@ -5708,12 +6030,59 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
       });
 
+      $("inventoryScopeTabs").addEventListener("click", async (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-scope]")
+          : null;
+        if (!el) return;
+        const scope = normalizeInventoryScope(el.getAttribute("data-inventory-scope"));
+        if (scope === state.inventorySelectedScope) return;
+        state.inventorySelectedScope = scope;
+        $("inventoryScopeSelect").value = scope;
+        persistPreferences();
+        syncInventoryDraftWithSelectedSoftware();
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+      });
+
       $("inventoryScopeSelect").addEventListener("change", async (evt) => {
         state.inventorySelectedScope = normalizeInventoryScope(evt.target.value);
         persistPreferences();
         syncInventoryDraftWithSelectedSoftware();
         renderInventoryPanel();
         await refreshSelectedDeployTargetDetail();
+      });
+
+      $("inventoryPanelViewTabs").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-view]")
+          : null;
+        if (!el) return;
+        state.inventoryCardView = normalizeInventoryCardView(el.getAttribute("data-inventory-view"));
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryCardFontSizeSelect").addEventListener("change", (evt) => {
+        state.inventoryCardFontSize = normalizeInventoryCardFontSize(evt.target.value);
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryCardWidthSelect").addEventListener("change", (evt) => {
+        state.inventoryCardWidth = normalizeInventoryCardWidth(evt.target.value);
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryCardHeightSelect").addEventListener("change", (evt) => {
+        state.inventoryCardHeight = normalizeInventoryCardHeight(evt.target.value);
+        applyInventoryDisplayPreferences();
+        persistPreferences();
+        renderInventoryPanel();
       });
 
       $("inventoryKindFilterSelect").addEventListener("change", async (evt) => {

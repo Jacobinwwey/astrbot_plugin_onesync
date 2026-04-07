@@ -98,6 +98,7 @@ OneSync 不再沿“软件表 + skill 表 + 绑定表”继续扩展，而是进
   - 保留已验证可用的软件筛选、scope 选择、兼容 source 快速勾选
   - 当前 Deploy Target 面板补充 drift 明细、projection diff 明细，并增加“重建当前投影”与批量修复入口
   - 兼容 Source 勾选区改为直接使用 canonical `source_rows`，不再依赖旧 `skill_rows`，并支持列表内就地 `Sync Source`
+  - `global/workspace` 切换改为 segmented tabs，并为 Source / Deploy 子视图增加 `单列 / 双列 / 紧凑列表` 与字体、卡片宽高偏好设置
 
 ## Test Plan
 - `tests/test_inventory_core.py`

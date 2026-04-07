@@ -37,6 +37,8 @@ status: active
 - npm-backed source sync 与 sync-all
 - canonical compatible source list（source_rows 真相源）
 - compatible source list inline sync action
+- segmented scope tabs（global/workspace）
+- source/deploy subpanel view mode + card typography/size preferences
 - deploy target 当前目标 repair
 - deploy target repair-all 批量修复
 - deploy target generated projection diff

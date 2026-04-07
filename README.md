@@ -72,9 +72,11 @@ WebUI 关键能力：
 - `Skills管理`：查看本地软件资产、基于 `npx skills ls` 汇总 Skills、按软件类型筛选可兼容 Skill 并保存绑定。
 - 软件列表默认只显示已安装且可调用 Skills 的软件；可在面板中切换显示未安装候选。
 - 统一管理面板支持绑定作用域切换（`global/workspace`）与快速选择（全选兼容 / 仅已发现 / 清空选择）。
+- `global/workspace` 现已改为分段切换按钮，减少顶部控制区占用。
 - 软件速览区支持按 `CLI/GUI/CLAW/OTHER` 过滤并点击卡片快速切换当前软件。
 - Deploy Targets 支持展示当前 drift 明细、generated projection diff，并可执行“重建当前投影 / 修复当前目标 / 批量修复全部漂移目标”。
 - 右侧可部署 Source package 列表现已直接使用 source-first `source_rows` 真相源，显示与下方 Source / Bundle 视图一致的 freshness、registry、sync 状态，并支持就地 `Sync Source`。
+- Source / Bundle 视图与 Deploy Targets 现已支持 `单列卡片 / 双列卡片 / 紧凑列表` 视图切换，并可在面板设置中调整字体、卡片宽度与卡片高度；这些偏好会保存在浏览器本地。
 - `健康检查` 现已额外覆盖 `manifest.json / lock.json / sources/*.json / generated/*.json` 与 `skill_bindings` 投影一致性。
 - 两个操作均有确认弹窗，防止误触。
 - 内置 Debug 日志面板：支持多标签视图（运行/目标/调度/系统）、实时滚动、级别筛选、关键字过滤与一键清空。
