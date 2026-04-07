@@ -70,6 +70,51 @@ _SYNC_STATUS_RANK = {
     "ok": 1,
     "": 0,
 }
+_PROVENANCE_CONFIDENCE_RANK = {
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+}
+
+PROVENANCE_FIELD_KEYS = (
+    "provenance_origin_kind",
+    "provenance_origin_ref",
+    "provenance_origin_label",
+    "provenance_root_kind",
+    "provenance_root_path",
+    "provenance_package_name",
+    "provenance_package_manager",
+    "provenance_package_strategy",
+    "provenance_confidence",
+)
+
+SKILLS_ROOT_PROVENANCE_RULES: list[dict[str, str]] = [
+    {
+        "marker": "/.codex/skills",
+        "root_kind": "codex_home_skills",
+        "label": "Codex Skills Root",
+    },
+    {
+        "marker": "/.agents/skills",
+        "root_kind": "agents_home_skills",
+        "label": "Agents Skills Root",
+    },
+    {
+        "marker": "/.claude/skills",
+        "root_kind": "claude_home_skills",
+        "label": "Claude Skills Root",
+    },
+    {
+        "marker": "/zeroclaw/.claude/skills",
+        "root_kind": "zeroclaw_claude_skills",
+        "label": "ZeroClaw Skills Root",
+    },
+    {
+        "marker": "/antigravity/skills",
+        "root_kind": "antigravity_skills",
+        "label": "Antigravity Skills Root",
+    },
+]
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -126,6 +171,10 @@ def _first_non_empty(*values: Any) -> str:
     return ""
 
 
+def _normalize_path_text(path_text: Any) -> str:
+    return str(path_text or "").strip().replace("\\", "/")
+
+
 def _safe_expand_path(path_text: Any) -> Path | None:
     text = str(path_text or "").strip()
     if not text:
@@ -147,6 +196,32 @@ def _infer_manager_from_hint(management_hint: str, default: str = "") -> str:
     if hint.startswith("npx "):
         return "npx"
     return default
+
+
+def _detect_skills_root(path_text: Any) -> tuple[str, str, str]:
+    normalized = _normalize_path_text(path_text)
+    lowered = normalized.lower()
+    if not lowered:
+        return "", "", ""
+    for rule in SKILLS_ROOT_PROVENANCE_RULES:
+        marker = _normalize_path_text(rule.get("marker")).lower().rstrip("/")
+        if not marker:
+            continue
+        idx = lowered.find(marker)
+        if idx < 0:
+            continue
+        root_path = normalized[: idx + len(marker)].rstrip("/")
+        return (
+            str(rule.get("root_kind") or "").strip(),
+            root_path,
+            str(rule.get("label") or "").strip(),
+        )
+    return "", "", ""
+
+
+def _looks_like_remote_locator(locator: str) -> bool:
+    normalized = str(locator or "").strip().lower()
+    return normalized.startswith(("http://", "https://", "git@", "ssh://"))
 
 
 def _match_curated_rule(source: dict[str, Any]) -> dict[str, Any] | None:
@@ -240,6 +315,241 @@ def _infer_npx_package(source: dict[str, Any]) -> tuple[str, str]:
     return "", ""
 
 
+def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
+    source_id = str(source.get("source_id") or source.get("id") or "").strip()
+    display_name = str(source.get("display_name") or source_id).strip() or source_id
+    source_kind = str(source.get("source_kind") or source.get("skill_kind") or "").strip().lower()
+    locator = _first_non_empty(source.get("locator"), source.get("source_path"), source_id)
+    source_path = str(source.get("source_path") or "").strip()
+    source_subpath = str(source.get("source_subpath") or "").strip()
+    management_hint = str(source.get("management_hint") or "").strip()
+    registry_package_name = str(source.get("registry_package_name") or "").strip()
+    registry_package_manager = str(source.get("registry_package_manager") or "").strip()
+    aggregation_strategy = str(source.get("aggregation_strategy") or "").strip()
+    collection_group_name = str(source.get("collection_group_name") or "").strip()
+    install_manager = str(source.get("install_manager") or "").strip()
+    managed_by = str(source.get("managed_by") or "").strip()
+
+    origin_kind = str(source.get("provenance_origin_kind") or "").strip()
+    origin_ref = str(source.get("provenance_origin_ref") or "").strip()
+    origin_label = str(source.get("provenance_origin_label") or "").strip()
+    root_kind = str(source.get("provenance_root_kind") or "").strip()
+    root_path = str(source.get("provenance_root_path") or "").strip()
+    package_name = str(source.get("provenance_package_name") or "").strip()
+    package_manager = str(source.get("provenance_package_manager") or "").strip()
+    package_strategy = str(source.get("provenance_package_strategy") or "").strip()
+    confidence = str(source.get("provenance_confidence") or "").strip().lower()
+
+    detected_root_kind, detected_root_path, detected_root_label = _detect_skills_root(source_path)
+    if not root_kind:
+        root_kind = detected_root_kind
+    if not root_path:
+        root_path = detected_root_path
+
+    rule = _match_curated_rule(source)
+    rule_registry_packages = _to_str_list(rule.get("registry_packages", [])) if rule else []
+    rule_registry_package = str(rule_registry_packages[0] or "").strip() if rule_registry_packages else ""
+
+    if aggregation_strategy in {"skill_lock_path", "skill_lock_source"} or (
+        _looks_like_remote_locator(locator) and source_subpath and str(source.get("update_policy") or "").strip() == "source_sync"
+    ):
+        if not origin_kind:
+            origin_kind = "skill_lock_source"
+        if not origin_ref:
+            origin_ref = locator
+        if not origin_label:
+            origin_label = collection_group_name or display_name
+        if not package_manager:
+            package_manager = install_manager or managed_by
+        if not package_strategy:
+            package_strategy = aggregation_strategy or ("skill_lock_path" if source_subpath else "skill_lock_source")
+        if not confidence:
+            confidence = "high"
+
+    if not package_name:
+        if registry_package_name:
+            package_name = registry_package_name
+            package_manager = package_manager or registry_package_manager or _infer_manager_from_hint(management_hint, "npm")
+            package_strategy = package_strategy or ("explicit_rule" if rule else "registry_package")
+            origin_kind = origin_kind or "registry_package"
+            origin_ref = origin_ref or registry_package_name
+            if not origin_label:
+                origin_label = str(rule.get("collection_group_name") or display_name) if rule else display_name
+            confidence = confidence or "high"
+        elif rule_registry_package:
+            package_name = rule_registry_package
+            package_manager = package_manager or str(rule.get("install_manager") or "") or _infer_manager_from_hint(management_hint, "npm")
+            package_strategy = package_strategy or "explicit_rule"
+            origin_kind = origin_kind or "registry_package"
+            origin_ref = origin_ref or rule_registry_package
+            origin_label = origin_label or str(rule.get("collection_group_name") or rule.get("install_unit_display_name") or display_name)
+            confidence = confidence or "high"
+        elif source_kind == "npx_single":
+            inferred_package_name, inferred_strategy = _infer_npx_package(source)
+            if inferred_package_name:
+                package_name = inferred_package_name
+                package_manager = package_manager or registry_package_manager or _infer_manager_from_hint(management_hint, "npm")
+                package_strategy = package_strategy or inferred_strategy
+                origin_kind = origin_kind or "registry_package"
+                origin_ref = origin_ref or inferred_package_name
+                origin_label = origin_label or display_name
+                confidence = confidence or ("high" if inferred_strategy == "package_json" else "medium")
+
+    if rule and not origin_kind:
+        if package_name:
+            origin_kind = "registry_package"
+            origin_ref = origin_ref or package_name
+        elif source_kind == "npx_bundle":
+            origin_kind = "curated_bundle"
+            origin_ref = origin_ref or str(rule.get("install_ref") or source_id or display_name)
+        elif source_kind == "npx_single":
+            origin_kind = "curated_bundle"
+            origin_ref = origin_ref or str(rule.get("install_ref") or display_name)
+        origin_label = origin_label or str(rule.get("collection_group_name") or rule.get("install_unit_display_name") or display_name)
+        package_manager = package_manager or str(rule.get("install_manager") or "")
+        package_strategy = package_strategy or ("explicit_rule" if package_name else "curated_override")
+        confidence = confidence or "high"
+
+    if source_kind == "manual_git":
+        origin_kind = origin_kind or "git_source"
+        origin_ref = origin_ref or locator
+        origin_label = origin_label or collection_group_name or display_name
+        confidence = confidence or "high"
+    elif source_kind == "manual_local":
+        origin_kind = origin_kind or "local_source"
+        origin_ref = origin_ref or locator
+        origin_label = origin_label or display_name
+        confidence = confidence or "medium"
+    elif source_kind == "npx_bundle":
+        origin_kind = origin_kind or ("registry_package" if package_name else "source_bundle")
+        origin_ref = origin_ref or package_name or locator or source_id
+        if not origin_label:
+            origin_label = str(rule.get("collection_group_name") or display_name) if rule else display_name
+        package_manager = package_manager or _infer_manager_from_hint(management_hint, install_manager or "npx")
+        package_strategy = package_strategy or aggregation_strategy or ("explicit_rule" if rule else "source_bundle")
+        confidence = confidence or ("high" if rule or package_name else "medium")
+    elif source_kind == "npx_single":
+        if not origin_kind and root_path:
+            origin_kind = "skills_root"
+            origin_ref = root_path
+            origin_label = detected_root_label or origin_label or display_name
+            package_strategy = package_strategy or "fallback_root"
+            confidence = confidence or "low"
+        else:
+            origin_kind = origin_kind or "npx_single"
+            origin_ref = origin_ref or locator or source_path or source_id
+            origin_label = origin_label or display_name
+            package_strategy = package_strategy or aggregation_strategy or "fallback_single"
+            confidence = confidence or "low"
+    else:
+        origin_kind = origin_kind or (source_kind or "source")
+        origin_ref = origin_ref or locator or source_id
+        origin_label = origin_label or display_name
+        confidence = confidence or "medium"
+
+    if package_name and not package_manager:
+        package_manager = registry_package_manager or _infer_manager_from_hint(management_hint, "npm")
+
+    return {
+        "provenance_origin_kind": origin_kind,
+        "provenance_origin_ref": origin_ref,
+        "provenance_origin_label": origin_label,
+        "provenance_root_kind": root_kind,
+        "provenance_root_path": root_path,
+        "provenance_package_name": package_name,
+        "provenance_package_manager": package_manager,
+        "provenance_package_strategy": package_strategy,
+        "provenance_confidence": confidence or "low",
+    }
+
+
+def build_provenance_summary(rows: list[dict[str, Any]] | dict[str, Any] | None) -> dict[str, Any]:
+    normalized_rows = rows if isinstance(rows, list) else ([rows] if isinstance(rows, dict) else [])
+    items = [item for item in normalized_rows if isinstance(item, dict)]
+
+    resolved = 0
+    partial = 0
+    unresolved = 0
+    origin_labels: list[str] = []
+    origin_kinds: list[str] = []
+    package_names: list[str] = []
+    package_strategies: list[str] = []
+    note_kind = ""
+
+    for item in items:
+        provenance = derive_source_provenance_fields(item)
+        confidence = str(
+            item.get("provenance_confidence")
+            or provenance.get("provenance_confidence")
+            or "low"
+        ).strip().lower()
+        if confidence == "high":
+            resolved += 1
+        elif confidence == "medium":
+            partial += 1
+        else:
+            unresolved += 1
+
+        origin_label = str(
+            item.get("provenance_origin_label")
+            or provenance.get("provenance_origin_label")
+            or ""
+        ).strip()
+        origin_kind = str(
+            item.get("provenance_origin_kind")
+            or provenance.get("provenance_origin_kind")
+            or ""
+        ).strip()
+        package_name = str(
+            item.get("provenance_package_name")
+            or provenance.get("provenance_package_name")
+            or ""
+        ).strip()
+        package_strategy = str(
+            item.get("provenance_package_strategy")
+            or provenance.get("provenance_package_strategy")
+            or ""
+        ).strip()
+        if origin_label and origin_label not in origin_labels:
+            origin_labels.append(origin_label)
+        if origin_kind and origin_kind not in origin_kinds:
+            origin_kinds.append(origin_kind)
+        if package_name and package_name not in package_names:
+            package_names.append(package_name)
+        if package_strategy and package_strategy not in package_strategies:
+            package_strategies.append(package_strategy)
+
+    if items and resolved == len(items):
+        state = "resolved"
+        aggregate_confidence = "high"
+    elif resolved > 0 or partial > 0:
+        state = "partial"
+        aggregate_confidence = "medium"
+    else:
+        state = "unresolved"
+        aggregate_confidence = "low"
+
+    if unresolved == len(items) and origin_kinds and set(origin_kinds) == {"skills_root"}:
+        note_kind = "legacy_root_only"
+    elif state == "partial":
+        note_kind = "mixed_resolution"
+    elif state == "resolved" and package_names:
+        note_kind = "package_resolved"
+
+    return {
+        "provenance_state": state,
+        "provenance_resolved_count": resolved,
+        "provenance_partial_count": partial,
+        "provenance_unresolved_count": unresolved,
+        "provenance_primary_origin_label": origin_labels[0] if origin_labels else "",
+        "provenance_primary_origin_kind": origin_kinds[0] if origin_kinds else "",
+        "provenance_primary_package_name": package_names[0] if package_names else "",
+        "provenance_primary_package_strategy": package_strategies[0] if package_strategies else "",
+        "provenance_confidence": aggregate_confidence,
+        "provenance_note_kind": note_kind,
+    }
+
+
 def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
     source_id = str(source.get("source_id") or source.get("id") or "").strip()
     display_name = str(source.get("display_name") or source_id).strip() or source_id
@@ -248,6 +558,18 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
     management_hint = str(source.get("management_hint") or "").strip()
     registry_package_name = str(source.get("registry_package_name") or "").strip()
     registry_package_manager = str(source.get("registry_package_manager") or "").strip()
+    provenance = derive_source_provenance_fields(source)
+    provenance_package_name = str(source.get("provenance_package_name") or provenance.get("provenance_package_name") or "").strip()
+    provenance_package_manager = str(
+        source.get("provenance_package_manager")
+        or provenance.get("provenance_package_manager")
+        or ""
+    ).strip()
+    provenance_package_strategy = str(
+        source.get("provenance_package_strategy")
+        or provenance.get("provenance_package_strategy")
+        or ""
+    ).strip()
 
     existing_install_unit_id = str(source.get("install_unit_id") or "").strip()
     existing_install_unit_kind = str(source.get("install_unit_kind") or "").strip()
@@ -265,13 +587,13 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
     aggregation_strategy = existing_strategy
 
     if not install_unit_id:
-        if registry_package_name:
-            install_unit_id = f"npm:{registry_package_name}"
+        if provenance_package_name:
+            install_unit_id = f"npm:{provenance_package_name}"
             install_unit_kind = "npm_package"
-            install_ref = registry_package_name
-            install_manager = registry_package_manager or _infer_manager_from_hint(management_hint, "npm")
+            install_ref = provenance_package_name
+            install_manager = provenance_package_manager or registry_package_manager or _infer_manager_from_hint(management_hint, "npm")
             install_unit_display_name = str(rule.get("install_unit_display_name") or display_name) if rule else display_name
-            aggregation_strategy = "explicit_rule" if rule else "registry_package"
+            aggregation_strategy = provenance_package_strategy or ("explicit_rule" if rule else "registry_package")
         elif source_kind == "manual_git":
             install_unit_id = f"git:{locator}"
             install_unit_kind = "git_source"
@@ -362,6 +684,7 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
 def enrich_source_aggregation(source: dict[str, Any]) -> dict[str, Any]:
     return {
         **source,
+        **build_provenance_summary(source),
         **derive_source_aggregation_fields(source),
     }
 
@@ -495,6 +818,14 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
                 "sync_status": sync_status,
                 "deployed_target_ids": deployed_target_ids,
                 "deployed_target_count": len(deployed_target_ids),
+                **build_provenance_summary(
+                    [
+                        raw_source
+                        for raw_source in source_rows
+                        if isinstance(raw_source, dict)
+                        and str(enrich_source_aggregation(raw_source).get("install_unit_id") or "").strip() == str(row.get("install_unit_id") or "").strip()
+                    ],
+                ),
             },
         )
 
@@ -586,6 +917,14 @@ def build_collection_group_rows(install_unit_rows: list[dict[str, Any]]) -> list
                 "sync_status": sync_status,
                 "deployed_target_ids": deployed_target_ids,
                 "deployed_target_count": len(deployed_target_ids),
+                **build_provenance_summary(
+                    [
+                        install_unit
+                        for install_unit in install_unit_rows
+                        if isinstance(install_unit, dict)
+                        and str(install_unit.get("collection_group_id") or "").strip() == str(row.get("collection_group_id") or "").strip()
+                    ],
+                ),
             },
         )
 

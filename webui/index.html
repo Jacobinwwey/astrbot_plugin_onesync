@@ -2872,7 +2872,7 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "健康检查",
         inventory_doctor_waiting: "等待最新状态...",
-        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | Install Unit(ready/missing/syncable/ok/error/pending)={install_ready}/{install_missing}/{install_syncable}/{install_sync_ok}/{install_sync_error}/{install_sync_pending} | Group(ready/missing/syncable/ok/error/pending)={group_ready}/{group_missing}/{group_syncable}/{group_sync_ok}/{group_sync_error}/{group_sync_pending} | 新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | 同步(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable} | 状态文件(manifest/lock/source_missing/generated_missing)={state_manifest}/{state_lock}/{state_source_missing}/{state_generated_missing} | 投影(binding_missing/extra)={projection_missing}/{projection_extra}",
+        inventory_doctor_summary: "Source 健康(ready/missing)={ready}/{missing} | 来源解析(resolved/partial/unresolved)={provenance_resolved}/{provenance_partial}/{provenance_unresolved} | Install Unit(ready/missing/syncable/ok/error/pending)={install_ready}/{install_missing}/{install_syncable}/{install_sync_ok}/{install_sync_error}/{install_sync_pending} | Group(ready/missing/syncable/ok/error/pending)={group_ready}/{group_missing}/{group_syncable}/{group_sync_ok}/{group_sync_error}/{group_sync_pending} | 新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | 同步(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable} | 状态文件(manifest/lock/source_missing/generated_missing)={state_manifest}/{state_lock}/{state_source_missing}/{state_generated_missing} | 投影(binding_missing/extra)={projection_missing}/{projection_extra}",
         inventory_selection_note: "按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 ce:* Skill 单独展开。",
         inventory_sync_all: "同步全部 Source",
         inventory_sync_all_running: "同步中",
@@ -2965,6 +2965,7 @@
         inventory_summary_bindings: "绑定(有效/无效)={valid}/{invalid}",
         inventory_summary_deploy: "Deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
         inventory_summary_registry_hosts: "Registry={registry} Hosts={hosts}",
+        inventory_summary_provenance: "来源解析(已确认/待补)={resolved}/{unresolved}",
         inventory_summary_warnings: "告警={count}",
         inventory_meta_kind: "类型",
         inventory_meta_provider: "Provider",
@@ -2993,6 +2994,19 @@
         inventory_skill_meta_latest_version: "最新包版本",
         inventory_skill_meta_sync_status: "同步状态",
         inventory_skill_meta_sync_checked: "同步时间",
+        inventory_skill_meta_provenance: "来源解析",
+        inventory_skill_meta_origin: "来源锚点",
+        inventory_skill_meta_package: "包边界",
+        inventory_skill_meta_confidence: "置信度",
+        inventory_provenance_resolved: "已确认",
+        inventory_provenance_partial: "部分确认",
+        inventory_provenance_unresolved: "待补",
+        inventory_provenance_confidence_high: "高",
+        inventory_provenance_confidence_medium: "中",
+        inventory_provenance_confidence_low: "低",
+        inventory_provenance_legacy_note: "该项只识别到 skills root，尚未恢复真实包/导入 provenance，暂不应视为可统一更新的聚合包。",
+        inventory_provenance_resolved_note: "该聚合已解析到真实包边界：{package}",
+        inventory_provenance_partial_note: "该聚合内存在混合来源：已确认 {resolved} 项，待补 {unresolved} 项。",
         inventory_skill_source_auto: "自动发现",
         inventory_skill_source_manual: "手工配置",
         inventory_skill_source_bundle: "npx 聚合包",
@@ -3302,7 +3316,7 @@
         inventory_deploy_title: "Deploy Targets",
         inventory_doctor: "Doctor",
         inventory_doctor_waiting: "Waiting for latest status...",
-        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Install units(ready/missing/syncable/ok/error/pending)={install_ready}/{install_missing}/{install_syncable}/{install_sync_ok}/{install_sync_error}/{install_sync_pending} | Groups(ready/missing/syncable/ok/error/pending)={group_ready}/{group_missing}/{group_syncable}/{group_sync_ok}/{group_sync_error}/{group_sync_pending} | Freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Sync(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable} | State(manifest/lock/source_missing/generated_missing)={state_manifest}/{state_lock}/{state_source_missing}/{state_generated_missing} | Projection(binding_missing/extra)={projection_missing}/{projection_extra}",
+        inventory_doctor_summary: "Source health(ready/missing)={ready}/{missing} | Provenance(resolved/partial/unresolved)={provenance_resolved}/{provenance_partial}/{provenance_unresolved} | Install units(ready/missing/syncable/ok/error/pending)={install_ready}/{install_missing}/{install_syncable}/{install_sync_ok}/{install_sync_error}/{install_sync_pending} | Groups(ready/missing/syncable/ok/error/pending)={group_ready}/{group_missing}/{group_syncable}/{group_sync_ok}/{group_sync_error}/{group_sync_pending} | Freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{fresh_missing} | Sync(syncable/ok/error/pending)={syncable}/{sync_ok}/{sync_error}/{sync_pending} | Deploy(ready/idle/stale/unavailable)={deploy_ready}/{deploy_idle}/{deploy_stale}/{deploy_unavailable} | State(manifest/lock/source_missing/generated_missing)={state_manifest}/{state_lock}/{state_source_missing}/{state_generated_missing} | Projection(binding_missing/extra)={projection_missing}/{projection_extra}",
         inventory_selection_note: "Manage by source package. Compound Engineering appears as one bundle instead of expanding every ce:* skill.",
         inventory_sync_all: "Sync All Sources",
         inventory_sync_all_running: "Syncing",
@@ -3395,6 +3409,7 @@
         inventory_summary_bindings: "bindings(valid/invalid)={valid}/{invalid}",
         inventory_summary_deploy: "deploy(ready/stale/unavailable/repairable)={ready}/{stale}/{unavailable}/{repairable}",
         inventory_summary_registry_hosts: "registry={registry} hosts={hosts}",
+        inventory_summary_provenance: "provenance(resolved/unresolved)={resolved}/{unresolved}",
         inventory_summary_warnings: "warnings={count}",
         inventory_meta_kind: "kind",
         inventory_meta_provider: "provider",
@@ -3423,6 +3438,19 @@
         inventory_skill_meta_latest_version: "latest_version",
         inventory_skill_meta_sync_status: "sync_status",
         inventory_skill_meta_sync_checked: "sync_checked_at",
+        inventory_skill_meta_provenance: "provenance",
+        inventory_skill_meta_origin: "origin",
+        inventory_skill_meta_package: "package",
+        inventory_skill_meta_confidence: "confidence",
+        inventory_provenance_resolved: "resolved",
+        inventory_provenance_partial: "partial",
+        inventory_provenance_unresolved: "unresolved",
+        inventory_provenance_confidence_high: "high",
+        inventory_provenance_confidence_medium: "medium",
+        inventory_provenance_confidence_low: "low",
+        inventory_provenance_legacy_note: "This item is only anchored to a skills root. Real package/import provenance is still missing, so it should not be treated as a true updatable aggregate yet.",
+        inventory_provenance_resolved_note: "This aggregate resolves to a real package boundary: {package}",
+        inventory_provenance_partial_note: "This aggregate still mixes resolved and unresolved members: resolved {resolved}, unresolved {unresolved}.",
         inventory_skill_source_auto: "auto",
         inventory_skill_source_manual: "manual",
         inventory_skill_source_bundle: "npx bundle",
@@ -4433,6 +4461,26 @@
       return inventorySourceKindLabel(item);
     }
 
+    function inventoryIsMeaningfulCollectionGroupRow(item) {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      const kind = String(item.collection_group_kind || "").trim().toLowerCase();
+      if (kind && kind !== "install_unit") {
+        return true;
+      }
+      if (Number(item.install_unit_count || 0) > 1) {
+        return true;
+      }
+      if (Number(item.source_count || 0) > 1) {
+        return true;
+      }
+      if (Number(item.member_count || 0) > 1) {
+        return true;
+      }
+      return false;
+    }
+
     function inventoryAggregateSourceIds(item) {
       if (!item || typeof item !== "object") return [];
       if (Array.isArray(item.source_ids)) {
@@ -4607,6 +4655,125 @@
       return `${locator} :: ${sourceSubpath}`;
     }
 
+    function inventoryNormalizeProvenanceConfidence(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (normalized === "high" || normalized === "medium" || normalized === "low") {
+        return normalized;
+      }
+      return "low";
+    }
+
+    function inventorySourceProvenanceStateLabel(summary) {
+      const state = String(
+        summary && (summary.provenance_state || summary.state) || "unresolved",
+      ).trim().toLowerCase();
+      if (state === "resolved") return t("inventory_provenance_resolved");
+      if (state === "partial") return t("inventory_provenance_partial");
+      return t("inventory_provenance_unresolved");
+    }
+
+    function inventorySourceProvenanceConfidenceLabel(value) {
+      const confidence = inventoryNormalizeProvenanceConfidence(value);
+      if (confidence === "high") return t("inventory_provenance_confidence_high");
+      if (confidence === "medium") return t("inventory_provenance_confidence_medium");
+      return t("inventory_provenance_confidence_low");
+    }
+
+    function inventorySourceProvenanceSummary(input) {
+      const rows = Array.isArray(input)
+        ? input.filter((item) => item && typeof item === "object")
+        : (input && typeof input === "object" ? [input] : []);
+      if (rows.length === 1) {
+        const item = rows[0];
+        const explicitState = String(item.provenance_state || "").trim();
+        if (explicitState) {
+          return {
+            rowsTotal: 1,
+            resolved: Number(item.provenance_resolved_count) || (explicitState === "resolved" ? 1 : 0),
+            partial: Number(item.provenance_partial_count) || (explicitState === "partial" ? 1 : 0),
+            unresolved: Number(item.provenance_unresolved_count) || (explicitState === "unresolved" ? 1 : 0),
+            state: explicitState,
+            confidence: String(item.provenance_confidence || "low").trim().toLowerCase() || "low",
+            originKind: String(item.provenance_primary_origin_kind || item.provenance_origin_kind || "").trim(),
+            originLabel: String(item.provenance_primary_origin_label || item.provenance_origin_label || "").trim(),
+            packageName: String(item.provenance_primary_package_name || item.provenance_package_name || "").trim(),
+            packageStrategy: String(item.provenance_primary_package_strategy || item.provenance_package_strategy || "").trim(),
+            noteKind: String(item.provenance_note_kind || "").trim(),
+          };
+        }
+      }
+      const packages = [];
+      const origins = [];
+      const strategies = [];
+      let resolved = 0;
+      let partial = 0;
+      let unresolved = 0;
+
+      rows.forEach((row) => {
+        const confidence = inventoryNormalizeProvenanceConfidence(row.provenance_confidence);
+        if (confidence === "high") {
+          resolved += 1;
+        } else if (confidence === "medium") {
+          partial += 1;
+        } else {
+          unresolved += 1;
+        }
+        const packageName = String(row.provenance_package_name || "").trim();
+        const originLabel = String(row.provenance_origin_label || row.provenance_origin_kind || "").trim();
+        const packageStrategy = String(row.provenance_package_strategy || "").trim();
+        if (packageName && !packages.includes(packageName)) {
+          packages.push(packageName);
+        }
+        if (originLabel && !origins.includes(originLabel)) {
+          origins.push(originLabel);
+        }
+        if (packageStrategy && !strategies.includes(packageStrategy)) {
+          strategies.push(packageStrategy);
+        }
+      });
+
+      let state = "unresolved";
+      if (rows.length && resolved === rows.length) {
+        state = "resolved";
+      } else if (resolved > 0 || partial > 0) {
+        state = "partial";
+      }
+
+      return {
+        rowsTotal: rows.length,
+        resolved,
+        partial,
+        unresolved,
+        state,
+        confidence: resolved > 0 ? "high" : (partial > 0 ? "medium" : "low"),
+        originKind: String(rows[0] && rows[0].provenance_origin_kind || "").trim(),
+        originLabel: origins[0] || "",
+        packageName: packages[0] || "",
+        packageStrategy: strategies[0] || "",
+        noteKind: "",
+      };
+    }
+
+    function inventorySourceProvenanceNote(summary) {
+      if (!summary || typeof summary !== "object") return "";
+      if (summary.noteKind === "legacy_root_only") {
+        return t("inventory_provenance_legacy_note");
+      }
+      if (summary.state === "resolved" && summary.packageName) {
+        return t("inventory_provenance_resolved_note", { package: summary.packageName });
+      }
+      if (summary.state === "partial") {
+        return t("inventory_provenance_partial_note", {
+          resolved: summary.resolved || 0,
+          unresolved: summary.unresolved || 0,
+        });
+      }
+      if (summary.originKind === "skills_root") {
+        return t("inventory_provenance_legacy_note");
+      }
+      return "";
+    }
+
     function inventoryTargetDriftNotes(targetRow) {
       if (!targetRow || typeof targetRow !== "object") return [];
       const notes = [];
@@ -4692,19 +4859,26 @@
       if (!normalizedSoftwareId) {
         return [];
       }
+      const meaningfulCollectionMap = snapshot.compatible_meaningful_collection_group_rows_by_software
+        && typeof snapshot.compatible_meaningful_collection_group_rows_by_software === "object"
+        ? snapshot.compatible_meaningful_collection_group_rows_by_software
+        : {};
+      if (Array.isArray(meaningfulCollectionMap[normalizedSoftwareId]) && meaningfulCollectionMap[normalizedSoftwareId].length) {
+        return meaningfulCollectionMap[normalizedSoftwareId];
+      }
       const collectionMap = snapshot.compatible_collection_group_rows_by_software
         && typeof snapshot.compatible_collection_group_rows_by_software === "object"
         ? snapshot.compatible_collection_group_rows_by_software
         : {};
-      if (Array.isArray(collectionMap[normalizedSoftwareId]) && collectionMap[normalizedSoftwareId].length) {
-        return collectionMap[normalizedSoftwareId];
-      }
       const installUnitMap = snapshot.compatible_install_unit_rows_by_software
         && typeof snapshot.compatible_install_unit_rows_by_software === "object"
         ? snapshot.compatible_install_unit_rows_by_software
         : {};
       if (Array.isArray(installUnitMap[normalizedSoftwareId]) && installUnitMap[normalizedSoftwareId].length) {
         return installUnitMap[normalizedSoftwareId];
+      }
+      if (Array.isArray(collectionMap[normalizedSoftwareId]) && collectionMap[normalizedSoftwareId].length) {
+        return collectionMap[normalizedSoftwareId].filter((item) => inventoryIsMeaningfulCollectionGroupRow(item));
       }
       return inventoryCompatibleSourceRows(snapshot, normalizedSoftwareId);
     }
@@ -5042,10 +5216,18 @@
           .filter(([hostId]) => Boolean(hostId)),
       );
       const sourceRows = Array.isArray(overview.source_rows) ? overview.source_rows : [];
+      const sourceRowIndex = Object.fromEntries(
+        sourceRows
+          .map((item) => [String(item.source_id || item.id || "").trim(), item])
+          .filter(([sourceId]) => Boolean(sourceId)),
+      );
       const installUnitRows = Array.isArray(overview.install_unit_rows) ? overview.install_unit_rows : [];
       const collectionGroupRows = Array.isArray(overview.collection_group_rows) ? overview.collection_group_rows : [];
-      const primarySourceRows = collectionGroupRows.length
-        ? collectionGroupRows
+      const meaningfulCollectionGroupRows = Array.isArray(overview.meaningful_collection_group_rows)
+        ? overview.meaningful_collection_group_rows
+        : collectionGroupRows.filter((item) => inventoryIsMeaningfulCollectionGroupRow(item));
+      const primarySourceRows = meaningfulCollectionGroupRows.length
+        ? meaningfulCollectionGroupRows
         : (installUnitRows.length ? installUnitRows : sourceRows);
       const deployRows = Array.isArray(overview.deploy_rows) ? overview.deploy_rows : [];
       const visibleDeployRows = deployRows.filter((item) => {
@@ -5122,6 +5304,15 @@
           const sourceSubpath = String(item.source_subpath || "").trim();
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
+          const provenanceRows = sourceIds
+            .map((entry) => sourceRowIndex[String(entry || "").trim()])
+            .filter((row) => row && typeof row === "object");
+          const provenanceSummary = inventorySourceProvenanceSummary(provenanceRows.length ? provenanceRows : [item]);
+          const provenanceState = inventorySourceProvenanceStateLabel(provenanceSummary);
+          const provenanceOrigin = provenanceSummary.originLabel || provenanceSummary.originKind || "-";
+          const provenancePackage = provenanceSummary.packageName || "-";
+          const provenanceConfidence = inventorySourceProvenanceConfidenceLabel(provenanceSummary.confidence);
+          const provenanceNote = inventorySourceProvenanceNote(provenanceSummary);
           const activeCls = sourceId === selectedSourceKey ? "active" : "";
           return `
             <div
@@ -5161,6 +5352,12 @@ ${sourceSubpath ? ` | ${escapeHtml(t("inventory_skill_meta_subpath"))}: ${escape
  | ${escapeHtml(t("inventory_skill_meta_managed_by"))}: ${escapeHtml(managedBy)}
               </div>
               <div class="meta">
+${escapeHtml(t("inventory_skill_meta_provenance"))}: ${escapeHtml(provenanceState)}
+ | ${escapeHtml(t("inventory_skill_meta_origin"))}: ${escapeHtml(provenanceOrigin)}
+ | ${escapeHtml(t("inventory_skill_meta_package"))}: ${escapeHtml(provenancePackage)}
+ | ${escapeHtml(t("inventory_skill_meta_confidence"))}: ${escapeHtml(provenanceConfidence)}
+              </div>
+              <div class="meta">
 ${escapeHtml(t("inventory_skill_meta_freshness"))}: ${escapeHtml(freshnessStatus)}
  | ${escapeHtml(t("inventory_skill_meta_age"))}: ${escapeHtml(sourceAge)}
  | ${escapeHtml(t("inventory_skill_meta_last_seen"))}: ${escapeHtml(lastSeen)}
@@ -5175,6 +5372,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
               <div class="meta">${escapeHtml(previewText)}</div>
               ${managementHint ? `<div class="meta">${escapeHtml(t("inventory_skill_meta_manage"))}: ${escapeHtml(managementHint)}</div>` : ""}
               ${registryPackageName ? `<div class="meta">${escapeHtml(t("inventory_skill_meta_registry"))}: ${escapeHtml(registryPackageName)}${registryPackageManager ? ` (${escapeHtml(registryPackageManager)})` : ""}</div>` : ""}
+              ${provenanceNote ? `<div class="meta">${escapeHtml(provenanceNote)}</div>` : ""}
               ${syncMessage ? `<div class="meta">${escapeHtml(syncMessage)}</div>` : ""}
             </div>
           `;
@@ -5304,9 +5502,29 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           })
           .filter(Boolean)
           .slice(0, 6);
+        const heroProvenance = inventorySourceProvenanceSummary(
+          detailSourceRows.length ? detailSourceRows : [selectedSourceRow],
+        );
+        const heroProvenanceState = inventorySourceProvenanceStateLabel(heroProvenance);
+        const heroProvenanceOrigin = heroProvenance.originLabel || heroProvenance.originKind || "-";
+        const heroProvenancePackage = heroProvenance.packageName || "-";
+        const heroProvenanceConfidence = inventorySourceProvenanceConfidenceLabel(heroProvenance.confidence);
+        const provenanceNotes = [
+          `${t("inventory_skill_meta_provenance")}: ${heroProvenanceState} · ${t("inventory_skill_meta_confidence")}: ${heroProvenanceConfidence}`,
+          `${t("inventory_skill_meta_origin")}: ${heroProvenanceOrigin}`,
+          `${t("inventory_skill_meta_package")}: ${heroProvenancePackage}`,
+        ];
+        const heroProvenanceNote = inventorySourceProvenanceNote(heroProvenance);
+        if (heroProvenanceNote) {
+          provenanceNotes.push(heroProvenanceNote);
+        }
         const noteItems = deployNotes.length
           ? deployNotes
-          : (detailWarnings.length ? detailWarnings.slice(0, 4) : (sourceDetail ? [] : ["Detail loading from API..."]));
+          : (
+            provenanceNotes.length
+              ? provenanceNotes
+              : (detailWarnings.length ? detailWarnings.slice(0, 4) : (sourceDetail ? [] : ["Detail loading from API..."]))
+          );
         const subtitleParts = [
           `${installUnitCount || 0} units`,
           `${sourceCount || 0} sources`,
@@ -5328,6 +5546,8 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             ${heroInstallId ? `<span class="inventory-chip">Install Unit<strong>${escapeHtml(heroInstallId)}</strong></span>` : ""}
             <span class="inventory-chip">Manager<strong>${escapeHtml(heroManager)}</strong></span>
             <span class="inventory-chip">Locator<strong>${escapeHtml(heroLocator)}</strong></span>
+            <span class="inventory-chip">${escapeHtml(t("inventory_skill_meta_provenance"))}<strong>${escapeHtml(heroProvenanceState)}</strong></span>
+            <span class="inventory-chip">${escapeHtml(t("inventory_skill_meta_package"))}<strong>${escapeHtml(heroProvenancePackage)}</strong></span>
             <span class="inventory-chip">Sync<strong>${escapeHtml(syncStatus)}</strong></span>
             <span class="inventory-chip">Latest<strong>${escapeHtml(latestVersion)}</strong></span>
           </div>
@@ -5407,6 +5627,9 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       doctorSummaryEl.textContent = t("inventory_doctor_summary", {
         ready: doctor.source_health && doctor.source_health.ready || 0,
         missing: doctor.source_health && doctor.source_health.missing || 0,
+        provenance_resolved: doctor.provenance_health && doctor.provenance_health.resolved || 0,
+        provenance_partial: doctor.provenance_health && doctor.provenance_health.partial || 0,
+        provenance_unresolved: doctor.provenance_health && doctor.provenance_health.unresolved || 0,
         install_ready: doctor.install_unit_health && doctor.install_unit_health.ready || 0,
         install_missing: doctor.install_unit_health && doctor.install_unit_health.missing || 0,
         install_syncable: doctor.install_unit_sync && doctor.install_unit_sync.syncable || 0,
@@ -5880,6 +6103,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           registry: counts.registry_total || sourceRows.length,
           hosts: counts.host_total || hostRows.length,
         }),
+        t("inventory_summary_provenance", {
+          resolved: counts.source_provenance_resolved_total || 0,
+          unresolved: counts.source_provenance_unresolved_total || 0,
+        }),
         t("inventory_summary_compatible", {
           total: state.inventoryVisibleCompatibleSkillIds.length,
           selected: state.inventoryDraftSkillIds.length,
@@ -6163,6 +6390,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         t("inventory_doctor_summary", {
           ready: doctor.source_health && doctor.source_health.ready || 0,
           missing: doctor.source_health && doctor.source_health.missing || 0,
+          provenance_resolved: doctor.provenance_health && doctor.provenance_health.resolved || 0,
+          provenance_partial: doctor.provenance_health && doctor.provenance_health.partial || 0,
+          provenance_unresolved: doctor.provenance_health && doctor.provenance_health.unresolved || 0,
           install_ready: doctor.install_unit_health && doctor.install_unit_health.ready || 0,
           install_missing: doctor.install_unit_health && doctor.install_unit_health.missing || 0,
           install_syncable: doctor.install_unit_sync && doctor.install_unit_sync.syncable || 0,

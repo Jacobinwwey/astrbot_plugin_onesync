@@ -436,6 +436,11 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertEqual("collection:source_repo_demo_tools", ui_reviewer["collection_group_id"])
         self.assertEqual("demo/tools", ui_audit["collection_group_name"])
         self.assertEqual("skill_lock_path", ui_audit["aggregation_strategy"])
+        self.assertEqual("skill_lock_source", ui_audit["provenance_origin_kind"])
+        self.assertEqual("https://github.com/demo/tools.git", ui_audit["provenance_origin_ref"])
+        self.assertEqual("demo/tools", ui_audit["provenance_origin_label"])
+        self.assertEqual("skill_lock_path", ui_audit["provenance_package_strategy"])
+        self.assertEqual("high", ui_audit["provenance_confidence"])
 
     def test_build_inventory_snapshot_keeps_codex_root_skills_split_by_source(self) -> None:
         software_catalog = normalize_software_catalog_payload(
@@ -501,6 +506,15 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertIn("npx_global_verification_before_completion", skill_ids)
         self.assertIn("npx_global_requesting_code_review", skill_ids)
         self.assertEqual(10, snapshot["counts"]["skills_members_total"])
+
+        correctness = next(
+            row for row in snapshot["skill_rows"] if row["id"] == "npx_global_correctness_reviewer"
+        )
+        self.assertEqual("skills_root", correctness["provenance_origin_kind"])
+        self.assertEqual("Codex Skills Root", correctness["provenance_origin_label"])
+        self.assertEqual("codex_home_skills", correctness["provenance_root_kind"])
+        self.assertEqual("/root/.codex/skills", correctness["provenance_root_path"])
+        self.assertEqual("low", correctness["provenance_confidence"])
 
     def test_build_inventory_snapshot_marks_stale_skill_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

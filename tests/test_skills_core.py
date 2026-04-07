@@ -173,6 +173,39 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertFalse(overview["doctor"]["ok"])
         self.assertGreaterEqual(overview["doctor"]["warning_count"], 2)
 
+    def test_build_skills_overview_exposes_provenance_summary_on_rows_and_doctor(self) -> None:
+        overview = build_skills_overview(self.inventory_snapshot)
+
+        source_rows = {item["source_id"]: item for item in overview["source_rows"]}
+        install_unit_rows = {item["install_unit_id"]: item for item in overview["install_unit_rows"]}
+        collection_group_rows = {item["collection_group_id"]: item for item in overview["collection_group_rows"]}
+
+        compound_source = source_rows["npx_bundle_compound_engineering_global"]
+        self.assertEqual("resolved", compound_source["provenance_state"])
+        self.assertEqual("@every-env/compound-plugin", compound_source["provenance_primary_package_name"])
+        self.assertEqual("Compound Engineering", compound_source["provenance_primary_origin_label"])
+
+        unresolved_source = source_rows["npx_global_find_skills"]
+        self.assertEqual("unresolved", unresolved_source["provenance_state"])
+        self.assertEqual("skills_root", unresolved_source["provenance_primary_origin_kind"])
+        self.assertEqual("Agents Skills Root", unresolved_source["provenance_primary_origin_label"])
+        self.assertEqual("legacy_root_only", unresolved_source["provenance_note_kind"])
+
+        compound_unit = install_unit_rows["npm:@every-env/compound-plugin"]
+        self.assertEqual("resolved", compound_unit["provenance_state"])
+        self.assertEqual("@every-env/compound-plugin", compound_unit["provenance_primary_package_name"])
+
+        find_skills_unit = install_unit_rows["synthetic_single:npx_global_find_skills"]
+        self.assertEqual("unresolved", find_skills_unit["provenance_state"])
+        self.assertEqual("legacy_root_only", find_skills_unit["provenance_note_kind"])
+
+        compound_group = collection_group_rows["collection:compound_engineering"]
+        self.assertEqual("resolved", compound_group["provenance_state"])
+
+        self.assertEqual(1, overview["doctor"]["provenance_health"]["resolved"])
+        self.assertEqual(0, overview["doctor"]["provenance_health"]["partial"])
+        self.assertEqual(1, overview["doctor"]["provenance_health"]["unresolved"])
+
     def test_build_skills_overview_propagates_source_freshness_metadata(self) -> None:
         snapshot = copy.deepcopy(self.inventory_snapshot)
         snapshot["skill_rows"][0].update(
@@ -712,6 +745,7 @@ class SkillsCoreTests(unittest.TestCase):
         ]
 
         overview = build_skills_overview(snapshot)
+        self.assertIn("meaningful_collection_group_rows", overview)
 
         design_unit = next(
             item for item in overview["install_unit_rows"]
@@ -742,6 +776,15 @@ class SkillsCoreTests(unittest.TestCase):
         )
         self.assertEqual(2, dhh_group["source_count"])
         self.assertEqual(2, dhh_group["member_count"])
+
+        meaningful_group_ids = {
+            item["collection_group_id"]
+            for item in overview["meaningful_collection_group_rows"]
+        }
+        self.assertIn("collection:compound_engineering", meaningful_group_ids)
+        self.assertIn("collection:design_review", meaningful_group_ids)
+        self.assertIn("collection:dhh_rails", meaningful_group_ids)
+        self.assertNotIn("collection:find_skills", meaningful_group_ids)
 
         self.assertGreaterEqual(overview["counts"]["install_unit_total"], 4)
         self.assertGreaterEqual(overview["counts"]["collection_group_total"], 4)
@@ -905,6 +948,63 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("https://github.com/demo/tools.git#skills/ui-audit", source["install_ref"])
         self.assertEqual("collection:source_repo_demo_tools", source["collection_group_id"])
         self.assertEqual("demo/tools", source["collection_group_name"])
+
+    def test_build_skills_lock_overlays_registry_provenance_without_manifest_runtime_fields(self) -> None:
+        manifest = {
+            "version": 1,
+            "generated_at": "2026-04-07T13:10:00+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_global_correctness_reviewer",
+                    "display_name": "correctness-reviewer",
+                    "source_kind": "npx_single",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "source_scope": "global",
+                    "update_policy": "registry",
+                    "compatible_software_ids": ["codex"],
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+            ],
+            "deploy_targets": [],
+        }
+        registry = {
+            "version": 1,
+            "generated_at": "2026-04-07T13:10:00+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_global_correctness_reviewer",
+                    "display_name": "correctness-reviewer",
+                    "source_kind": "npx_single",
+                    "provider_key": "npx_skills",
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/correctness-reviewer",
+                    "provenance_origin_kind": "skills_root",
+                    "provenance_origin_ref": "/root/.codex/skills",
+                    "provenance_origin_label": "Codex Skills Root",
+                    "provenance_root_kind": "codex_home_skills",
+                    "provenance_root_path": "/root/.codex/skills",
+                    "provenance_package_strategy": "fallback_root",
+                    "provenance_confidence": "low",
+                },
+            ],
+        }
+
+        lock = build_skills_lock(
+            manifest,
+            {"generated_at": "2026-04-07T13:10:00+00:00"},
+            registry=registry,
+        )
+
+        source = lock["sources"][0]
+        self.assertEqual("skills_root", source["provenance_origin_kind"])
+        self.assertEqual("/root/.codex/skills", source["provenance_origin_ref"])
+        self.assertEqual("Codex Skills Root", source["provenance_origin_label"])
+        self.assertEqual("codex_home_skills", source["provenance_root_kind"])
+        self.assertEqual("/root/.codex/skills", source["provenance_root_path"])
+        self.assertEqual("fallback_root", source["provenance_package_strategy"])
+        self.assertEqual("low", source["provenance_confidence"])
 
     def test_build_skills_overview_uses_saved_state_when_inventory_is_unavailable(self) -> None:
         target_root = Path(self._tempdir.name) / "codex-skills"

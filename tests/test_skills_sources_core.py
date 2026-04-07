@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -230,6 +231,45 @@ class SkillsSourcesCoreTests(unittest.TestCase):
         self.assertEqual("demo/tools", source["collection_group_name"])
         self.assertEqual("skills/ui-audit", source["source_subpath"])
         self.assertEqual("https://github.com/demo/tools.git", source["locator"])
+
+    def test_build_skills_registry_derives_package_provenance_from_nearest_package_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / ".codex" / "skills" / "review-pack"
+            skill_dir = root / "design-iterator"
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (root / "package.json").write_text(
+                json.dumps({"name": "@demo/review-pack"}),
+                encoding="utf-8",
+            )
+
+            registry = build_skills_registry(
+                [
+                    {
+                        "id": "npx_global_design_iterator",
+                        "display_name": "design-iterator",
+                        "skill_kind": "skill",
+                        "source_kind": "npx_single",
+                        "provider_key": "npx_skills",
+                        "source_scope": "global",
+                        "source_path": str(skill_dir),
+                        "discovered": True,
+                        "auto_discovered": True,
+                        "source_exists": True,
+                        "freshness_status": "fresh",
+                        "tags": ["npx-managed"],
+                    },
+                ],
+                saved_registry={},
+                generated_at="2026-04-07T13:00:00+00:00",
+            )
+
+        self.assertEqual(1, len(registry["sources"]))
+        source = registry["sources"][0]
+        self.assertEqual("@demo/review-pack", source["provenance_package_name"])
+        self.assertEqual("npm", source["provenance_package_manager"])
+        self.assertEqual("package_json", source["provenance_package_strategy"])
+        self.assertEqual("high", source["provenance_confidence"])
+        self.assertEqual("npm:@demo/review-pack", source["install_unit_id"])
 
 
 if __name__ == "__main__":

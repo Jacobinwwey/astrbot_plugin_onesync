@@ -10,22 +10,26 @@ from typing import Any
 
 try:
     from .skills_aggregation_core import (
+        PROVENANCE_FIELD_KEYS,
         build_collection_group_rows,
         build_compatible_aggregate_rows_by_software,
         build_install_unit_rows,
+        derive_source_provenance_fields,
         enrich_source_aggregation,
     )
     from .skills_hosts_core import build_host_adapters, resolve_host_target_path
-    from .skills_sources_core import build_skills_registry
+    from .skills_sources_core import build_skills_registry, normalize_skills_registry
 except ImportError:  # pragma: no cover - direct test imports
     from skills_aggregation_core import (
+        PROVENANCE_FIELD_KEYS,
         build_collection_group_rows,
         build_compatible_aggregate_rows_by_software,
         build_install_unit_rows,
+        derive_source_provenance_fields,
         enrich_source_aggregation,
     )
     from skills_hosts_core import build_host_adapters, resolve_host_target_path
-    from skills_sources_core import build_skills_registry
+    from skills_sources_core import build_skills_registry, normalize_skills_registry
 
 VALID_DEPLOY_SCOPES = ("global", "workspace")
 
@@ -138,6 +142,27 @@ def _count_syncable_rows(rows: list[dict[str, Any]]) -> int:
         if str(item.get("registry_package_name", "")).strip()
         and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
     )
+
+
+def _is_meaningful_collection_group_row(row: dict[str, Any]) -> bool:
+    kind = str(row.get("collection_group_kind") or "").strip().lower()
+    if kind and kind != "install_unit":
+        return True
+    if _to_int(row.get("install_unit_count", 0), 0, 0) > 1:
+        return True
+    if _to_int(row.get("source_count", 0), 0, 0) > 1:
+        return True
+    if _to_int(row.get("member_count", 0), 0, 0) > 1:
+        return True
+    return False
+
+
+def build_meaningful_collection_group_rows(collection_group_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        copy.deepcopy(item)
+        for item in collection_group_rows
+        if isinstance(item, dict) and _is_meaningful_collection_group_row(item)
+    ]
 
 
 def _stable_hash(payload: Any) -> str:
@@ -325,6 +350,9 @@ def normalize_saved_skills_lock(raw: Any) -> dict[str, Any]:
             "collection_group_name": str(item.get("collection_group_name") or ""),
             "collection_group_kind": str(item.get("collection_group_kind") or ""),
         }
+        for field_name in PROVENANCE_FIELD_KEYS:
+            source_record[field_name] = str(item.get(field_name) or "")
+        source_record.update(derive_source_provenance_fields(source_record))
         source_record.update(enrich_source_aggregation(source_record))
         sources.append(source_record)
 
@@ -709,6 +737,7 @@ def build_skills_lock(
     manifest: dict[str, Any],
     inventory_snapshot: dict[str, Any],
     *,
+    registry: dict[str, Any] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
@@ -717,30 +746,39 @@ def build_skills_lock(
         for item in manifest.get("sources", [])
         if isinstance(item, dict) and str(item.get("source_id", "")).strip()
     }
+    normalized_registry = normalize_skills_registry(registry or {}) if isinstance(registry, dict) else {"sources": []}
+    registry_source_index = {
+        str(item.get("source_id", "")).strip(): item
+        for item in normalized_registry.get("sources", [])
+        if isinstance(item, dict) and str(item.get("source_id", "")).strip()
+    }
 
     source_locks: list[dict[str, Any]] = []
     for source in manifest.get("sources", []):
         if not isinstance(source, dict):
             continue
         source_id = str(source.get("source_id", "")).strip()
+        resolved_source = _merge_overlay_row(copy.deepcopy(source), registry_source_index.get(source_id, {}))
+        resolved_source.update(derive_source_provenance_fields(resolved_source))
+        resolved_source.update(enrich_source_aggregation(resolved_source))
         deployed_target_ids = [
             str(target.get("target_id", "")).strip()
             for target in manifest.get("deploy_targets", [])
             if isinstance(target, dict) and source_id in _to_str_list(target.get("selected_source_ids", []))
         ]
-        status = "ready" if _to_bool(source.get("discovered", False), False) else "missing"
+        status = "ready" if _to_bool(resolved_source.get("discovered", False), False) else "missing"
         source_locks.append(
             {
-                **source,
+                **resolved_source,
                 "status": status,
                 "deployed_target_ids": _dedupe_keep_order(deployed_target_ids),
                 "deployed_target_count": len(_dedupe_keep_order(deployed_target_ids)),
                 "resolution_hash": _stable_hash(
                     {
                         "source_id": source_id,
-                        "source_path": source.get("source_path"),
-                        "member_count": source.get("member_count"),
-                        "compatible_software_ids": source.get("compatible_software_ids"),
+                        "source_path": resolved_source.get("source_path"),
+                        "member_count": resolved_source.get("member_count"),
+                        "compatible_software_ids": resolved_source.get("compatible_software_ids"),
                     },
                 ),
                 "last_synced_at": ts,
@@ -1157,7 +1195,7 @@ def build_skills_overview(
             "software_hosts": copy.deepcopy(host_rows),
             "deploy_targets": copy.deepcopy(normalized_saved_manifest.get("deploy_targets", [])),
         }
-    lock = build_skills_lock(manifest, inventory_snapshot, generated_at=ts)
+    lock = build_skills_lock(manifest, inventory_snapshot, registry=registry, generated_at=ts)
     inventory_unavailable = not bool(inventory_snapshot.get("ok", True))
     if inventory_unavailable and (
         normalized_saved_lock.get("sources") or normalized_saved_lock.get("deploy_targets")
@@ -1198,6 +1236,15 @@ def build_skills_overview(
             warnings.append(
                 f"source[{source.get('source_id')}] sync failed: {source.get('sync_message')}",
             )
+    unresolved_provenance_total = sum(
+        1
+        for item in source_rows
+        if str(item.get("provenance_state", "")).strip().lower() == "unresolved"
+    )
+    if unresolved_provenance_total:
+        warnings.append(
+            f"source provenance unresolved for {unresolved_provenance_total} sources; these items are still anchored only by fallback/root heuristics",
+        )
     for target in deploy_rows:
         if str(target.get("drift_status", "")) == "missing_source":
             warnings.append(
@@ -1232,12 +1279,17 @@ def build_skills_overview(
 
     install_unit_rows = build_install_unit_rows(source_rows, deploy_rows)
     collection_group_rows = build_collection_group_rows(install_unit_rows)
+    meaningful_collection_group_rows = build_meaningful_collection_group_rows(collection_group_rows)
     compatible_install_unit_rows_by_software = build_compatible_aggregate_rows_by_software(
         install_unit_rows,
         compatible_source_rows_by_software,
     )
     compatible_collection_group_rows_by_software = build_compatible_aggregate_rows_by_software(
         collection_group_rows,
+        compatible_source_rows_by_software,
+    )
+    compatible_meaningful_collection_group_rows_by_software = build_compatible_aggregate_rows_by_software(
+        meaningful_collection_group_rows,
         compatible_source_rows_by_software,
     )
 
@@ -1265,6 +1317,16 @@ def build_skills_overview(
                 and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
+            "source_provenance_resolved_total": sum(
+                1
+                for item in source_rows
+                if str(item.get("provenance_confidence", "")).strip().lower() in {"high", "medium"}
+            ),
+            "source_provenance_unresolved_total": sum(
+                1
+                for item in source_rows
+                if str(item.get("provenance_confidence", "")).strip().lower() not in {"high", "medium"}
+            ),
             "registry_total": len(registry.get("sources", [])),
             "install_unit_total": len(install_unit_rows),
             "install_unit_ready_total": _count_rows_by_field(install_unit_rows, "status", "ready"),
@@ -1283,6 +1345,7 @@ def build_skills_overview(
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
             "collection_group_total": len(collection_group_rows),
+            "meaningful_collection_group_total": len(meaningful_collection_group_rows),
             "collection_group_ready_total": _count_rows_by_field(collection_group_rows, "status", "ready"),
             "collection_group_missing_total": _count_rows_by_field(collection_group_rows, "status", "missing"),
             "collection_group_fresh_total": _count_rows_by_field(collection_group_rows, "freshness_status", "fresh"),
@@ -1327,6 +1390,15 @@ def build_skills_overview(
             "error": counts.get("source_sync_error_total", 0),
             "pending": counts.get("source_sync_pending_total", 0),
         },
+        "provenance_health": {
+            "resolved": counts.get("source_provenance_resolved_total", 0),
+            "partial": sum(
+                1
+                for item in source_rows
+                if str(item.get("provenance_state", "")).strip().lower() == "partial"
+            ),
+            "unresolved": counts.get("source_provenance_unresolved_total", 0),
+        },
         "install_unit_health": {
             "ready": counts.get("install_unit_ready_total", 0),
             "missing": counts.get("install_unit_missing_total", 0),
@@ -1367,6 +1439,7 @@ def build_skills_overview(
         "source_rows": source_rows,
         "install_unit_rows": install_unit_rows,
         "collection_group_rows": collection_group_rows,
+        "meaningful_collection_group_rows": meaningful_collection_group_rows,
         "deploy_rows": deploy_rows,
         "doctor": doctor,
         "counts": counts,
@@ -1376,6 +1449,7 @@ def build_skills_overview(
         "compatible_source_rows_by_software": compatible_source_rows_by_software,
         "compatible_install_unit_rows_by_software": compatible_install_unit_rows_by_software,
         "compatible_collection_group_rows_by_software": compatible_collection_group_rows_by_software,
+        "compatible_meaningful_collection_group_rows_by_software": compatible_meaningful_collection_group_rows_by_software,
         "binding_rows": copy.deepcopy(inventory_snapshot.get("binding_rows", [])),
         "binding_map": copy.deepcopy(inventory_snapshot.get("binding_map", {})),
         "binding_map_by_scope": copy.deepcopy(inventory_snapshot.get("binding_map_by_scope", {})),

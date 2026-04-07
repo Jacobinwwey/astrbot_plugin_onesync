@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .skills_aggregation_core import derive_source_aggregation_fields
+    from .skills_aggregation_core import PROVENANCE_FIELD_KEYS, derive_source_aggregation_fields, derive_source_provenance_fields
 except ImportError:  # pragma: no cover - direct test imports
-    from skills_aggregation_core import derive_source_aggregation_fields
+    from skills_aggregation_core import PROVENANCE_FIELD_KEYS, derive_source_aggregation_fields, derive_source_provenance_fields
 
 VALID_SOURCE_KINDS = {"npx_bundle", "npx_single", "manual_local", "manual_git"}
 VALID_SOURCE_SCOPES = {"global", "workspace"}
@@ -227,6 +227,9 @@ def _normalize_registry_source(raw: dict[str, Any], *, generated_at: str = "") -
         "collection_group_name": str(raw.get("collection_group_name") or "").strip(),
         "collection_group_kind": str(raw.get("collection_group_kind") or "").strip(),
     }
+    for field_name in PROVENANCE_FIELD_KEYS:
+        normalized[field_name] = str(raw.get(field_name) or "").strip()
+    normalized.update(derive_source_provenance_fields(normalized))
     normalized.update(derive_source_aggregation_fields(normalized))
     return normalized
 

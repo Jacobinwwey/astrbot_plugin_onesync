@@ -14,10 +14,10 @@ from urllib.parse import urlparse
 
 try:
     from .skills_hosts_core import DEFAULT_SOFTWARE_CATALOG, PROVIDER_DEFAULTS
-    from .skills_aggregation_core import derive_source_aggregation_fields
+    from .skills_aggregation_core import derive_source_aggregation_fields, derive_source_provenance_fields
 except ImportError:  # pragma: no cover - direct test imports
     from skills_hosts_core import DEFAULT_SOFTWARE_CATALOG, PROVIDER_DEFAULTS
-    from skills_aggregation_core import derive_source_aggregation_fields
+    from skills_aggregation_core import derive_source_aggregation_fields, derive_source_provenance_fields
 
 VALID_SOFTWARE_KINDS = {"cli", "gui", "claw", "other"}
 VALID_BINDING_SCOPES = {"global", "workspace"}
@@ -788,6 +788,7 @@ def _build_npx_skill_row_from_raw(raw_item: dict[str, Any], *, now_dt: datetime)
         "registry_package_manager": "",
     }
     row.update(provenance)
+    row.update(derive_source_provenance_fields(row))
     row.update(derive_source_aggregation_fields(row))
     return _attach_source_diagnostics(row, now_dt=now_dt)
 
@@ -849,6 +850,7 @@ def _build_npx_bundle_row(
         "registry_package_name": str(bundle_meta.get("registry_package_name") or "").strip(),
         "registry_package_manager": str(bundle_meta.get("registry_package_manager") or "").strip(),
     }
+    row.update(derive_source_provenance_fields(row))
     row.update(derive_source_aggregation_fields(row))
     return _attach_source_diagnostics(row, now_dt=now_dt)
 
@@ -1215,31 +1217,31 @@ def _discover_skills_from_roots(
                 seen_paths.add(source_path)
                 skill_name = Path(current_dir).name
                 skill_id = "auto_" + hashlib.sha1(source_path.encode("utf-8")).hexdigest()[:12]
+                row = {
+                    "id": skill_id,
+                    "display_name": skill_name,
+                    "provider_key": provider_key,
+                    "skill_kind": "skill",
+                    "enabled": True,
+                    "source_path": source_path,
+                    "detect_paths": [source_path],
+                    "compatible_software_kinds": [software_kind] if software_kind in VALID_SOFTWARE_KINDS else [],
+                    "compatible_software_families": [_slug(provider_key, default="")] if provider_key else [],
+                    "tags": [software_id, "auto-discovered"],
+                    "auto_discovered": True,
+                    "discovered": True,
+                    "source_scope": "global",
+                    "member_count": 1,
+                    "member_skill_preview": [skill_name],
+                    "member_skill_overflow": 0,
+                    "management_hint": "",
+                    "registry_package_name": "",
+                    "registry_package_manager": "",
+                }
+                row.update(derive_source_provenance_fields(row))
+                row.update(derive_source_aggregation_fields(row))
                 discovered.append(
-                    _attach_source_diagnostics(
-                        {
-                            "id": skill_id,
-                            "display_name": skill_name,
-                            "provider_key": provider_key,
-                            "skill_kind": "skill",
-                            "enabled": True,
-                            "source_path": source_path,
-                            "detect_paths": [source_path],
-                            "compatible_software_kinds": [software_kind] if software_kind in VALID_SOFTWARE_KINDS else [],
-                            "compatible_software_families": [_slug(provider_key, default="")] if provider_key else [],
-                            "tags": [software_id, "auto-discovered"],
-                            "auto_discovered": True,
-                            "discovered": True,
-                            "source_scope": "global",
-                            "member_count": 1,
-                            "member_skill_preview": [skill_name],
-                            "member_skill_overflow": 0,
-                            "management_hint": "",
-                            "registry_package_name": "",
-                            "registry_package_manager": "",
-                        },
-                        now_dt=now_dt,
-                    ),
+                    _attach_source_diagnostics(row, now_dt=now_dt),
                 )
                 if len(discovered) >= max_hits:
                     return discovered
@@ -1258,31 +1260,31 @@ def _build_manual_skill_rows(skill_catalog: list[dict[str, Any]], *, now_dt: dat
         source_path = _resolve_path(item.get("source_path", ""))
         if not source_path and existing_paths:
             source_path = existing_paths[0]
+        row = {
+            "id": str(item.get("id", "")),
+            "display_name": str(item.get("display_name", "")).strip() or str(item.get("id", "")),
+            "provider_key": str(item.get("provider_key", "generic")),
+            "skill_kind": str(item.get("skill_kind", "skill")),
+            "enabled": _to_bool(item.get("enabled", True), True),
+            "source_path": source_path,
+            "detect_paths": detect_paths,
+            "compatible_software_kinds": _to_str_list(item.get("compatible_software_kinds", [])),
+            "compatible_software_families": _to_str_list(item.get("compatible_software_families", [])),
+            "tags": _to_str_list(item.get("tags", [])),
+            "auto_discovered": False,
+            "discovered": bool(existing_paths or (source_path and Path(source_path).exists())),
+            "source_scope": str(item.get("source_scope") or "global"),
+            "member_count": 1,
+            "member_skill_preview": [str(item.get("display_name", "")).strip() or str(item.get("id", ""))],
+            "member_skill_overflow": 0,
+            "management_hint": str(item.get("management_hint") or ""),
+            "registry_package_name": str(item.get("registry_package_name") or ""),
+            "registry_package_manager": str(item.get("registry_package_manager") or ""),
+        }
+        row.update(derive_source_provenance_fields(row))
+        row.update(derive_source_aggregation_fields(row))
         rows.append(
-            _attach_source_diagnostics(
-                {
-                    "id": str(item.get("id", "")),
-                    "display_name": str(item.get("display_name", "")).strip() or str(item.get("id", "")),
-                    "provider_key": str(item.get("provider_key", "generic")),
-                    "skill_kind": str(item.get("skill_kind", "skill")),
-                    "enabled": _to_bool(item.get("enabled", True), True),
-                    "source_path": source_path,
-                    "detect_paths": detect_paths,
-                    "compatible_software_kinds": _to_str_list(item.get("compatible_software_kinds", [])),
-                    "compatible_software_families": _to_str_list(item.get("compatible_software_families", [])),
-                    "tags": _to_str_list(item.get("tags", [])),
-                    "auto_discovered": False,
-                    "discovered": bool(existing_paths or (source_path and Path(source_path).exists())),
-                    "source_scope": str(item.get("source_scope") or "global"),
-                    "member_count": 1,
-                    "member_skill_preview": [str(item.get("display_name", "")).strip() or str(item.get("id", ""))],
-                    "member_skill_overflow": 0,
-                    "management_hint": str(item.get("management_hint") or ""),
-                    "registry_package_name": str(item.get("registry_package_name") or ""),
-                    "registry_package_manager": str(item.get("registry_package_manager") or ""),
-                },
-                now_dt=now_dt,
-            ),
+            _attach_source_diagnostics(row, now_dt=now_dt),
         )
     return rows
 

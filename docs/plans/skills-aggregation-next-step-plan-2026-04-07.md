@@ -28,6 +28,38 @@ depends_on:
 - 叶子 skill 只在 detail 中展开
 - refresh / update / doctor 都能围绕真实维护边界运行
 
+## 运行态现实校正（2026-04-07）
+
+截至本轮排查，运行态已经确认下面这些事实：
+
+- 当前 registry 中共有 `98` 条 source rows
+- 其中 `94` 条 install units 曾被前端直接当作“可读聚合包”
+- 实际只有 `5` 个 meaningful collection groups：
+  - `Compound Engineering`
+  - `Design Review`
+  - `DHH Rails`
+  - `anthropics/skills`
+  - `vercel-labs/skills`
+- 剩余 `89` 条 `fallback_single` 全部来自 `/root/.codex/skills/*`
+- 这些目录大多缺少：
+  - `package.json`
+  - `.skill-lock.json`
+  - git/source provenance
+  - 可恢复的安装 ledger
+
+这意味着当前系统的主要问题已经不再是“前端没有折叠好”，而是：
+
+- discovery 阶段没有把 provenance 当成一等状态持久化
+- aggregation 只能在每次扫描时临时猜 package/source 边界
+- UI 只能在错误粒度上继续做过滤，而不能依赖稳定 install-unit truth
+
+所以从这个节点开始，下一步优先级必须改成：
+
+- 先做 provenance-aware aggregation foundation
+- 再把同一 install-unit 模型扩到 `manual_git` / `manual_local`
+
+而不是继续把当前模糊聚合逻辑平移到更多来源。
+
 ## 目标状态
 
 ### 数据层
@@ -253,7 +285,112 @@ collection group 不能替代 install unit 成为唯一真相。
 - manual / filesystem 聚合当前返回 structured unsupported，避免伪更新
 - 下一步应推进 Phase E，把同一 install-unit-first 模型扩到 `manual_git` / `manual_local`
 
-## Phase E：扩展到 manual_git 与 manual_local
+## Phase E：Provenance foundation（新的第一优先级）
+
+目标：让 aggregation 不再依赖“本轮临时猜中”，而是依赖可持久化、可迁移、可解释的 provenance state。
+
+### E1. 状态模型
+
+新增 source-level provenance 字段，统一进入 `registry.json`，并在 `lock.json` 中保留解析结果：
+
+- `provenance_origin_kind`
+- `provenance_origin_ref`
+- `provenance_origin_label`
+- `provenance_root_kind`
+- `provenance_root_path`
+- `provenance_package_name`
+- `provenance_package_manager`
+- `provenance_package_strategy`
+- `provenance_confidence`
+
+字段职责：
+
+- `origin_*`
+  - 描述 leaf 最初来自哪个 source/package/repo 语义边界
+- `root_*`
+  - 描述 leaf 当前落在哪个 skills root 下，便于 legacy recovery 与诊断
+- `package_*`
+  - 描述 discovery 已确认的 package 维护边界
+- `provenance_confidence`
+  - 显式区分 `high` / `medium` / `low`，避免把低可信猜测直接当成正式 install unit
+
+### E2. Discovery capture
+
+实现单元：
+
+- `inventory_core.py`
+  - 在 discovery 时补足 provenance 字段，而不是只补 `install_unit_id`
+- `skills_sources_core.py`
+  - registry normalize 时保留 provenance 字段，并对历史数据做无损回填
+- `skills_core.py`
+  - `lock.json` 从 registry overlay provenance，而不是要求 manifest 承担 runtime 解析状态
+
+解析顺序：
+
+1. 显式 bundle / curated rule
+2. `.skill-lock.json` repo/subpath
+3. 近邻 `package.json`
+4. `node_modules/<package>` 路径启发式
+5. skills root 分类（仅作 provenance，不直接视为 install unit）
+6. unresolved fallback
+
+### E3. Aggregation resolver 改写
+
+`derive_source_aggregation_fields()` 改为优先使用持久 provenance：
+
+1. 现有显式 install-unit 字段
+2. `provenance_package_name`
+3. `registry_package_name`
+4. `manual_git` / `manual_local` locator
+5. `npx_bundle`
+6. unresolved fallback
+
+原则：
+
+- 可持久化 provenance 优先于运行时临时猜测
+- skills root 只作为恢复与诊断依据，不能重新变成 root synthetic bundle
+- unresolved source 必须保留“未解状态”，而不是伪装成真实聚合包
+
+### E4. Legacy recovery 策略
+
+对历史 `/root/.codex/skills/*` 这类目录，采用两段式策略：
+
+- 第一段：先保留 leaf 级 install unit，但把 root/source provenance 固化下来
+- 第二段：等 importer 或安装路径开始写入 ledger 后，再基于 provenance 做可信迁移
+
+这比直接恢复“Codex Skill Pack”更安全，因为：
+
+- 不会把无关技能错聚成一个大包
+- 不会制造用户以为“可统一更新”但实际并不存在的维护边界
+- 可以逐步把未来安装记录补回历史数据模型
+
+### E5. UI / API contract
+
+本阶段不强制重做主面板，但 API 需要开始暴露 provenance 状态，以便后续 UI 能区分：
+
+- 已确认 package/repo group
+- curated group
+- unresolved fallback single
+
+推荐新增统计：
+
+- `source_provenance_resolved_total`
+- `source_provenance_unresolved_total`
+
+本阶段仍保持：
+
+- 默认主视图继续优先 `meaningful_collection_group_rows`
+- unresolved fallback singles 不自动升级为“聚合包”
+
+### E6. 验收标准
+
+- registry 可持久化 provenance 字段
+- lock 可在不污染 manifest 的前提下保留 provenance 解析结果
+- aggregation 优先使用 provenance，而不是重复即席扫描
+- 现有 UI 不再依赖“94 个伪聚合包”才能工作
+- 对 `/root/.codex/skills/*` 这类 legacy roots，系统能明确标记“低置信未解”，而不是假装已经识别完毕
+
+## Phase F：扩展到 manual_git 与 manual_local
 
 目标：让 install-unit 模型不只服务 `npx`。
 
