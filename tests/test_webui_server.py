@@ -126,9 +126,32 @@ class _FakePlugin:
                     "source_id": "skill_cli",
                     "display_name": "CLI Skill",
                     "source_kind": "skill",
+                    "install_unit_id": "install:skill_cli",
+                    "collection_group_id": "collection:cli_tools",
                     "status": "ready",
                     "member_count": 1,
                     "deployed_target_count": 1,
+                },
+            ],
+            "install_unit_rows": [
+                {
+                    "install_unit_id": "install:skill_cli",
+                    "display_name": "CLI Tool Pack",
+                    "source_ids": ["skill_cli"],
+                    "source_count": 1,
+                    "member_count": 1,
+                    "collection_group_id": "collection:cli_tools",
+                },
+            ],
+            "collection_group_rows": [
+                {
+                    "collection_group_id": "collection:cli_tools",
+                    "display_name": "CLI Tools",
+                    "install_unit_ids": ["install:skill_cli"],
+                    "install_unit_count": 1,
+                    "source_ids": ["skill_cli"],
+                    "source_count": 1,
+                    "member_count": 1,
                 },
             ],
             "deploy_rows": [
@@ -192,6 +215,32 @@ class _FakePlugin:
             "ok": True,
             "generated_at": self.skills_snapshot["generated_at"],
             "source": self.skills_snapshot["source_rows"][0],
+            "deploy_rows": self.skills_snapshot["deploy_rows"],
+            "warnings": [],
+        }
+
+    def webui_get_install_unit_payload(self, install_unit_id: str) -> dict:
+        if install_unit_id != "install:skill_cli":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "deploy_rows": self.skills_snapshot["deploy_rows"],
+            "warnings": [],
+        }
+
+    def webui_get_collection_group_payload(self, collection_group_id: str) -> dict:
+        if collection_group_id != "collection:cli_tools":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "install_unit_rows": self.skills_snapshot["install_unit_rows"],
+            "source_rows": self.skills_snapshot["source_rows"],
             "deploy_rows": self.skills_snapshot["deploy_rows"],
             "warnings": [],
         }
@@ -470,10 +519,26 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, detail_resp.status_code)
         self.assertEqual("skill_cli", detail_resp.json()["source"]["source_id"])
 
+        install_unit_detail_resp = self.client.get("/api/skills/install-units/install%3Askill_cli")
+        self.assertEqual(200, install_unit_detail_resp.status_code)
+        self.assertEqual("install:skill_cli", install_unit_detail_resp.json()["install_unit"]["install_unit_id"])
+
+        collection_detail_resp = self.client.get("/api/skills/collections/collection%3Acli_tools")
+        self.assertEqual(200, collection_detail_resp.status_code)
+        self.assertEqual("collection:cli_tools", collection_detail_resp.json()["collection_group"]["collection_group_id"])
+
         target_detail_resp = self.client.get("/api/skills/deploy-targets/claude_code:global")
         self.assertEqual(200, target_detail_resp.status_code)
         self.assertEqual("claude_code:global", target_detail_resp.json()["deploy_target"]["target_id"])
         self.assertTrue(target_detail_resp.json()["generated_projection"]["exists"])
+
+        missing_install_unit_detail_resp = self.client.get("/api/skills/install-units/missing")
+        self.assertEqual(404, missing_install_unit_detail_resp.status_code)
+        self.assertFalse(missing_install_unit_detail_resp.json()["ok"])
+
+        missing_collection_detail_resp = self.client.get("/api/skills/collections/missing")
+        self.assertEqual(404, missing_collection_detail_resp.status_code)
+        self.assertFalse(missing_collection_detail_resp.json()["ok"])
 
         missing_target_detail_resp = self.client.get("/api/skills/deploy-targets/missing:global")
         self.assertEqual(404, missing_target_detail_resp.status_code)

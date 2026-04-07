@@ -963,6 +963,148 @@ def _apply_saved_lock_fallback(
     )
 
 
+def _overview_rows(overview: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    rows = overview.get(key, []) if isinstance(overview, dict) else []
+    return [
+        item
+        for item in rows
+        if isinstance(item, dict)
+    ]
+
+
+def _find_overview_row(overview: dict[str, Any], key: str, field: str, value: str) -> dict[str, Any] | None:
+    normalized_value = str(value or "").strip()
+    if not normalized_value:
+        return None
+    return next(
+        (
+            copy.deepcopy(item)
+            for item in _overview_rows(overview, key)
+            if str(item.get(field, "")).strip() == normalized_value
+        ),
+        None,
+    )
+
+
+def _related_deploy_rows_for_sources(
+    overview: dict[str, Any],
+    source_ids: list[str],
+) -> list[dict[str, Any]]:
+    related_source_ids = {
+        str(item or "").strip()
+        for item in source_ids
+        if str(item or "").strip()
+    }
+    if not related_source_ids:
+        return []
+
+    selected_deploy_rows: list[dict[str, Any]] = []
+    related_deploy_rows: list[dict[str, Any]] = []
+    for item in _overview_rows(overview, "deploy_rows"):
+        selected_source_ids = set(_to_str_list(item.get("selected_source_ids", [])))
+        if related_source_ids.intersection(selected_source_ids):
+            selected_deploy_rows.append(copy.deepcopy(item))
+            continue
+
+        candidate_source_ids = set(
+            _dedupe_keep_order(
+                _to_str_list(item.get("available_source_ids", []))
+                + _to_str_list(item.get("ready_source_ids", []))
+                + _to_str_list(item.get("missing_source_ids", []))
+                + _to_str_list(item.get("incompatible_source_ids", [])),
+            ),
+        )
+        if related_source_ids.intersection(candidate_source_ids):
+            related_deploy_rows.append(copy.deepcopy(item))
+    return selected_deploy_rows or related_deploy_rows
+
+
+def build_install_unit_detail_payload(overview: dict[str, Any], install_unit_id: str) -> dict[str, Any]:
+    normalized_install_unit_id = str(install_unit_id or "").strip()
+    if not normalized_install_unit_id:
+        return {"ok": False, "message": "install_unit_id is required"}
+
+    install_unit = _find_overview_row(
+        overview,
+        "install_unit_rows",
+        "install_unit_id",
+        normalized_install_unit_id,
+    )
+    if not install_unit:
+        return {"ok": False, "message": f"install_unit_id not found: {normalized_install_unit_id}"}
+
+    source_ids = _dedupe_keep_order(_to_str_list(install_unit.get("source_ids", [])))
+    source_rows = [
+        copy.deepcopy(item)
+        for item in _overview_rows(overview, "source_rows")
+        if str(item.get("source_id", "")).strip() in source_ids
+    ]
+    collection_group = _find_overview_row(
+        overview,
+        "collection_group_rows",
+        "collection_group_id",
+        str(install_unit.get("collection_group_id", "")).strip(),
+    ) or {}
+    deploy_rows = _related_deploy_rows_for_sources(overview, source_ids)
+
+    return {
+        "ok": True,
+        "generated_at": overview.get("generated_at"),
+        "install_unit": install_unit,
+        "collection_group": collection_group,
+        "source_rows": source_rows,
+        "deploy_rows": deploy_rows,
+        "warnings": copy.deepcopy(overview.get("warnings", [])),
+    }
+
+
+def build_collection_group_detail_payload(overview: dict[str, Any], collection_group_id: str) -> dict[str, Any]:
+    normalized_collection_group_id = str(collection_group_id or "").strip()
+    if not normalized_collection_group_id:
+        return {"ok": False, "message": "collection_group_id is required"}
+
+    collection_group = _find_overview_row(
+        overview,
+        "collection_group_rows",
+        "collection_group_id",
+        normalized_collection_group_id,
+    )
+    if not collection_group:
+        return {"ok": False, "message": f"collection_group_id not found: {normalized_collection_group_id}"}
+
+    install_unit_ids = _dedupe_keep_order(_to_str_list(collection_group.get("install_unit_ids", [])))
+    install_unit_rows = [
+        copy.deepcopy(item)
+        for item in _overview_rows(overview, "install_unit_rows")
+        if str(item.get("install_unit_id", "")).strip() in install_unit_ids
+    ]
+
+    source_ids = _dedupe_keep_order(
+        _to_str_list(collection_group.get("source_ids", []))
+        + [
+            source_id
+            for install_unit in install_unit_rows
+            for source_id in _to_str_list(install_unit.get("source_ids", []))
+        ],
+    )
+    source_rows = [
+        copy.deepcopy(item)
+        for item in _overview_rows(overview, "source_rows")
+        if str(item.get("source_id", "")).strip() in source_ids
+    ]
+    deploy_rows = _related_deploy_rows_for_sources(overview, source_ids)
+
+    return {
+        "ok": True,
+        "generated_at": overview.get("generated_at"),
+        "collection_group": collection_group,
+        "install_unit_rows": install_unit_rows,
+        "source_rows": source_rows,
+        "deploy_rows": deploy_rows,
+        "warnings": copy.deepcopy(overview.get("warnings", [])),
+    }
+
+
 def build_skills_overview(
     inventory_snapshot: dict[str, Any],
     *,

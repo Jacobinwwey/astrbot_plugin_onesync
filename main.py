@@ -28,6 +28,8 @@ from .skills_projection_core import (
 )
 from .skills_runtime_health import build_skills_runtime_health
 from .skills_core import (
+    build_collection_group_detail_payload,
+    build_install_unit_detail_payload,
     build_skills_overview,
     manifest_to_binding_rows,
     normalize_saved_skills_manifest,
@@ -1304,6 +1306,20 @@ class OneSyncPlugin(Star):
             "deploy_rows": related_targets,
             "warnings": snapshot.get("warnings", []),
         }
+
+    def webui_get_install_unit_payload(self, install_unit_id: str) -> dict[str, Any]:
+        normalized_install_unit_id = str(install_unit_id or "").strip()
+        if not normalized_install_unit_id:
+            return {"ok": False, "message": "install_unit_id is required"}
+        snapshot = self.webui_get_skills_payload()
+        return build_install_unit_detail_payload(snapshot, normalized_install_unit_id)
+
+    def webui_get_collection_group_payload(self, collection_group_id: str) -> dict[str, Any]:
+        normalized_collection_group_id = str(collection_group_id or "").strip()
+        if not normalized_collection_group_id:
+            return {"ok": False, "message": "collection_group_id is required"}
+        snapshot = self.webui_get_skills_payload()
+        return build_collection_group_detail_payload(snapshot, normalized_collection_group_id)
 
     def webui_get_deploy_target_payload(self, target_id: str) -> dict[str, Any]:
         normalized_target_id = str(target_id or "").strip()

@@ -141,6 +141,20 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
+        @self.app.get("/api/skills/install-units/{install_unit_id}")
+        async def skill_install_unit_detail(install_unit_id: str):
+            ret = self.plugin.webui_get_install_unit_payload(install_unit_id)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
+        @self.app.get("/api/skills/collections/{collection_group_id}")
+        async def skill_collection_group_detail(collection_group_id: str):
+            ret = self.plugin.webui_get_collection_group_payload(collection_group_id)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
         @self.app.get("/api/skills/deploy-targets/{target_id}")
         async def skill_deploy_target_detail(target_id: str):
             ret = self.plugin.webui_get_deploy_target_payload(target_id)

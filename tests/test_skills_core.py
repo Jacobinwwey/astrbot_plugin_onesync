@@ -11,9 +11,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from skills_core import (
+    build_collection_group_detail_payload,
     build_skills_lock,
     build_skills_manifest,
     build_skills_overview,
+    build_install_unit_detail_payload,
     manifest_to_binding_rows,
     normalize_saved_skills_manifest,
     normalize_saved_skills_lock,
@@ -719,6 +721,61 @@ class SkillsCoreTests(unittest.TestCase):
 
         self.assertGreaterEqual(overview["counts"]["install_unit_total"], 4)
         self.assertGreaterEqual(overview["counts"]["collection_group_total"], 4)
+
+    def test_build_install_unit_detail_payload_returns_member_sources_and_related_targets(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["skill_rows"][0].update(
+            {
+                "source_exists": True,
+                "freshness_status": "fresh",
+                "registry_package_name": "@every-env/compound-plugin",
+                "registry_package_manager": "npm",
+            },
+        )
+        overview = build_skills_overview(snapshot)
+
+        detail = build_install_unit_detail_payload(overview, "npm:@every-env/compound-plugin")
+
+        self.assertTrue(detail["ok"])
+        self.assertEqual("npm:@every-env/compound-plugin", detail["install_unit"]["install_unit_id"])
+        self.assertEqual(
+            ["npx_bundle_compound_engineering_global"],
+            [item["source_id"] for item in detail["source_rows"]],
+        )
+        self.assertEqual(
+            ["codex:global"],
+            [item["target_id"] for item in detail["deploy_rows"]],
+        )
+        self.assertEqual("collection:compound_engineering", detail["collection_group"]["collection_group_id"])
+
+    def test_build_collection_group_detail_payload_returns_install_units_sources_and_targets(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["skill_rows"][0].update(
+            {
+                "source_exists": True,
+                "freshness_status": "fresh",
+                "registry_package_name": "@every-env/compound-plugin",
+                "registry_package_manager": "npm",
+            },
+        )
+        overview = build_skills_overview(snapshot)
+
+        detail = build_collection_group_detail_payload(overview, "collection:compound_engineering")
+
+        self.assertTrue(detail["ok"])
+        self.assertEqual("collection:compound_engineering", detail["collection_group"]["collection_group_id"])
+        self.assertEqual(
+            ["npm:@every-env/compound-plugin"],
+            [item["install_unit_id"] for item in detail["install_unit_rows"]],
+        )
+        self.assertEqual(
+            ["npx_bundle_compound_engineering_global"],
+            [item["source_id"] for item in detail["source_rows"]],
+        )
+        self.assertEqual(
+            ["codex:global"],
+            [item["target_id"] for item in detail["deploy_rows"]],
+        )
 
     def test_build_skills_overview_preserves_registry_source_subpath(self) -> None:
         saved_registry = {

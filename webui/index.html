@@ -1466,6 +1466,18 @@
       max-width: var(--inventory-source-card-max-width);
       width: 100%;
       background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
+    }
+
+    .inventory-source-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      transform: translateY(-1px);
+    }
+
+    .inventory-source-item.active {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
     }
 
     .inventory-deploy-item {
@@ -2010,6 +2022,9 @@
                 <button id="inventoryDoctorBtn" type="button">健康检查</button>
               </div>
               <p class="inventory-doctor-note" id="inventoryDoctorSummary">等待最新状态...</p>
+              <div class="inventory-target-hero" id="inventorySourceHero">
+                <div class="debug-empty" id="inventorySourceHeroEmpty">等待选择 Source / Bundle...</div>
+              </div>
               <div class="inventory-source-rows" id="inventorySourceRows">
                 <div class="debug-empty" id="inventorySourceRowsEmpty">暂无 Source 数据</div>
               </div>
@@ -2548,6 +2563,8 @@
       inventoryImportSaving: false,
       inventorySaving: false,
       inventoryTargetDetail: null,
+      inventorySelectedSourceKey: "",
+      inventorySourceDetail: null,
       inventoryRepairing: false,
       inventoryRepairAllRunning: false,
       inventoryReprojecting: false
@@ -4338,6 +4355,42 @@
       return single ? [single] : [];
     }
 
+    function inventorySourceSelectionKey(item) {
+      if (!item || typeof item !== "object") return "";
+      return String(item.collection_group_id || item.install_unit_id || item.source_id || item.id || "").trim();
+    }
+
+    function inventorySourceDetailKey(detail) {
+      if (!detail || typeof detail !== "object") return "";
+      if (detail.install_unit && typeof detail.install_unit === "object") {
+        return String(detail.install_unit.install_unit_id || "").trim();
+      }
+      if (detail.collection_group && typeof detail.collection_group === "object") {
+        return String(detail.collection_group.collection_group_id || "").trim();
+      }
+      if (detail.source && typeof detail.source === "object") {
+        return String(detail.source.source_id || "").trim();
+      }
+      return "";
+    }
+
+    function resolveInventorySourceDetailEndpoint(sourceKey, overview = state.inventoryOverview) {
+      const normalizedSourceKey = String(sourceKey || "").trim();
+      if (!normalizedSourceKey) {
+        return "";
+      }
+      const snapshot = overview && typeof overview === "object" ? overview : {};
+      const collectionGroupRows = Array.isArray(snapshot.collection_group_rows) ? snapshot.collection_group_rows : [];
+      if (collectionGroupRows.some((item) => String(item.collection_group_id || "").trim() === normalizedSourceKey)) {
+        return `/api/skills/collections/${encodeURIComponent(normalizedSourceKey)}`;
+      }
+      const installUnitRows = Array.isArray(snapshot.install_unit_rows) ? snapshot.install_unit_rows : [];
+      if (installUnitRows.some((item) => String(item.install_unit_id || "").trim() === normalizedSourceKey)) {
+        return `/api/skills/install-units/${encodeURIComponent(normalizedSourceKey)}`;
+      }
+      return `/api/skills/sources/${encodeURIComponent(normalizedSourceKey)}`;
+    }
+
     function inventorySourceLocatorText(item) {
       const locator = String(item && (item.locator || item.source_path) || "-").trim() || "-";
       const sourceSubpath = String(item && item.source_subpath || "").trim();
@@ -4472,6 +4525,30 @@
       }
     }
 
+    async function refreshSelectedInventorySourceDetail({ silent = true } = {}) {
+      const sourceKey = String(state.inventorySelectedSourceKey || "").trim();
+      const endpoint = resolveInventorySourceDetailEndpoint(sourceKey);
+      if (!endpoint) {
+        state.inventorySourceDetail = null;
+        renderInventoryPanel();
+        return null;
+      }
+
+      try {
+        const detail = await api(endpoint);
+        state.inventorySourceDetail = detail;
+        renderInventoryPanel();
+        return detail;
+      } catch (err) {
+        state.inventorySourceDetail = null;
+        renderInventoryPanel();
+        if (!silent) {
+          throw err;
+        }
+        return null;
+      }
+    }
+
     function renderInventoryPanel() {
       const summaryEl = $("inventorySummary");
       const selectEl = $("inventorySoftwareSelect");
@@ -4487,6 +4564,7 @@
       const metaEl = $("inventorySoftwareMeta");
       const skillListEl = $("inventorySkillList");
       const softwareRowsEl = $("inventorySoftwareRows");
+      const sourceHeroEl = $("inventorySourceHero");
       const sourceRowsEl = $("inventorySourceRows");
       const deployRowsEl = $("inventoryDeployRows");
       const doctorSummaryEl = $("inventoryDoctorSummary");
@@ -4606,10 +4684,31 @@
       const detailProjection = state.inventoryTargetDetail && state.inventoryTargetDetail.generated_projection
         ? state.inventoryTargetDetail.generated_projection
         : null;
+      const availableSourceKeys = primarySourceRows
+        .map((item) => inventorySourceSelectionKey(item))
+        .filter(Boolean);
+      const currentSelectedSourceKey = String(state.inventorySelectedSourceKey || "").trim();
+      const selectedSourceKey = availableSourceKeys.includes(currentSelectedSourceKey)
+        ? currentSelectedSourceKey
+        : (availableSourceKeys[0] || "");
+      if (selectedSourceKey !== currentSelectedSourceKey) {
+        state.inventorySelectedSourceKey = selectedSourceKey;
+      }
+      const currentSourceDetailKey = inventorySourceDetailKey(state.inventorySourceDetail);
+      if (currentSourceDetailKey && currentSourceDetailKey !== selectedSourceKey) {
+        state.inventorySourceDetail = null;
+      }
+      const sourceDetail = state.inventorySourceDetail
+        && inventorySourceDetailKey(state.inventorySourceDetail) === selectedSourceKey
+        ? state.inventorySourceDetail
+        : null;
+      const selectedSourceRow = primarySourceRows.find(
+        (item) => inventorySourceSelectionKey(item) === selectedSourceKey,
+      ) || null;
 
       sourceRowsEl.innerHTML = primarySourceRows.length
         ? primarySourceRows.map((item) => {
-          const sourceId = String(item.collection_group_id || item.install_unit_id || item.source_id || item.id || "").trim();
+          const sourceId = inventorySourceSelectionKey(item);
           const sourceIds = inventoryAggregateSourceIds(item);
           const primarySourceId = String(item.primary_source_id || (sourceIds.length === 1 ? sourceIds[0] : "")).trim();
           const memberCount = Number(item.member_count) || 1;
@@ -4636,8 +4735,12 @@
           const sourceSubpath = String(item.source_subpath || "").trim();
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
+          const activeCls = sourceId === selectedSourceKey ? "active" : "";
           return `
-            <div class="inventory-source-item">
+            <div
+              class="inventory-source-item ${activeCls}"
+              data-inventory-source-key="${escapeHtml(sourceId)}"
+            >
               <div class="title">
                 <span>${escapeHtml(item.display_name || sourceId)}</span>
                 <span class="inventory-source-actions">
@@ -4690,6 +4793,197 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           `;
         }).join("")
         : `<div class="debug-empty">${t("inventory_source_empty")}</div>`;
+
+      if (!selectedSourceRow) {
+        sourceHeroEl.innerHTML = `<div class="debug-empty">等待选择 Source / Bundle...</div>`;
+      } else {
+        const detailCollection = sourceDetail && sourceDetail.collection_group && typeof sourceDetail.collection_group === "object"
+          ? sourceDetail.collection_group
+          : null;
+        const detailInstallUnit = sourceDetail && sourceDetail.install_unit && typeof sourceDetail.install_unit === "object"
+          ? sourceDetail.install_unit
+          : null;
+        const detailSource = sourceDetail && sourceDetail.source && typeof sourceDetail.source === "object"
+          ? sourceDetail.source
+          : null;
+        const detailInstallUnitRows = sourceDetail && Array.isArray(sourceDetail.install_unit_rows)
+          ? sourceDetail.install_unit_rows
+          : (detailInstallUnit ? [detailInstallUnit] : []);
+        const detailSourceRows = sourceDetail && Array.isArray(sourceDetail.source_rows)
+          ? sourceDetail.source_rows
+          : (detailSource ? [detailSource] : []);
+        const detailDeployRows = sourceDetail && Array.isArray(sourceDetail.deploy_rows)
+          ? sourceDetail.deploy_rows
+          : [];
+        const detailWarnings = sourceDetail && Array.isArray(sourceDetail.warnings)
+          ? sourceDetail.warnings.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        const heroKind = detailCollection
+          ? "Collection Group"
+          : (detailInstallUnit ? "Install Unit" : "Source");
+        const heroTitle = String(
+          (detailCollection && detailCollection.display_name)
+          || (detailInstallUnit && detailInstallUnit.display_name)
+          || (detailSource && detailSource.display_name)
+          || selectedSourceRow.display_name
+          || selectedSourceKey,
+        ).trim() || selectedSourceKey;
+        const heroId = String(
+          (detailInstallUnit && detailInstallUnit.install_unit_id)
+          || (detailCollection && detailCollection.collection_group_id)
+          || (detailSource && detailSource.source_id)
+          || selectedSourceKey,
+        ).trim() || selectedSourceKey;
+        const heroCollectionId = String(
+          (detailCollection && detailCollection.collection_group_id)
+          || selectedSourceRow.collection_group_id
+          || "",
+        ).trim();
+        const heroInstallId = String(
+          (detailInstallUnit && detailInstallUnit.install_unit_id)
+          || selectedSourceRow.install_unit_id
+          || "",
+        ).trim();
+        const heroLocator = String(
+          selectedSourceRow.install_ref
+          || selectedSourceRow.locator
+          || selectedSourceRow.source_path
+          || (detailSource ? inventorySourceLocatorText(detailSource) : "-"),
+        ).trim() || "-";
+        const heroManager = String(
+          selectedSourceRow.install_manager
+          || selectedSourceRow.managed_by
+          || (detailSource && detailSource.managed_by)
+          || "-",
+        ).trim() || "-";
+        const installUnitCount = Number(
+          (detailCollection && detailCollection.install_unit_count)
+          || detailInstallUnitRows.length
+          || (heroInstallId ? 1 : 0),
+        ) || 0;
+        const sourceCount = Number(
+          (detailCollection && detailCollection.source_count)
+          || (detailInstallUnit && detailInstallUnit.source_count)
+          || detailSourceRows.length
+          || selectedSourceRow.source_count
+          || inventoryAggregateSourceIds(selectedSourceRow).length,
+        ) || 0;
+        const memberCount = Number(
+          (detailCollection && detailCollection.member_count)
+          || (detailInstallUnit && detailInstallUnit.member_count)
+          || (detailSource && detailSource.member_count)
+          || selectedSourceRow.member_count
+          || detailSourceRows.length,
+        ) || 0;
+        const deployedTargetCount = Number(
+          detailDeployRows.length
+          || (detailCollection && detailCollection.deployed_target_count)
+          || (detailInstallUnit && detailInstallUnit.deployed_target_count)
+          || (detailSource && detailSource.deployed_target_count)
+          || selectedSourceRow.deployed_target_count,
+        ) || 0;
+        const syncStatus = String(
+          selectedSourceRow.sync_status
+          || (detailSource && detailSource.sync_status)
+          || "pending",
+        ).trim() || "pending";
+        const latestVersion = String(
+          selectedSourceRow.registry_latest_version
+          || (detailSource && detailSource.registry_latest_version)
+          || "-",
+        ).trim() || "-";
+        const checkedAt = String(
+          selectedSourceRow.sync_checked_at
+          || (detailSource && detailSource.sync_checked_at)
+          || "-",
+        ).trim() || "-";
+        const memberPreview = [...new Set(
+          detailSourceRows.flatMap((row) => {
+            const preview = Array.isArray(row && row.member_skill_preview)
+              ? row.member_skill_preview.map((item) => String(item || "").trim()).filter(Boolean)
+              : [];
+            if (preview.length) {
+              return preview;
+            }
+            const sourceId = String(row && (row.display_name || row.source_id) || "").trim();
+            return sourceId ? [sourceId] : [];
+          }),
+        )].filter(Boolean).slice(0, 8);
+        const deployNotes = detailDeployRows
+          .map((row) => {
+            const targetId = String(row && row.target_id || "").trim();
+            if (!targetId) return "";
+            return `${targetId} · ${String(row.status || "idle").trim()} · ${inventoryDriftLabel(row.drift_status || "ok")}`;
+          })
+          .filter(Boolean)
+          .slice(0, 6);
+        const noteItems = deployNotes.length
+          ? deployNotes
+          : (detailWarnings.length ? detailWarnings.slice(0, 4) : (sourceDetail ? [] : ["Detail loading from API..."]));
+        const subtitleParts = [
+          `${installUnitCount || 0} units`,
+          `${sourceCount || 0} sources`,
+          `${memberCount || 0} members`,
+          `${deployedTargetCount || 0} deploy targets`,
+        ];
+        sourceHeroEl.innerHTML = `
+          <div class="inventory-target-top">
+            <div class="inventory-target-copy">
+              <div class="inventory-target-kicker">${escapeHtml(heroKind)}</div>
+              <h3 class="inventory-target-title">${escapeHtml(heroTitle)}</h3>
+              <p class="inventory-target-subtitle">${escapeHtml(subtitleParts.join(" · "))}</p>
+            </div>
+            ${renderSkillsStatusBadge(selectedSourceRow.status || "idle")}
+          </div>
+          <div class="inventory-target-chip-row">
+            <span class="inventory-chip">ID<strong>${escapeHtml(heroId)}</strong></span>
+            ${heroCollectionId ? `<span class="inventory-chip">Collection<strong>${escapeHtml(heroCollectionId)}</strong></span>` : ""}
+            ${heroInstallId ? `<span class="inventory-chip">Install Unit<strong>${escapeHtml(heroInstallId)}</strong></span>` : ""}
+            <span class="inventory-chip">Manager<strong>${escapeHtml(heroManager)}</strong></span>
+            <span class="inventory-chip">Locator<strong>${escapeHtml(heroLocator)}</strong></span>
+            <span class="inventory-chip">Sync<strong>${escapeHtml(syncStatus)}</strong></span>
+            <span class="inventory-chip">Latest<strong>${escapeHtml(latestVersion)}</strong></span>
+          </div>
+          <div class="inventory-target-metrics">
+            <div class="inventory-target-metric">
+              <div class="label">Install Units</div>
+              <div class="value">${escapeHtml(installUnitCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">Sources</div>
+              <div class="value">${escapeHtml(sourceCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">Members</div>
+              <div class="value">${escapeHtml(memberCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">Deploy Targets</div>
+              <div class="value">${escapeHtml(deployedTargetCount)}</div>
+            </div>
+            <div class="inventory-target-metric">
+              <div class="label">Checked</div>
+              <div class="value">${escapeHtml(toLocalTime(checkedAt))}</div>
+            </div>
+          </div>
+          <div class="inventory-target-drift">
+            <div class="inventory-target-drift-title">Members Preview</div>
+            <div class="inventory-target-drift-list">
+              ${memberPreview.length
+                ? memberPreview.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">No member preview yet.</div>`}
+            </div>
+          </div>
+          <div class="inventory-target-drift">
+            <div class="inventory-target-drift-title">Deploy Targets / Notes</div>
+            <div class="inventory-target-drift-list">
+              ${noteItems.length
+                ? noteItems.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">No deploy targets linked.</div>`}
+            </div>
+          </div>
+        `;
+      }
 
       deployRowsEl.innerHTML = visibleDeployRows.length
         ? visibleDeployRows.map((item) => {
@@ -5138,8 +5432,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const data = await api(endpoint, options);
       state.inventoryOverview = data.skills || data.inventory || data;
       state.inventoryTargetDetail = null;
+      state.inventorySourceDetail = null;
       renderInventoryPanel();
       await refreshSelectedDeployTargetDetail();
+      await refreshSelectedInventorySourceDetail();
     }
 
     async function syncInventorySource(sourceId) {
@@ -5166,6 +5462,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
         renderInventoryPanel();
         await refreshSelectedDeployTargetDetail();
+        await refreshSelectedInventorySourceDetail();
       } finally {
         const nextSyncing = new Set(
           (state.inventorySyncingSourceIds || [])
@@ -5192,6 +5489,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
         renderInventoryPanel();
         await refreshSelectedDeployTargetDetail();
+        await refreshSelectedInventorySourceDetail();
       } finally {
         state.inventorySyncAllRunning = false;
         renderInventoryPanel();
@@ -6790,16 +7088,33 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       });
 
       $("inventorySourceRows").addEventListener("click", async (evt) => {
-        const el = evt.target && typeof evt.target.closest === "function"
+        const syncEl = evt.target && typeof evt.target.closest === "function"
           ? evt.target.closest("[data-source-sync-id]")
           : null;
-        if (!el) return;
-        const sourceId = String(el.getAttribute("data-source-sync-id") || "").trim();
-        if (!sourceId) return;
+        if (syncEl) {
+          const sourceId = String(syncEl.getAttribute("data-source-sync-id") || "").trim();
+          if (!sourceId) return;
+          try {
+            await syncInventorySource(sourceId);
+          } catch (err) {
+            alert(t("inventory_sync_error", { msg: err.message }));
+          }
+          return;
+        }
+
+        const itemEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-source-key]")
+          : null;
+        if (!itemEl) return;
+        const sourceKey = String(itemEl.getAttribute("data-inventory-source-key") || "").trim();
+        if (!sourceKey || sourceKey === String(state.inventorySelectedSourceKey || "").trim()) return;
+        state.inventorySelectedSourceKey = sourceKey;
+        state.inventorySourceDetail = null;
+        renderInventoryPanel();
         try {
-          await syncInventorySource(sourceId);
+          await refreshSelectedInventorySourceDetail({ silent: false });
         } catch (err) {
-          alert(t("inventory_sync_error", { msg: err.message }));
+          alert(`Failed to load source detail: ${err.message}`);
         }
       });
 
