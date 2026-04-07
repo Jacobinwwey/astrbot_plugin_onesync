@@ -240,6 +240,13 @@ collection group 不能替代 install unit 成为唯一真相。
 - deploy
   - 将 install unit 下当前生效 leaf members 投影到指定 target
 
+当前进度（2026-04-07）：
+
+- 已完成 install-unit 级 `refresh` / `sync` / `deploy`
+- 已补 collection-group 级批量 `refresh` / `sync` / `deploy`
+- 前端动作栏已从 “单 install unit” 升级为 “按当前 aggregate 自动路由”
+- 下一步应补足 doctor 汇总与 update/repair 的 aggregate-first 编排
+
 ## Phase E：扩展到 manual_git 与 manual_local
 
 目标：让 install-unit 模型不只服务 `npx`。

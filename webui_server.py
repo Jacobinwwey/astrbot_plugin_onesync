@@ -187,6 +187,13 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
+        @self.app.post("/api/skills/collections/{collection_group_id}/refresh")
+        async def skill_collection_group_refresh(collection_group_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_refresh_collection_group(collection_group_id, payload)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
         @self.app.post("/api/skills/sources/{source_id}/remove")
         async def skill_source_remove(source_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_remove_skill_source(source_id, payload)
@@ -210,6 +217,14 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
+        @self.app.post("/api/skills/collections/{collection_group_id}/sync")
+        async def skill_collection_group_sync(collection_group_id: str, payload: dict[str, Any]):
+            _ = payload
+            ret = self.plugin.webui_sync_collection_group(collection_group_id)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
         @self.app.post("/api/skills/sources/sync-all")
         async def skill_source_sync_all(payload: dict[str, Any]):
             _ = payload
@@ -228,6 +243,14 @@ class OneSyncWebUIServer:
         @self.app.post("/api/skills/install-units/{install_unit_id}/deploy")
         async def skill_install_unit_deploy(install_unit_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_deploy_install_unit(install_unit_id, payload)
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(ret, status_code=status_code)
+            return ret
+
+        @self.app.post("/api/skills/collections/{collection_group_id}/deploy")
+        async def skill_collection_group_deploy(collection_group_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_deploy_collection_group(collection_group_id, payload)
             if not ret.get("ok"):
                 status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
                 return JSONResponse(ret, status_code=status_code)

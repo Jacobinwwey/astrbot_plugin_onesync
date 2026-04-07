@@ -282,6 +282,46 @@ class _FakePlugin:
             "inventory": self.inventory_snapshot,
         }
 
+    def webui_refresh_collection_group(self, collection_group_id: str, payload: dict) -> dict:
+        _ = payload
+        if collection_group_id != "collection:cli_tools":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "install_unit_rows": self.skills_snapshot["install_unit_rows"],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_sync_collection_group(self, collection_group_id: str) -> dict:
+        if collection_group_id != "collection:cli_tools":
+            return {"ok": False, "message": "not found"}
+        return {
+            "ok": True,
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "install_unit_rows": self.skills_snapshot["install_unit_rows"],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "synced_source_ids": ["skill_cli"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_deploy_collection_group(self, collection_group_id: str, payload: dict) -> dict:
+        if collection_group_id != "collection:cli_tools":
+            return {"ok": False, "message": "not found"}
+        if not payload.get("software_ids") and not payload.get("target_ids"):
+            return {"ok": False, "message": "software_ids or target_ids is required"}
+        return {
+            "ok": True,
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "install_unit_rows": self.skills_snapshot["install_unit_rows"],
+            "target_ids": ["claude_code:global"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
     def webui_get_skills_registry_payload(self) -> dict:
         return {
             "ok": True,
@@ -615,6 +655,16 @@ class WebUIServerTests(unittest.TestCase):
         self.assertTrue(unit_sync_resp.json()["ok"])
         self.assertEqual(["skill_cli"], unit_sync_resp.json()["synced_source_ids"])
 
+        group_refresh_resp = self.client.post("/api/skills/collections/collection%3Acli_tools/refresh", json={})
+        self.assertEqual(200, group_refresh_resp.status_code)
+        self.assertTrue(group_refresh_resp.json()["ok"])
+        self.assertEqual("collection:cli_tools", group_refresh_resp.json()["collection_group"]["collection_group_id"])
+
+        group_sync_resp = self.client.post("/api/skills/collections/collection%3Acli_tools/sync", json={})
+        self.assertEqual(200, group_sync_resp.status_code)
+        self.assertTrue(group_sync_resp.json()["ok"])
+        self.assertEqual(["skill_cli"], group_sync_resp.json()["synced_source_ids"])
+
         unit_deploy_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/deploy",
             json={"software_ids": ["claude_code"], "scope": "global"},
@@ -622,6 +672,14 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, unit_deploy_resp.status_code)
         self.assertTrue(unit_deploy_resp.json()["ok"])
         self.assertEqual(["claude_code:global"], unit_deploy_resp.json()["target_ids"])
+
+        group_deploy_resp = self.client.post(
+            "/api/skills/collections/collection%3Acli_tools/deploy",
+            json={"software_ids": ["claude_code"], "scope": "global"},
+        )
+        self.assertEqual(200, group_deploy_resp.status_code)
+        self.assertTrue(group_deploy_resp.json()["ok"])
+        self.assertEqual(["claude_code:global"], group_deploy_resp.json()["target_ids"])
 
         missing_unit_refresh_resp = self.client.post("/api/skills/install-units/missing/refresh", json={})
         self.assertEqual(404, missing_unit_refresh_resp.status_code)
@@ -631,12 +689,27 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(404, missing_unit_sync_resp.status_code)
         self.assertFalse(missing_unit_sync_resp.json()["ok"])
 
+        missing_group_refresh_resp = self.client.post("/api/skills/collections/missing/refresh", json={})
+        self.assertEqual(404, missing_group_refresh_resp.status_code)
+        self.assertFalse(missing_group_refresh_resp.json()["ok"])
+
+        missing_group_sync_resp = self.client.post("/api/skills/collections/missing/sync", json={})
+        self.assertEqual(404, missing_group_sync_resp.status_code)
+        self.assertFalse(missing_group_sync_resp.json()["ok"])
+
         bad_unit_deploy_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/deploy",
             json={},
         )
         self.assertEqual(400, bad_unit_deploy_resp.status_code)
         self.assertFalse(bad_unit_deploy_resp.json()["ok"])
+
+        bad_group_deploy_resp = self.client.post(
+            "/api/skills/collections/collection%3Acli_tools/deploy",
+            json={},
+        )
+        self.assertEqual(400, bad_group_deploy_resp.status_code)
+        self.assertFalse(bad_group_deploy_resp.json()["ok"])
 
         refresh_resp = self.client.post("/api/skills/sources/skill_cli/refresh", json={})
         self.assertEqual(200, refresh_resp.status_code)

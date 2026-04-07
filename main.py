@@ -1382,6 +1382,72 @@ class OneSyncPlugin(Star):
             response.update(extra)
         return response
 
+    def _resolve_collection_group_action_context(self, collection_group_id: str) -> dict[str, Any]:
+        normalized_collection_group_id = str(collection_group_id or "").strip()
+        if not normalized_collection_group_id:
+            return {"ok": False, "message": "collection_group_id is required"}
+
+        detail = self.webui_get_collection_group_payload(normalized_collection_group_id)
+        if not detail.get("ok"):
+            return detail
+
+        install_unit_rows = [
+            item
+            for item in detail.get("install_unit_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_rows = [
+            item
+            for item in detail.get("source_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_ids = _dedupe_keep_order(
+            [
+                _normalize_inventory_id(item.get("source_id", ""), default="")
+                for item in source_rows
+                if _normalize_inventory_id(item.get("source_id", ""), default="")
+            ],
+        )
+        if not source_ids:
+            return {
+                "ok": False,
+                "message": f"collection_group has no source members: {normalized_collection_group_id}",
+            }
+
+        return {
+            "ok": True,
+            "collection_group_id": normalized_collection_group_id,
+            "detail": detail,
+            "collection_group": detail.get("collection_group", {}),
+            "install_unit_rows": install_unit_rows,
+            "source_rows": source_rows,
+            "source_ids": source_ids,
+        }
+
+    def _build_collection_group_mutation_response(
+        self,
+        collection_group_id: str,
+        *,
+        inventory_snapshot: dict[str, Any],
+        skills_snapshot: dict[str, Any],
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        detail = self.webui_get_collection_group_payload(collection_group_id)
+        response = {
+            "ok": True,
+            "generated_at": detail.get("generated_at", skills_snapshot.get("generated_at")),
+            "collection_group": detail.get("collection_group", {}),
+            "install_unit_rows": detail.get("install_unit_rows", []),
+            "source_rows": detail.get("source_rows", []),
+            "deploy_rows": detail.get("deploy_rows", []),
+            "warnings": detail.get("warnings", []),
+            "skills": skills_snapshot,
+            "inventory": inventory_snapshot,
+        }
+        if isinstance(extra, dict):
+            response.update(extra)
+        return response
+
     def webui_get_deploy_target_payload(self, target_id: str) -> dict[str, Any]:
         normalized_target_id = str(target_id or "").strip()
         if not normalized_target_id:
@@ -1743,6 +1809,137 @@ class OneSyncPlugin(Star):
         )
         return self._build_install_unit_mutation_response(
             normalized_install_unit_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "registry": registry,
+                "synced_source_ids": synced_source_ids,
+                "failed_sources": failed_sources,
+            },
+        )
+
+    def webui_refresh_collection_group(
+        self,
+        collection_group_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        source_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_collection_group_action_context(collection_group_id)
+        if not context.get("ok"):
+            return context
+
+        updated_registry = self._load_saved_skills_registry()
+        refreshed_source_ids: list[str] = []
+        for source_row in context.get("source_rows", []):
+            if not isinstance(source_row, dict):
+                continue
+            source_id = _normalize_inventory_id(source_row.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            registry_source = next(
+                (
+                    item
+                    for item in updated_registry.get("sources", [])
+                    if isinstance(item, dict) and str(item.get("source_id", "")).strip() == source_id
+                ),
+                None,
+            )
+            merged_source = {
+                **(registry_source if isinstance(registry_source, dict) else {}),
+                **source_row,
+                **source_payload,
+                "source_id": source_id,
+            }
+            if isinstance(registry_source, dict):
+                updated_registry = refresh_registry_source(
+                    updated_registry,
+                    source_id,
+                    merged_source,
+                    generated_at=_now_iso(),
+                )
+            else:
+                updated_registry = register_registry_source(
+                    updated_registry,
+                    merged_source,
+                    generated_at=_now_iso(),
+                )
+            refreshed_source_ids.append(source_id)
+
+        self._save_skills_registry(updated_registry)
+        normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        self._append_skills_audit_event(
+            "collection_group_refresh",
+            source_id=normalized_collection_group_id,
+            payload={
+                "source_ids": refreshed_source_ids,
+                **source_payload,
+            },
+        )
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        self._push_debug_log(
+            "info",
+            (
+                "collection group refreshed: "
+                f"collection_group={normalized_collection_group_id} sources={','.join(refreshed_source_ids)}"
+            ),
+            source="webui",
+        )
+        return self._build_collection_group_mutation_response(
+            normalized_collection_group_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "registry": updated_registry,
+                "refreshed_source_ids": refreshed_source_ids,
+            },
+        )
+
+    def webui_sync_collection_group(self, collection_group_id: str) -> dict[str, Any]:
+        context = self._resolve_collection_group_action_context(collection_group_id)
+        if not context.get("ok"):
+            return context
+
+        synced_source_ids: list[str] = []
+        failed_sources: list[dict[str, Any]] = []
+        registry = self._load_saved_skills_registry()
+
+        for source in context.get("source_rows", []):
+            if not isinstance(source, dict):
+                continue
+            source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            sync_record = build_source_sync_record(source)
+            registry = self._update_saved_registry_source_metadata(
+                source_id=source_id,
+                source_payload=source,
+                sync_payload=sync_record,
+            )
+            if str(sync_record.get("sync_status") or "") == "ok":
+                synced_source_ids.append(source_id)
+            else:
+                failed_sources.append(
+                    {
+                        "source_id": source_id,
+                        "sync_status": str(sync_record.get("sync_status") or ""),
+                        "sync_message": str(sync_record.get("sync_message") or ""),
+                    },
+                )
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        self._push_debug_log(
+            "info" if not failed_sources else "warn",
+            (
+                "collection group synced: "
+                f"collection_group={normalized_collection_group_id} ok={len(synced_source_ids)} failed={len(failed_sources)}"
+            ),
+            source="webui",
+        )
+        return self._build_collection_group_mutation_response(
+            normalized_collection_group_id,
             inventory_snapshot=inventory_snapshot,
             skills_snapshot=refreshed_skills_snapshot,
             extra={
@@ -2405,6 +2602,38 @@ class OneSyncPlugin(Star):
         )
         return self._build_install_unit_mutation_response(
             normalized_install_unit_id,
+            inventory_snapshot=deploy_result.get("inventory", {}),
+            skills_snapshot=deploy_result.get("skills", {}),
+            extra={
+                "manifest": deploy_result.get("manifest", {}),
+                "target_ids": deploy_result.get("target_ids", []),
+            },
+        )
+
+    def webui_deploy_collection_group(self, collection_group_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        context = self._resolve_collection_group_action_context(collection_group_id)
+        if not context.get("ok"):
+            return context
+
+        deploy_result = self._deploy_source_ids_to_targets(
+            _to_str_list(context.get("source_ids", [])),
+            payload,
+        )
+        if not deploy_result.get("ok"):
+            return deploy_result
+
+        normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        self._push_debug_log(
+            "info",
+            (
+                "collection group deployed: "
+                f"collection_group={normalized_collection_group_id} scope={deploy_result.get('scope', 'global')} "
+                f"targets={','.join(_to_str_list(deploy_result.get('target_ids', [])))}"
+            ),
+            source="webui",
+        )
+        return self._build_collection_group_mutation_response(
+            normalized_collection_group_id,
             inventory_snapshot=deploy_result.get("inventory", {}),
             skills_snapshot=deploy_result.get("skills", {}),
             extra={
