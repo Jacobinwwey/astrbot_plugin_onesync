@@ -799,6 +799,92 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual("collection:source_repo_microsoft_playwright_cli", aggregation["collection_group_id"])
         self.assertEqual("source_repo", aggregation["collection_group_kind"])
 
+    def test_npx_single_recovers_catalog_source_repo_from_curated_reference_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "ui-ux-pro-max"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: ui-ux-pro-max\n"
+                "description: UI/UX design intelligence for web and mobile.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_ui_ux_pro_max",
+                "display_name": "ui-ux-pro-max",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["ui-ux-pro-max"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("catalog_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual(
+            "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git#.claude/skills/ui-ux-pro-max",
+            provenance["provenance_origin_ref"],
+        )
+        self.assertEqual("nextlevelbuilder/ui-ux-pro-max-skill", provenance["provenance_origin_label"])
+        self.assertEqual("catalog_reference_hint", provenance["provenance_package_strategy"])
+        self.assertEqual("medium", provenance["provenance_confidence"])
+
+        self.assertEqual(
+            "repo:https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git#.claude/skills/ui-ux-pro-max",
+            aggregation["install_unit_id"],
+        )
+        self.assertEqual("catalog_source_repo", aggregation["install_unit_kind"])
+        self.assertEqual(
+            "nextlevelbuilder/ui-ux-pro-max-skill :: .claude/skills/ui-ux-pro-max",
+            aggregation["install_unit_display_name"],
+        )
+        self.assertEqual("collection:source_repo_nextlevelbuilder_ui_ux_pro_max_skill", aggregation["collection_group_id"])
+        self.assertEqual("source_repo", aggregation["collection_group_kind"])
+
+    def test_npx_single_catalog_source_repo_hint_does_not_promote_unlisted_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "javascript-pro"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: javascript-pro\n"
+                "description: Master modern JavaScript with ES6+.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_javascript_pro",
+                "display_name": "javascript-pro",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["javascript-pro"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("skills_root", provenance["provenance_origin_kind"])
+        self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
+        self.assertEqual("low", provenance["provenance_confidence"])
+        self.assertEqual("synthetic_single:npx_global_javascript_pro", aggregation["install_unit_id"])
+
     def test_npx_single_recovers_package_from_structured_cache_skill_variant(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

@@ -145,6 +145,11 @@ _EMBEDDED_SOURCE_DOC_FILENAMES = (
     "WARP.md",
     "NOTICE.txt",
 )
+_CURATED_REFERENCE_SKILL_REPO_HINTS: dict[str, str] = {
+    # Cross-checked against local reference managers (`skill-flow` and
+    # `ai-toolbox`) and the upstream repository layout.
+    "ui-ux-pro-max": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git#.claude/skills/ui-ux-pro-max",
+}
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -743,6 +748,27 @@ def _infer_documented_source_repo(source: dict[str, Any]) -> tuple[str, str, str
     return "", "", ""
 
 
+def _infer_curated_reference_repo_hint(source: dict[str, Any]) -> tuple[str, str, str]:
+    candidate_names = [
+        str(source.get("display_name") or "").strip().lower(),
+        *[
+            str(item or "").strip().lower()
+            for item in _to_str_list(source.get("member_skill_preview", []))
+        ],
+    ]
+    for name in candidate_names:
+        if not name:
+            continue
+        origin_ref = str(_CURATED_REFERENCE_SKILL_REPO_HINTS.get(name) or "").strip()
+        if not origin_ref:
+            continue
+        locator, _ = _split_locator_with_subpath(origin_ref)
+        origin_label = _repo_label_from_locator(locator or origin_ref)
+        if origin_label:
+            return origin_ref, origin_label, "catalog_reference_hint"
+    return "", "", ""
+
+
 @lru_cache(maxsize=512)
 def _candidate_local_skill_mirror_documents(skill_dir_name: str, local_roots: tuple[str, ...]) -> tuple[str, ...]:
     normalized_name = str(skill_dir_name or "").strip()
@@ -1151,6 +1177,14 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                         origin_label = origin_label or documented_origin_label or display_name
                         package_strategy = package_strategy or documented_strategy
                         confidence = confidence or "high"
+                    else:
+                        hinted_origin_ref, hinted_origin_label, hinted_strategy = _infer_curated_reference_repo_hint(source)
+                        if hinted_origin_ref:
+                            origin_kind = origin_kind or "catalog_source_repo"
+                            origin_ref = origin_ref or hinted_origin_ref
+                            origin_label = origin_label or hinted_origin_label or display_name
+                            package_strategy = package_strategy or hinted_strategy
+                            confidence = confidence or "medium"
 
     if not rule and package_name:
         rule = _match_curated_rule(
@@ -1526,6 +1560,17 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                     f"{repo_label} :: {repo_subpath}" if repo_subpath else repo_label
                 )
                 aggregation_strategy = provenance_package_strategy or "documented_source_repo"
+            elif provenance_origin_kind == "catalog_source_repo" and provenance_origin_ref:
+                repo_locator, repo_subpath = _split_locator_with_subpath(provenance_origin_ref)
+                repo_label = _repo_label_from_locator(repo_locator or provenance_origin_ref) or display_name
+                install_unit_id = f"repo:{provenance_origin_ref}"
+                install_unit_kind = "catalog_source_repo"
+                install_ref = provenance_origin_ref
+                install_manager = "manual"
+                install_unit_display_name = (
+                    f"{repo_label} :: {repo_subpath}" if repo_subpath else repo_label
+                )
+                aggregation_strategy = provenance_package_strategy or "catalog_reference_hint"
             elif rule:
                 install_unit_id = str(rule.get("install_unit_id") or f"curated:{_slug(display_name, default='pack')}")
                 install_unit_kind = str(rule.get("install_unit_kind") or "curated_npx_pack")
@@ -1565,6 +1610,12 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             collection_group_name = install_unit_display_name or provenance_origin_label or display_name
             collection_group_kind = "plugin_bundle"
         elif provenance_origin_kind == "documented_source_repo" and provenance_origin_ref:
+            repo_locator, _ = _split_locator_with_subpath(provenance_origin_ref)
+            collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
+                repo_locator or provenance_origin_ref,
+                "manual_git",
+            )
+        elif provenance_origin_kind == "catalog_source_repo" and provenance_origin_ref:
             repo_locator, _ = _split_locator_with_subpath(provenance_origin_ref)
             collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
                 repo_locator or provenance_origin_ref,
