@@ -107,6 +107,16 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_operation_plan_unsupported", html)
         self.assertIn("renderInventoryOperationPlan(", html)
 
+    def test_inventory_panel_exposes_update_plan_support_and_confirmation_hooks(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("getSelectedSourceAggregateUpdatePlan(", html)
+        self.assertIn("inventory_install_unit_update_confirm", html)
+        self.assertIn("inventory_install_unit_update_partial_confirm", html)
+        self.assertIn("inventory_install_unit_update_unsupported", html)
+        self.assertIn("actionableUpdatePlan", html)
+        self.assertIn("actionableUpdateSupported", html)
+
     def test_inventory_panel_doctor_summary_reads_aggregate_health(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

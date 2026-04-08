@@ -151,6 +151,18 @@ class _FakePlugin:
                     "management_hint": "bunx @every-env/compound-plugin",
                     "update_policy": "registry",
                 },
+                {
+                    "install_unit_id": "npm:@every-env/compound-plugin",
+                    "display_name": "Compound Engineering",
+                    "source_ids": ["skill_cli"],
+                    "source_count": 1,
+                    "member_count": 1,
+                    "collection_group_id": "collection:cli_tools",
+                    "install_ref": "@every-env/compound-plugin",
+                    "install_manager": "bunx",
+                    "management_hint": "bunx @every-env/compound-plugin",
+                    "update_policy": "registry",
+                },
             ],
             "collection_group_rows": [
                 {
@@ -202,6 +214,27 @@ class _FakePlugin:
             "warnings": [],
         }
 
+    def _get_install_unit_row(self, install_unit_id: str) -> dict | None:
+        for row in self.skills_snapshot["install_unit_rows"]:
+            if row["install_unit_id"] == install_unit_id:
+                return row
+        return None
+
+    def _build_install_unit_update_plan(self, install_unit_id: str, display_name: str) -> dict:
+        return {
+            "install_unit_id": install_unit_id,
+            "display_name": display_name,
+            "manager": "bunx",
+            "policy": "registry",
+            "install_ref": "@every-env/compound-plugin",
+            "management_hint": "bunx @every-env/compound-plugin",
+            "source_paths": ["/tmp/skill_cli"],
+            "commands": ["bunx @every-env/compound-plugin"],
+            "command_count": 1,
+            "supported": True,
+            "message": f"registry update is available for {display_name}",
+        }
+
     def webui_get_inventory_payload(self) -> dict:
         return self.inventory_snapshot
 
@@ -229,28 +262,20 @@ class _FakePlugin:
         }
 
     def webui_get_install_unit_payload(self, install_unit_id: str) -> dict:
-        if install_unit_id != "install:skill_cli":
+        install_unit = self._get_install_unit_row(install_unit_id)
+        if install_unit is None:
             return {"ok": False, "message": "not found"}
         return {
             "ok": True,
             "generated_at": self.skills_snapshot["generated_at"],
-            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "install_unit": install_unit,
             "collection_group": self.skills_snapshot["collection_group_rows"][0],
             "source_rows": self.skills_snapshot["source_rows"],
             "deploy_rows": self.skills_snapshot["deploy_rows"],
-            "update_plan": {
-                "install_unit_id": "install:skill_cli",
-                "display_name": "CLI Tool Pack",
-                "manager": "bunx",
-                "policy": "registry",
-                "install_ref": "@every-env/compound-plugin",
-                "management_hint": "bunx @every-env/compound-plugin",
-                "source_paths": ["/tmp/skill_cli"],
-                "commands": ["bunx @every-env/compound-plugin"],
-                "command_count": 1,
-                "supported": True,
-                "message": "registry update is available for CLI Tool Pack",
-            },
+            "update_plan": self._build_install_unit_update_plan(
+                install_unit_id=install_unit["install_unit_id"],
+                display_name=install_unit["display_name"],
+            ),
             "warnings": [],
         }
 
@@ -297,22 +322,24 @@ class _FakePlugin:
 
     def webui_refresh_install_unit(self, install_unit_id: str, payload: dict) -> dict:
         _ = payload
-        if install_unit_id != "install:skill_cli":
+        install_unit = self._get_install_unit_row(install_unit_id)
+        if install_unit is None:
             return {"ok": False, "message": "not found"}
         return {
             "ok": True,
-            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "install_unit": install_unit,
             "source_rows": self.skills_snapshot["source_rows"],
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
         }
 
     def webui_sync_install_unit(self, install_unit_id: str) -> dict:
-        if install_unit_id != "install:skill_cli":
+        install_unit = self._get_install_unit_row(install_unit_id)
+        if install_unit is None:
             return {"ok": False, "message": "not found"}
         return {
             "ok": True,
-            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "install_unit": install_unit,
             "source_rows": self.skills_snapshot["source_rows"],
             "synced_source_ids": ["skill_cli"],
             "skills": self.skills_snapshot,
@@ -323,11 +350,12 @@ class _FakePlugin:
         _ = payload
         if install_unit_id == "unsupported":
             return {"ok": False, "message": "update unsupported for aggregate"}
-        if install_unit_id != "install:skill_cli":
+        install_unit = self._get_install_unit_row(install_unit_id)
+        if install_unit is None:
             return {"ok": False, "message": "not found"}
         return {
             "ok": True,
-            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "install_unit": install_unit,
             "source_rows": self.skills_snapshot["source_rows"],
             "update": {
                 "supported": True,
@@ -341,13 +369,14 @@ class _FakePlugin:
         }
 
     def webui_deploy_install_unit(self, install_unit_id: str, payload: dict) -> dict:
-        if install_unit_id != "install:skill_cli":
+        install_unit = self._get_install_unit_row(install_unit_id)
+        if install_unit is None:
             return {"ok": False, "message": "not found"}
         if not payload.get("software_ids") and not payload.get("target_ids"):
             return {"ok": False, "message": "software_ids or target_ids is required"}
         return {
             "ok": True,
-            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "install_unit": install_unit,
             "target_ids": ["claude_code:global"],
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
@@ -417,11 +446,12 @@ class _FakePlugin:
 
     def webui_repair_install_unit(self, install_unit_id: str, payload: dict) -> dict:
         _ = payload
-        if install_unit_id != "install:skill_cli":
+        install_unit = self._get_install_unit_row(install_unit_id)
+        if install_unit is None:
             return {"ok": False, "message": "not found"}
         return {
             "ok": True,
-            "install_unit": self.skills_snapshot["install_unit_rows"][0],
+            "install_unit": install_unit,
             "repaired_target_ids": ["claude_code:global"],
             "remaining_repairable_total": 0,
             "skills": self.skills_snapshot,
@@ -970,6 +1000,37 @@ class WebUIServerTests(unittest.TestCase):
         )
         self.assertEqual(400, bad_reproject_resp.status_code)
         self.assertFalse(bad_reproject_resp.json()["ok"])
+
+    def test_install_unit_routes_support_ids_with_slashes(self) -> None:
+        encoded_install_unit_id = "npm%3A%40every-env%2Fcompound-plugin"
+        expected_install_unit_id = "npm:@every-env/compound-plugin"
+
+        detail_resp = self.client.get(f"/api/skills/install-units/{encoded_install_unit_id}")
+        self.assertEqual(200, detail_resp.status_code)
+        self.assertEqual(expected_install_unit_id, detail_resp.json()["install_unit"]["install_unit_id"])
+
+        refresh_resp = self.client.post(f"/api/skills/install-units/{encoded_install_unit_id}/refresh", json={})
+        self.assertEqual(200, refresh_resp.status_code)
+        self.assertEqual(expected_install_unit_id, refresh_resp.json()["install_unit"]["install_unit_id"])
+
+        sync_resp = self.client.post(f"/api/skills/install-units/{encoded_install_unit_id}/sync", json={})
+        self.assertEqual(200, sync_resp.status_code)
+        self.assertEqual(expected_install_unit_id, sync_resp.json()["install_unit"]["install_unit_id"])
+
+        update_resp = self.client.post(f"/api/skills/install-units/{encoded_install_unit_id}/update", json={})
+        self.assertEqual(200, update_resp.status_code)
+        self.assertEqual(expected_install_unit_id, update_resp.json()["install_unit"]["install_unit_id"])
+
+        deploy_resp = self.client.post(
+            f"/api/skills/install-units/{encoded_install_unit_id}/deploy",
+            json={"software_ids": ["claude_code"], "scope": "global"},
+        )
+        self.assertEqual(200, deploy_resp.status_code)
+        self.assertEqual(expected_install_unit_id, deploy_resp.json()["install_unit"]["install_unit_id"])
+
+        repair_resp = self.client.post(f"/api/skills/install-units/{encoded_install_unit_id}/repair", json={})
+        self.assertEqual(200, repair_resp.status_code)
+        self.assertEqual(expected_install_unit_id, repair_resp.json()["install_unit"]["install_unit_id"])
 
 
 if __name__ == "__main__":

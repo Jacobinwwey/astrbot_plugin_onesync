@@ -141,7 +141,7 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
-        @self.app.get("/api/skills/install-units/{install_unit_id}")
+        @self.app.get("/api/skills/install-units/{install_unit_id:path}")
         async def skill_install_unit_detail(install_unit_id: str):
             ret = self.plugin.webui_get_install_unit_payload(install_unit_id)
             if not ret.get("ok"):
@@ -180,7 +180,7 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
-        @self.app.post("/api/skills/install-units/{install_unit_id}/refresh")
+        @self.app.post("/api/skills/install-units/{install_unit_id:path}/refresh")
         async def skill_install_unit_refresh(install_unit_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_refresh_install_unit(install_unit_id, payload)
             if not ret.get("ok"):
@@ -209,7 +209,7 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
-        @self.app.post("/api/skills/install-units/{install_unit_id}/sync")
+        @self.app.post("/api/skills/install-units/{install_unit_id:path}/sync")
         async def skill_install_unit_sync(install_unit_id: str, payload: dict[str, Any]):
             _ = payload
             ret = self.plugin.webui_sync_install_unit(install_unit_id)
@@ -217,7 +217,7 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=404)
             return ret
 
-        @self.app.post("/api/skills/install-units/{install_unit_id}/update")
+        @self.app.post("/api/skills/install-units/{install_unit_id:path}/update")
         async def skill_install_unit_update(install_unit_id: str, payload: dict[str, Any]):
             ret = await self.plugin.webui_update_install_unit(install_unit_id, payload)
             if not ret.get("ok"):
@@ -256,7 +256,7 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=400)
             return ret
 
-        @self.app.post("/api/skills/install-units/{install_unit_id}/deploy")
+        @self.app.post("/api/skills/install-units/{install_unit_id:path}/deploy")
         async def skill_install_unit_deploy(install_unit_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_deploy_install_unit(install_unit_id, payload)
             if not ret.get("ok"):
@@ -264,7 +264,7 @@ class OneSyncWebUIServer:
                 return JSONResponse(ret, status_code=status_code)
             return ret
 
-        @self.app.post("/api/skills/install-units/{install_unit_id}/repair")
+        @self.app.post("/api/skills/install-units/{install_unit_id:path}/repair")
         async def skill_install_unit_repair(install_unit_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_repair_install_unit(install_unit_id, payload)
             if not ret.get("ok"):

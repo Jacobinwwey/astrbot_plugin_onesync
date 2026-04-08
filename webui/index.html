@@ -3126,6 +3126,9 @@
         inventory_install_unit_syncing: "同步中",
         inventory_install_unit_update: "更新当前聚合",
         inventory_install_unit_updating: "更新中",
+        inventory_install_unit_update_confirm: "即将更新 {label}\n\nManager: {manager}\nPolicy: {policy}\nCommands ({count}):\n{commands}",
+        inventory_install_unit_update_partial_confirm: "即将更新 {label}\n\nManager: {manager}\nPolicy: {policy}\n可更新单元: {supported}\n受阻单元: {unsupported}\nCommands ({count}):\n{commands}",
+        inventory_install_unit_update_unsupported: "当前聚合没有可执行更新计划，请先查看运维计划预览。",
         inventory_install_unit_repair: "修复当前聚合",
         inventory_install_unit_repairing: "修复中",
         inventory_install_unit_deploy: "部署当前聚合",
@@ -3606,6 +3609,9 @@
         inventory_install_unit_syncing: "Syncing",
         inventory_install_unit_update: "Update Aggregate",
         inventory_install_unit_updating: "Updating",
+        inventory_install_unit_update_confirm: "You are about to update {label}\n\nManager: {manager}\nPolicy: {policy}\nCommands ({count}):\n{commands}",
+        inventory_install_unit_update_partial_confirm: "You are about to update {label}\n\nManager: {manager}\nPolicy: {policy}\nSupported units: {supported}\nBlocked units: {unsupported}\nCommands ({count}):\n{commands}",
+        inventory_install_unit_update_unsupported: "This aggregate does not have an executable update plan yet. Review the operation plan preview first.",
         inventory_install_unit_repair: "Repair Aggregate",
         inventory_install_unit_repairing: "Repairing",
         inventory_install_unit_deploy: "Deploy Aggregate",
@@ -5259,6 +5265,41 @@
       return null;
     }
 
+    function getSelectedSourceAggregateUpdatePlan() {
+      const detail = state.inventorySourceDetail && typeof state.inventorySourceDetail === "object"
+        ? state.inventorySourceDetail
+        : {};
+      const aggregateContext = getSelectedSourceAggregateActionContext();
+      const rootPlan = detail.update_plan && typeof detail.update_plan === "object"
+        ? detail.update_plan
+        : null;
+      if (!aggregateContext || !rootPlan) {
+        return null;
+      }
+
+      if (aggregateContext.kind === "install_unit") {
+        const aggregateInstallUnitId = String(aggregateContext.id || "").trim();
+        if (!aggregateInstallUnitId) {
+          return null;
+        }
+        if (String(rootPlan.install_unit_id || "").trim() === aggregateInstallUnitId) {
+          return rootPlan;
+        }
+        const nestedPlans = Array.isArray(rootPlan.install_unit_plans)
+          ? rootPlan.install_unit_plans.filter((item) => item && typeof item === "object")
+          : [];
+        return nestedPlans.find(
+          (item) => String(item.install_unit_id || "").trim() === aggregateInstallUnitId,
+        ) || null;
+      }
+
+      if (aggregateContext.kind === "collection_group") {
+        return rootPlan;
+      }
+
+      return null;
+    }
+
     function getSelectedSourceAggregateRepairableTargetIds() {
       const detail = state.inventorySourceDetail && typeof state.inventorySourceDetail === "object"
         ? state.inventorySourceDetail
@@ -5630,6 +5671,42 @@
     async function updateSelectedSourceAggregate() {
       const aggregateContext = getSelectedSourceAggregateActionContext();
       if (!aggregateContext || !aggregateContext.id || state.inventoryUpdatingInstallUnit) {
+        return null;
+      }
+      const actionableUpdatePlan = getSelectedSourceAggregateUpdatePlan();
+      const actionableUpdateSupported = Boolean(
+        actionableUpdatePlan
+        && actionableUpdatePlan.supported
+        && (Number(actionableUpdatePlan.command_count) > 0
+          || (Array.isArray(actionableUpdatePlan.commands) && actionableUpdatePlan.commands.length)),
+      );
+      if (!actionableUpdateSupported) {
+        alert(t("inventory_install_unit_update_unsupported"));
+        return null;
+      }
+      const updateCommands = Array.isArray(actionableUpdatePlan.commands)
+        ? actionableUpdatePlan.commands.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const updateLabel = String(
+        aggregateContext.aggregate && aggregateContext.aggregate.display_name
+        || actionableUpdatePlan.display_name
+        || aggregateContext.id
+        || "-",
+      ).trim() || "-";
+      const updateConfirmKey = aggregateContext.kind === "collection_group"
+        && Number(actionableUpdatePlan.unsupported_install_unit_total || 0) > 0
+        ? "inventory_install_unit_update_partial_confirm"
+        : "inventory_install_unit_update_confirm";
+      const confirmed = window.confirm(t(updateConfirmKey, {
+        label: updateLabel,
+        manager: String(actionableUpdatePlan.manager || "-").trim() || "-",
+        policy: String(actionableUpdatePlan.policy || "-").trim() || "-",
+        count: updateCommands.length,
+        commands: updateCommands.join("\n"),
+        supported: Number(actionableUpdatePlan.supported_install_unit_total || 0),
+        unsupported: Number(actionableUpdatePlan.unsupported_install_unit_total || 0),
+      }));
+      if (!confirmed) {
         return null;
       }
       state.inventoryUpdatingInstallUnit = true;
@@ -6555,6 +6632,13 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const actionableAggregate = getSelectedSourceAggregateActionContext();
       const actionableAggregateId = String(actionableAggregate && actionableAggregate.id || "").trim();
       const actionableAggregateKind = String(actionableAggregate && actionableAggregate.kind || "").trim();
+      const actionableUpdatePlan = getSelectedSourceAggregateUpdatePlan();
+      const actionableUpdateSupported = Boolean(
+        actionableUpdatePlan
+        && actionableUpdatePlan.supported
+        && (Number(actionableUpdatePlan.command_count) > 0
+          || (Array.isArray(actionableUpdatePlan.commands) && actionableUpdatePlan.commands.length)),
+      );
       const actionableInstallUnitId = actionableAggregateKind === "install_unit" ? actionableAggregateId : "";
       const actionableCollectionGroupId = actionableAggregateKind === "collection_group" ? actionableAggregateId : "";
       const aggregateRepairableTargetIds = getSelectedSourceAggregateRepairableTargetIds();
@@ -6597,6 +6681,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         || state.inventoryRepairingInstallUnit
         || state.inventoryDeployingInstallUnit;
       updateInstallUnitBtn.disabled = !actionableAggregateId
+        || !actionableUpdateSupported
         || state.inventoryRefreshingInstallUnit
         || state.inventorySyncingInstallUnit
         || state.inventoryUpdatingInstallUnit
