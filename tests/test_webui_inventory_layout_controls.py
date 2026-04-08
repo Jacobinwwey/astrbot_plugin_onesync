@@ -24,6 +24,16 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
         self.assertIn('id="inventoryDeployCardWidthSelect"', html)
         self.assertIn('id="inventoryDeployCardHeightSelect"', html)
 
+    def test_inventory_inspector_is_not_sticky(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        block_start = html.index("    .inventory-inspector {\n")
+        block_end = html.index("    .inventory-inspector-head {\n", block_start)
+        block = html[block_start:block_end]
+
+        self.assertNotIn("position: sticky;", block)
+        self.assertNotIn("top: 12px;", block)
+
     def test_inventory_panel_declares_compatible_sources_before_status_cards(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
