@@ -19,6 +19,10 @@ try:
     )
     from .skills_hosts_core import build_host_adapters, resolve_host_target_path
     from .skills_sources_core import build_skills_registry, normalize_skills_registry
+    from .skills_update_core import (
+        build_collection_group_update_plan,
+        build_install_unit_update_plan,
+    )
 except ImportError:  # pragma: no cover - direct test imports
     from skills_aggregation_core import (
         PROVENANCE_FIELD_KEYS,
@@ -30,6 +34,10 @@ except ImportError:  # pragma: no cover - direct test imports
     )
     from skills_hosts_core import build_host_adapters, resolve_host_target_path
     from skills_sources_core import build_skills_registry, normalize_skills_registry
+    from skills_update_core import (
+        build_collection_group_update_plan,
+        build_install_unit_update_plan,
+    )
 
 VALID_DEPLOY_SCOPES = ("global", "workspace")
 
@@ -1097,6 +1105,7 @@ def build_install_unit_detail_payload(overview: dict[str, Any], install_unit_id:
         str(install_unit.get("collection_group_id", "")).strip(),
     ) or {}
     deploy_rows = _related_deploy_rows_for_sources(overview, source_ids)
+    update_plan = build_install_unit_update_plan(install_unit, source_rows)
 
     return {
         "ok": True,
@@ -1105,6 +1114,7 @@ def build_install_unit_detail_payload(overview: dict[str, Any], install_unit_id:
         "collection_group": collection_group,
         "source_rows": source_rows,
         "deploy_rows": deploy_rows,
+        "update_plan": update_plan,
         "warnings": copy.deepcopy(overview.get("warnings", [])),
     }
 
@@ -1144,6 +1154,7 @@ def build_collection_group_detail_payload(overview: dict[str, Any], collection_g
         if str(item.get("source_id", "")).strip() in source_ids
     ]
     deploy_rows = _related_deploy_rows_for_sources(overview, source_ids)
+    update_plan = build_collection_group_update_plan(collection_group, install_unit_rows, source_rows)
 
     return {
         "ok": True,
@@ -1152,6 +1163,7 @@ def build_collection_group_detail_payload(overview: dict[str, Any], collection_g
         "install_unit_rows": install_unit_rows,
         "source_rows": source_rows,
         "deploy_rows": deploy_rows,
+        "update_plan": update_plan,
         "warnings": copy.deepcopy(overview.get("warnings", [])),
     }
 

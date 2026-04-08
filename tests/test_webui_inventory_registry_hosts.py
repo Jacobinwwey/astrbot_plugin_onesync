@@ -96,6 +96,17 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_fanout_preview_direct", html)
         self.assertIn("syncInventorySourceDetailScopeTabs()", html)
 
+    def test_inventory_panel_exposes_operation_plan_preview(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventoryOperationPlanBar"', html)
+        self.assertIn('id="inventoryOperationPlanTitle"', html)
+        self.assertIn('id="inventoryOperationPlanRows"', html)
+        self.assertIn("inventory_operation_plan_title", html)
+        self.assertIn("inventory_operation_plan_ready", html)
+        self.assertIn("inventory_operation_plan_unsupported", html)
+        self.assertIn("renderInventoryOperationPlan(", html)
+
     def test_inventory_panel_doctor_summary_reads_aggregate_health(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

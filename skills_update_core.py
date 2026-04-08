@@ -115,6 +115,7 @@ def build_install_unit_update_plan(
         unit.get("management_hint"),
         *[item.get("management_hint") for item in rows],
     )
+    hint_manager = _manager_from_hint(management_hint)
     install_ref = _first_non_empty(
         unit.get("install_ref"),
         *[item.get("install_ref") for item in rows],
@@ -130,8 +131,8 @@ def build_install_unit_update_plan(
             *[item.get("registry_package_manager") for item in rows],
         ),
     )
-    if not manager:
-        manager = _manager_from_hint(management_hint)
+    if hint_manager:
+        manager = hint_manager
     update_policy = _first_non_empty(
         unit.get("update_policy"),
         *[item.get("update_policy") for item in rows],

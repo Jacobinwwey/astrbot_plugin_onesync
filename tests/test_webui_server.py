@@ -128,6 +128,11 @@ class _FakePlugin:
                     "source_kind": "skill",
                     "install_unit_id": "install:skill_cli",
                     "collection_group_id": "collection:cli_tools",
+                    "install_ref": "@every-env/compound-plugin",
+                    "install_manager": "bunx",
+                    "management_hint": "bunx @every-env/compound-plugin",
+                    "update_policy": "registry",
+                    "source_path": "/tmp/skill_cli",
                     "status": "ready",
                     "member_count": 1,
                     "deployed_target_count": 1,
@@ -141,6 +146,10 @@ class _FakePlugin:
                     "source_count": 1,
                     "member_count": 1,
                     "collection_group_id": "collection:cli_tools",
+                    "install_ref": "@every-env/compound-plugin",
+                    "install_manager": "bunx",
+                    "management_hint": "bunx @every-env/compound-plugin",
+                    "update_policy": "registry",
                 },
             ],
             "collection_group_rows": [
@@ -229,6 +238,19 @@ class _FakePlugin:
             "collection_group": self.skills_snapshot["collection_group_rows"][0],
             "source_rows": self.skills_snapshot["source_rows"],
             "deploy_rows": self.skills_snapshot["deploy_rows"],
+            "update_plan": {
+                "install_unit_id": "install:skill_cli",
+                "display_name": "CLI Tool Pack",
+                "manager": "bunx",
+                "policy": "registry",
+                "install_ref": "@every-env/compound-plugin",
+                "management_hint": "bunx @every-env/compound-plugin",
+                "source_paths": ["/tmp/skill_cli"],
+                "commands": ["bunx @every-env/compound-plugin"],
+                "command_count": 1,
+                "supported": True,
+                "message": "registry update is available for CLI Tool Pack",
+            },
             "warnings": [],
         }
 
@@ -242,6 +264,34 @@ class _FakePlugin:
             "install_unit_rows": self.skills_snapshot["install_unit_rows"],
             "source_rows": self.skills_snapshot["source_rows"],
             "deploy_rows": self.skills_snapshot["deploy_rows"],
+            "update_plan": {
+                "collection_group_id": "collection:cli_tools",
+                "display_name": "CLI Tools",
+                "supported": True,
+                "manager": "bunx",
+                "policy": "registry",
+                "commands": ["bunx @every-env/compound-plugin"],
+                "command_count": 1,
+                "supported_install_unit_total": 1,
+                "unsupported_install_unit_total": 0,
+                "unsupported_install_units": [],
+                "install_unit_plans": [
+                    {
+                        "install_unit_id": "install:skill_cli",
+                        "display_name": "CLI Tool Pack",
+                        "manager": "bunx",
+                        "policy": "registry",
+                        "install_ref": "@every-env/compound-plugin",
+                        "management_hint": "bunx @every-env/compound-plugin",
+                        "source_paths": ["/tmp/skill_cli"],
+                        "commands": ["bunx @every-env/compound-plugin"],
+                        "command_count": 1,
+                        "supported": True,
+                        "message": "registry update is available for CLI Tool Pack",
+                    },
+                ],
+                "message": "collection group update prepared for 1 install units",
+            },
             "warnings": [],
         }
 
@@ -668,10 +718,14 @@ class WebUIServerTests(unittest.TestCase):
         install_unit_detail_resp = self.client.get("/api/skills/install-units/install%3Askill_cli")
         self.assertEqual(200, install_unit_detail_resp.status_code)
         self.assertEqual("install:skill_cli", install_unit_detail_resp.json()["install_unit"]["install_unit_id"])
+        self.assertIn("update_plan", install_unit_detail_resp.json())
+        self.assertTrue(install_unit_detail_resp.json()["update_plan"]["supported"])
 
         collection_detail_resp = self.client.get("/api/skills/collections/collection%3Acli_tools")
         self.assertEqual(200, collection_detail_resp.status_code)
         self.assertEqual("collection:cli_tools", collection_detail_resp.json()["collection_group"]["collection_group_id"])
+        self.assertIn("update_plan", collection_detail_resp.json())
+        self.assertTrue(collection_detail_resp.json()["update_plan"]["supported"])
 
         target_detail_resp = self.client.get("/api/skills/deploy-targets/claude_code:global")
         self.assertEqual(200, target_detail_resp.status_code)

@@ -1566,6 +1566,66 @@
       white-space: pre-wrap;
     }
 
+    .inventory-operation-plan-rows {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .inventory-operation-plan-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 10px 11px;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
+      display: grid;
+      gap: 6px;
+    }
+
+    .inventory-operation-plan-item.supported {
+      border-color: color-mix(in srgb, var(--accent-2) 52%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-2) 16%, transparent);
+    }
+
+    .inventory-operation-plan-item.blocked {
+      border-color: color-mix(in srgb, var(--warn) 48%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--warn) 14%, transparent);
+    }
+
+    .inventory-operation-plan-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .inventory-operation-plan-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .inventory-operation-plan-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .inventory-operation-plan-command {
+      border-radius: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+      padding: 7px 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
     .inventory-source-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
       border-radius: 10px;
@@ -2164,6 +2224,17 @@
                 </div>
                 <div class="inventory-install-unit-rows inventory-fanout-preview-rows" id="inventoryFanoutPreviewRows">
                   <div class="debug-empty" id="inventoryFanoutPreviewRowsEmpty">等待聚合详情...</div>
+                </div>
+              </div>
+              <div class="inventory-install-unit-bar" id="inventoryOperationPlanBar">
+                <div class="inventory-install-unit-head">
+                  <div class="inventory-repair-copy">
+                    <div class="inventory-repair-title" id="inventoryOperationPlanTitle">运维计划预览</div>
+                    <div class="inventory-repair-note" id="inventoryOperationPlanNote">等待聚合详情...</div>
+                  </div>
+                </div>
+                <div class="inventory-install-unit-rows inventory-operation-plan-rows" id="inventoryOperationPlanRows">
+                  <div class="debug-empty" id="inventoryOperationPlanRowsEmpty">等待聚合详情...</div>
                 </div>
               </div>
               <div class="inventory-repair-bar" id="inventoryInstallUnitBar">
@@ -3029,6 +3100,21 @@
         inventory_fanout_preview_collection: "当前 collection / group 动作将扇出到以下 install units；执行前先确认真实影响面。",
         inventory_fanout_preview_direct: "当前动作已收窄到单个 install unit；以下就是直接维护边界。",
         inventory_fanout_preview_empty: "等待聚合详情...",
+        inventory_operation_plan_title: "运维计划预览",
+        inventory_operation_plan_ready: "当前聚合存在可执行更新计划；执行前请先确认 manager、policy 与命令扇出。",
+        inventory_operation_plan_unsupported: "当前聚合暂无可执行更新计划；请查看受阻 install unit 或改用手工维护。",
+        inventory_operation_plan_empty: "等待聚合详情...",
+        inventory_operation_plan_scope_collection: "Collection 范围",
+        inventory_operation_plan_scope_install_unit: "Install Unit 范围",
+        inventory_operation_plan_summary: "聚合摘要",
+        inventory_operation_plan_manager: "Manager",
+        inventory_operation_plan_policy: "Policy",
+        inventory_operation_plan_commands: "Commands",
+        inventory_operation_plan_supported_units: "可更新单元",
+        inventory_operation_plan_unsupported_units: "受阻单元",
+        inventory_operation_plan_message: "说明",
+        inventory_operation_plan_source_paths: "Source 路径",
+        inventory_operation_plan_command_none: "暂无可执行命令",
         inventory_install_unit_title: "当前聚合运维",
         inventory_install_unit_note_idle: "围绕真实 install unit 或 collection group 执行 refresh / sync / update / deploy，而不是对每条 leaf skill 分别操作。",
         inventory_install_unit_note_ready: "当前将操作 install unit {installUnit}（直接维护边界），目标宿主 {target}。",
@@ -3494,6 +3580,21 @@
         inventory_fanout_preview_collection: "Collection-scope actions fan out across the install units below; verify the real execution surface before running them.",
         inventory_fanout_preview_direct: "Action scope is narrowed to a single install unit below; this is the direct maintenance boundary.",
         inventory_fanout_preview_empty: "Waiting for aggregate detail...",
+        inventory_operation_plan_title: "Operation Plan Preview",
+        inventory_operation_plan_ready: "This aggregate has an executable update plan. Verify the manager, policy, and command fan-out before running it.",
+        inventory_operation_plan_unsupported: "This aggregate does not currently have an executable update plan. Review the blocked install units or handle it manually.",
+        inventory_operation_plan_empty: "Waiting for aggregate detail...",
+        inventory_operation_plan_scope_collection: "Collection Scope",
+        inventory_operation_plan_scope_install_unit: "Install Unit Scope",
+        inventory_operation_plan_summary: "Aggregate Summary",
+        inventory_operation_plan_manager: "Manager",
+        inventory_operation_plan_policy: "Policy",
+        inventory_operation_plan_commands: "Commands",
+        inventory_operation_plan_supported_units: "Supported Units",
+        inventory_operation_plan_unsupported_units: "Blocked Units",
+        inventory_operation_plan_message: "Message",
+        inventory_operation_plan_source_paths: "Source Paths",
+        inventory_operation_plan_command_none: "No executable command is available",
         inventory_install_unit_title: "Current Aggregate Operations",
         inventory_install_unit_note_idle: "Operate on real install units or collection groups for refresh, sync, update, and deploy instead of touching every leaf skill separately.",
         inventory_install_unit_note_ready: "Current action scope: install unit {installUnit} targeting {target}; this is the direct maintenance boundary.",
@@ -4147,6 +4248,8 @@
       $("inventoryInstallUnitsNote").textContent = t("inventory_install_units_note");
       $("inventoryFanoutPreviewTitle").textContent = t("inventory_fanout_preview_title");
       $("inventoryFanoutPreviewNote").textContent = t("inventory_fanout_preview_empty");
+      $("inventoryOperationPlanTitle").textContent = t("inventory_operation_plan_title");
+      $("inventoryOperationPlanNote").textContent = t("inventory_operation_plan_empty");
       $("inventoryInstallUnitTitle").textContent = t("inventory_install_unit_title");
       $("inventoryInstallUnitNote").textContent = t("inventory_install_unit_note_idle");
       $("inventoryRefreshInstallUnitBtn").textContent = state.inventoryRefreshingInstallUnit
@@ -4758,6 +4861,149 @@
       }
       return (Array.isArray(deployRows) ? deployRows : [])
         .filter((item) => inventoryDeployRowTouchesSourceIds(item, unitSourceIds));
+    }
+
+    function renderInventoryOperationPlan({
+      detail = null,
+      selectedInstallUnit = null,
+      collectionGroup = null,
+      noteEl = null,
+      rowsEl = null,
+    } = {}) {
+      const targetNoteEl = noteEl || $("inventoryOperationPlanNote");
+      const targetRowsEl = rowsEl || $("inventoryOperationPlanRows");
+      const emptyText = t("inventory_operation_plan_empty");
+      if (!targetNoteEl || !targetRowsEl) {
+        return null;
+      }
+
+      const updatePlan = detail && typeof detail === "object" && detail.update_plan && typeof detail.update_plan === "object"
+        ? detail.update_plan
+        : null;
+      if (!updatePlan) {
+        targetNoteEl.textContent = emptyText;
+        targetRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(emptyText)}</div>`;
+        return null;
+      }
+
+      const nestedPlans = Array.isArray(updatePlan.install_unit_plans)
+        ? updatePlan.install_unit_plans.filter((item) => item && typeof item === "object")
+        : [];
+      const selectedInstallUnitId = String(selectedInstallUnit && selectedInstallUnit.install_unit_id || "").trim();
+      let direct = false;
+      let displayPlans = [];
+
+      if (selectedInstallUnitId) {
+        const nestedMatch = nestedPlans.find(
+          (item) => String(item.install_unit_id || "").trim() === selectedInstallUnitId,
+        );
+        if (nestedMatch) {
+          direct = true;
+          displayPlans = [nestedMatch];
+        } else if (String(updatePlan.install_unit_id || "").trim() === selectedInstallUnitId) {
+          direct = true;
+          displayPlans = [updatePlan];
+        }
+      }
+
+      if (!displayPlans.length) {
+        if (String(updatePlan.install_unit_id || "").trim()) {
+          direct = true;
+          displayPlans = [updatePlan];
+        } else if (nestedPlans.length) {
+          displayPlans = nestedPlans;
+        } else {
+          displayPlans = [updatePlan];
+        }
+      }
+
+      const hasSupportedPlan = Boolean(updatePlan.supported) || displayPlans.some((item) => Boolean(item && item.supported));
+      targetNoteEl.textContent = t(hasSupportedPlan ? "inventory_operation_plan_ready" : "inventory_operation_plan_unsupported");
+
+      const renderPlanCard = ({
+        kicker = "",
+        title = "-",
+        supported = false,
+        lines = [],
+        commands = [],
+        message = "",
+      } = {}) => {
+        const commandList = (Array.isArray(commands) ? commands : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean);
+        const infoLines = (Array.isArray(lines) ? lines : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean);
+        const extraCommandCount = Math.max(0, commandList.length - 3);
+        return `
+          <div class="inventory-operation-plan-item ${supported ? "supported" : "blocked"}">
+            <div class="inventory-operation-plan-kicker">${escapeHtml(kicker)}</div>
+            <div class="inventory-operation-plan-title">
+              <span>${escapeHtml(title)}</span>
+              ${renderSkillsStatusBadge(supported ? "ready" : "missing")}
+            </div>
+            ${infoLines.map((line) => `<div class="inventory-operation-plan-meta">${escapeHtml(line)}</div>`).join("")}
+            ${commandList.length
+              ? commandList.slice(0, 3).map((command) => `<div class="inventory-operation-plan-command">${escapeHtml(command)}</div>`).join("")
+              : `<div class="inventory-operation-plan-meta">${escapeHtml(t("inventory_operation_plan_command_none"))}</div>`}
+            ${extraCommandCount ? `<div class="inventory-operation-plan-meta">+${escapeHtml(extraCommandCount)} ${escapeHtml(t("inventory_operation_plan_commands"))}</div>` : ""}
+            ${message ? `<div class="inventory-operation-plan-meta">${escapeHtml(t("inventory_operation_plan_message"))}: ${escapeHtml(message)}</div>` : ""}
+          </div>
+        `;
+      };
+
+      const cards = [];
+      if (!direct && nestedPlans.length) {
+        cards.push(renderPlanCard({
+          kicker: t("inventory_operation_plan_scope_collection"),
+          title: String(
+            updatePlan.display_name
+            || (collectionGroup && collectionGroup.display_name)
+            || updatePlan.collection_group_id
+            || t("inventory_operation_plan_summary")
+          ).trim() || t("inventory_operation_plan_summary"),
+          supported: Boolean(updatePlan.supported),
+          lines: [
+            `${t("inventory_operation_plan_supported_units")}: ${Number(updatePlan.supported_install_unit_total) || displayPlans.filter((item) => Boolean(item && item.supported)).length}`,
+            `${t("inventory_operation_plan_unsupported_units")}: ${Number(updatePlan.unsupported_install_unit_total) || displayPlans.filter((item) => item && !item.supported).length}`,
+            `${t("inventory_operation_plan_manager")}: ${String(updatePlan.manager || "-").trim() || "-"}`,
+            `${t("inventory_operation_plan_policy")}: ${String(updatePlan.policy || "-").trim() || "-"}`,
+          ],
+          commands: updatePlan.commands,
+          message: String(updatePlan.message || "").trim(),
+        }));
+      }
+
+      displayPlans.forEach((plan) => {
+        const sourcePaths = Array.isArray(plan.source_paths)
+          ? plan.source_paths.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        const sourcePathText = sourcePaths.length <= 2
+          ? sourcePaths.join(", ")
+          : `${sourcePaths.slice(0, 2).join(", ")} +${sourcePaths.length - 2}`;
+        const installUnitTitle = String(plan.display_name || plan.install_unit_id || "-").trim() || "-";
+        cards.push(renderPlanCard({
+          kicker: t("inventory_operation_plan_scope_install_unit"),
+          title: installUnitTitle,
+          supported: Boolean(plan.supported),
+          lines: [
+            `ID: ${String(plan.install_unit_id || "-").trim() || "-"}`,
+            `${t("inventory_operation_plan_manager")}: ${String(plan.manager || "-").trim() || "-"}`,
+            `${t("inventory_operation_plan_policy")}: ${String(plan.policy || "-").trim() || "-"}`,
+            sourcePathText ? `${t("inventory_operation_plan_source_paths")}: ${sourcePathText}` : "",
+          ],
+          commands: plan.commands,
+          message: String(plan.message || "").trim(),
+        }));
+      });
+
+      targetRowsEl.innerHTML = cards.length
+        ? cards.join("")
+        : `<div class="debug-empty">${escapeHtml(emptyText)}</div>`;
+      return {
+        direct,
+        plan: displayPlans[0] || updatePlan,
+      };
     }
 
     function inventoryBoundarySubpathList(item, installUnitRows = []) {
@@ -5529,6 +5775,9 @@
       const fanoutPreviewTitleEl = $("inventoryFanoutPreviewTitle");
       const fanoutPreviewNoteEl = $("inventoryFanoutPreviewNote");
       const fanoutPreviewRowsEl = $("inventoryFanoutPreviewRows");
+      const operationPlanTitleEl = $("inventoryOperationPlanTitle");
+      const operationPlanNoteEl = $("inventoryOperationPlanNote");
+      const operationPlanRowsEl = $("inventoryOperationPlanRows");
       const installUnitTitleEl = $("inventoryInstallUnitTitle");
       const installUnitNoteEl = $("inventoryInstallUnitNote");
       const refreshInstallUnitBtn = $("inventoryRefreshInstallUnitBtn");
@@ -5609,6 +5858,7 @@
       syncInventoryDeployFilterTabs();
       sourceDetailScopeTitleEl.textContent = t("inventory_detail_scope_title");
       fanoutPreviewTitleEl.textContent = t("inventory_fanout_preview_title");
+      operationPlanTitleEl.textContent = t("inventory_operation_plan_title");
 
       const overview = state.inventoryOverview || {};
       const allSoftwareRows = Array.isArray(overview.software_rows) ? overview.software_rows : [];
@@ -5803,6 +6053,8 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
         installUnitDrilldownRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
         fanoutPreviewNoteEl.textContent = t("inventory_fanout_preview_empty");
         fanoutPreviewRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_fanout_preview_empty"))}</div>`;
+        operationPlanNoteEl.textContent = t("inventory_operation_plan_empty");
+        operationPlanRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_operation_plan_empty"))}</div>`;
       } else {
         const detailCollection = sourceDetail && sourceDetail.collection_group && typeof sourceDetail.collection_group === "object"
           ? sourceDetail.collection_group
@@ -5930,6 +6182,13 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             `;
           }).join("")
           : `<div class="debug-empty">${escapeHtml(t("inventory_fanout_preview_empty"))}</div>`;
+        renderInventoryOperationPlan({
+          detail: sourceDetail,
+          selectedInstallUnit: activeDetailInstallUnit,
+          collectionGroup: detailCollection,
+          noteEl: operationPlanNoteEl,
+          rowsEl: operationPlanRowsEl,
+        });
         const heroKindItem = activeDetailInstallUnit || detailCollection || detailSource || selectedSourceRow;
         const heroKind = inventoryAggregateKindLabel(heroKindItem);
         const heroTitle = String(
@@ -6251,6 +6510,8 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         installUnitDrilldownRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
         fanoutPreviewNoteEl.textContent = t("inventory_fanout_preview_empty");
         fanoutPreviewRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_fanout_preview_empty"))}</div>`;
+        operationPlanNoteEl.textContent = t("inventory_operation_plan_empty");
+        operationPlanRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_operation_plan_empty"))}</div>`;
         installUnitNoteEl.textContent = t("inventory_install_unit_note_empty");
         state.inventoryDraftSkillIds = [];
         state.inventoryVisibleCompatibleSkillIds = [];
