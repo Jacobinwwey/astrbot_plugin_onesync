@@ -126,8 +126,26 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual(1, len(collection_group_rows))
         self.assertEqual("collection:source_repo_demo_skills", collection_group_rows[0]["collection_group_id"])
         self.assertEqual("source_repo", collection_group_rows[0]["collection_group_kind"])
+        self.assertEqual("https://github.com/demo/skills.git", collection_group_rows[0]["locator"])
+        self.assertEqual(
+            ["packages/ui-audit", "packages/ui-reviewer"],
+            collection_group_rows[0]["source_subpaths"],
+        )
         self.assertEqual(2, collection_group_rows[0]["install_unit_count"])
         self.assertEqual(2, collection_group_rows[0]["source_count"])
+        install_unit_by_id = {item["install_unit_id"]: item for item in install_unit_rows}
+        self.assertEqual(
+            "https://github.com/demo/skills.git",
+            install_unit_by_id["git:https://github.com/demo/skills.git#packages/ui-audit"]["locator"],
+        )
+        self.assertEqual(
+            "packages/ui-audit",
+            install_unit_by_id["git:https://github.com/demo/skills.git#packages/ui-audit"]["source_subpath"],
+        )
+        self.assertEqual(
+            ["packages/ui-audit"],
+            install_unit_by_id["git:https://github.com/demo/skills.git#packages/ui-audit"]["source_subpaths"],
+        )
 
 
 if __name__ == "__main__":

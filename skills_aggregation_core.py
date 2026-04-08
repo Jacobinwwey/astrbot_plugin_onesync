@@ -821,6 +821,9 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
                 "install_unit_kind": str(source.get("install_unit_kind") or ""),
                 "display_name": str(source.get("install_unit_display_name") or source.get("display_name") or install_unit_id),
                 "install_ref": str(source.get("install_ref") or ""),
+                "locator_values": [],
+                "source_path_values": [],
+                "source_subpaths": [],
                 "install_manager": str(source.get("install_manager") or ""),
                 "aggregation_strategy": str(source.get("aggregation_strategy") or ""),
                 "collection_group_id": str(source.get("collection_group_id") or ""),
@@ -855,6 +858,9 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
         row["status_values"].append(str(source.get("status") or ""))
         row["freshness_values"].append(str(source.get("freshness_status") or ""))
         row["sync_status_values"].append(str(source.get("sync_status") or ""))
+        row["locator_values"].append(str(source.get("locator") or "").strip())
+        row["source_path_values"].append(str(source.get("source_path") or "").strip())
+        row["source_subpaths"].append(str(source.get("source_subpath") or "").strip())
         if not row["registry_package_name"]:
             row["registry_package_name"] = str(source.get("registry_package_name") or "")
         if not row["registry_package_manager"]:
@@ -874,6 +880,9 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
         compatible_software_ids = _dedupe_keep_order(row.pop("compatible_software_ids"))
         compatible_software_families = _dedupe_keep_order(row.pop("compatible_software_families"))
         scopes = _dedupe_keep_order(row.pop("scopes"))
+        locators = _dedupe_keep_order(row.pop("locator_values"))
+        source_paths = _dedupe_keep_order(row.pop("source_path_values"))
+        source_subpaths = _dedupe_keep_order(row.pop("source_subpaths"))
         member_total = int(row.pop("member_total") or 0)
         status = _aggregate_status(row.pop("status_values"), _SOURCE_STATUS_RANK, "ready")
         freshness_status = _aggregate_status(row.pop("freshness_values"), _FRESHNESS_RANK, "missing")
@@ -890,6 +899,10 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
                 "member_count": member_total or max(1, len(member_preview) + member_overflow),
                 "member_skill_preview": member_preview,
                 "member_skill_overflow": member_overflow,
+                "locator": locators[0] if len(locators) == 1 else "",
+                "source_path": source_paths[0] if len(source_paths) == 1 else "",
+                "source_subpath": source_subpaths[0] if len(source_subpaths) == 1 else "",
+                "source_subpaths": source_subpaths,
                 "compatible_software_ids": compatible_software_ids,
                 "compatible_software_families": compatible_software_families,
                 "status": status,
@@ -930,6 +943,9 @@ def build_collection_group_rows(install_unit_rows: list[dict[str, Any]]) -> list
                 "install_unit_ids": [],
                 "source_ids": [],
                 "member_names": [],
+                "locator_values": [],
+                "source_path_values": [],
+                "source_subpaths": [],
                 "member_total": 0,
                 "compatible_software_ids": [],
                 "compatible_software_families": [],
@@ -953,6 +969,9 @@ def build_collection_group_rows(install_unit_rows: list[dict[str, Any]]) -> list
         row["status_values"].append(str(install_unit.get("status") or ""))
         row["freshness_values"].append(str(install_unit.get("freshness_status") or ""))
         row["sync_status_values"].append(str(install_unit.get("sync_status") or ""))
+        row["locator_values"].append(str(install_unit.get("locator") or "").strip())
+        row["source_path_values"].append(str(install_unit.get("source_path") or "").strip())
+        row["source_subpaths"].extend(_to_str_list(install_unit.get("source_subpaths", [])) or [str(install_unit.get("source_subpath") or "").strip()])
         row["deployed_target_ids"].extend(_to_str_list(install_unit.get("deployed_target_ids", [])))
         if not row["management_hint"]:
             row["management_hint"] = str(install_unit.get("management_hint") or "")
@@ -973,6 +992,9 @@ def build_collection_group_rows(install_unit_rows: list[dict[str, Any]]) -> list
         deployed_target_ids = _dedupe_keep_order(row.pop("deployed_target_ids"))
         compatible_software_ids = _dedupe_keep_order(row.pop("compatible_software_ids"))
         compatible_software_families = _dedupe_keep_order(row.pop("compatible_software_families"))
+        locators = _dedupe_keep_order(row.pop("locator_values"))
+        source_paths = _dedupe_keep_order(row.pop("source_path_values"))
+        source_subpaths = _dedupe_keep_order(row.pop("source_subpaths"))
         member_total = int(row.pop("member_total") or 0)
         status = _aggregate_status(row.pop("status_values"), _SOURCE_STATUS_RANK, "ready")
         freshness_status = _aggregate_status(row.pop("freshness_values"), _FRESHNESS_RANK, "missing")
@@ -989,6 +1011,10 @@ def build_collection_group_rows(install_unit_rows: list[dict[str, Any]]) -> list
                 "member_count": member_total or max(1, len(member_preview) + member_overflow),
                 "member_skill_preview": member_preview,
                 "member_skill_overflow": member_overflow,
+                "locator": locators[0] if len(locators) == 1 else "",
+                "source_path": source_paths[0] if len(source_paths) == 1 else "",
+                "source_subpath": source_subpaths[0] if len(source_subpaths) == 1 else "",
+                "source_subpaths": source_subpaths,
                 "compatible_software_ids": compatible_software_ids,
                 "compatible_software_families": compatible_software_families,
                 "status": status,

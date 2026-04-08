@@ -289,6 +289,8 @@ collection group 不能替代 install unit 成为唯一真相。
   - `manual_git` 现在按 `repo#subpath` 形成 install unit
   - 同一 Git repo 下多个 subpath 会归到同一个 `source_repo` collection group
   - `manual_local` 现在按 `root#subpath` 形成 install unit，并归到稳定的 `source_root` collection group
+  - install-unit / collection-group row contract 已补 `locator` 与 `source_subpaths`
+  - WebUI 已能把 manual source 渲染成 `Source Repository` / `Source Root`，并显示 subpath boundary summary
 
 ## Phase E：Provenance foundation（新的第一优先级）
 

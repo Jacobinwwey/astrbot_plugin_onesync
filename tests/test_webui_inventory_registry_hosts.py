@@ -44,6 +44,14 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("function inventorySourceProvenanceSummary(", html)
         self.assertIn("function inventorySourceProvenanceStateLabel(", html)
 
+    def test_inventory_panel_exposes_manual_source_boundary_labels(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("inventory_skill_meta_subpaths", html)
+        self.assertIn("inventory_aggregate_kind_source_repo", html)
+        self.assertIn("inventory_aggregate_kind_source_root", html)
+        self.assertIn("function inventorySourceSubpathSummary(", html)
+
     def test_inventory_panel_doctor_summary_reads_aggregate_health(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

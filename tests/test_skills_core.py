@@ -923,6 +923,11 @@ class SkillsCoreTests(unittest.TestCase):
         )
         self.assertEqual("demo/skills", group["display_name"])
         self.assertEqual("source_repo", group["collection_group_kind"])
+        self.assertEqual("https://github.com/demo/skills.git", group["locator"])
+        self.assertEqual(
+            ["packages/ui-audit", "packages/ui-reviewer"],
+            group["source_subpaths"],
+        )
         self.assertEqual(2, group["install_unit_count"])
         self.assertEqual(2, group["source_count"])
 

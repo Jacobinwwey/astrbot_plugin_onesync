@@ -2984,6 +2984,7 @@
         inventory_skill_meta_manage: "维护",
         inventory_skill_meta_locator: "定位",
         inventory_skill_meta_subpath: "子路径",
+        inventory_skill_meta_subpaths: "子路径边界",
         inventory_skill_meta_policy: "策略",
         inventory_skill_meta_managed_by: "管理方",
         inventory_skill_meta_deployed: "部署目标",
@@ -3014,6 +3015,10 @@
         inventory_skill_source_npx_single: "npx 单包",
         inventory_skill_source_manual_local: "本地 Source",
         inventory_skill_source_manual_git: "Git Source",
+        inventory_aggregate_kind_collection_group: "Collection Group",
+        inventory_aggregate_kind_install_unit: "Install Unit",
+        inventory_aggregate_kind_source_repo: "源码仓库组",
+        inventory_aggregate_kind_source_root: "本地根目录组",
         inventory_source_sync: "同步源",
         inventory_source_syncing: "同步中",
         inventory_sync_pending: "未同步",
@@ -3428,6 +3433,7 @@
         inventory_skill_meta_manage: "manage",
         inventory_skill_meta_locator: "locator",
         inventory_skill_meta_subpath: "subpath",
+        inventory_skill_meta_subpaths: "subpath boundaries",
         inventory_skill_meta_policy: "policy",
         inventory_skill_meta_managed_by: "managed_by",
         inventory_skill_meta_deployed: "deploy",
@@ -3458,6 +3464,10 @@
         inventory_skill_source_npx_single: "npx package",
         inventory_skill_source_manual_local: "local source",
         inventory_skill_source_manual_git: "git source",
+        inventory_aggregate_kind_collection_group: "Collection Group",
+        inventory_aggregate_kind_install_unit: "Install Unit",
+        inventory_aggregate_kind_source_repo: "Source Repository",
+        inventory_aggregate_kind_source_root: "Source Root",
         inventory_source_sync: "Sync Source",
         inventory_source_syncing: "Syncing",
         inventory_sync_pending: "unsynced",
@@ -4452,13 +4462,41 @@
       if (!item || typeof item !== "object") {
         return inventorySourceKindLabel(item);
       }
-      if (item.collection_group_id) {
-        return "Collection Group";
-      }
+      const groupKind = String(item.collection_group_kind || "").trim().toLowerCase();
       if (item.install_unit_id) {
-        return "Install Unit";
+        return t("inventory_aggregate_kind_install_unit");
+      }
+      if (groupKind === "source_repo") {
+        return t("inventory_aggregate_kind_source_repo");
+      }
+      if (groupKind === "source_root") {
+        return t("inventory_aggregate_kind_source_root");
+      }
+      if (item.collection_group_id) {
+        return t("inventory_aggregate_kind_collection_group");
       }
       return inventorySourceKindLabel(item);
+    }
+
+    function inventorySourceSubpathList(item) {
+      if (!item || typeof item !== "object") return [];
+      const values = Array.isArray(item.source_subpaths)
+        ? item.source_subpaths.map((entry) => String(entry || "").trim()).filter(Boolean)
+        : [];
+      if (values.length) {
+        return values;
+      }
+      const single = String(item.source_subpath || "").trim();
+      return single ? [single] : [];
+    }
+
+    function inventorySourceSubpathSummary(item, limit = 3) {
+      const subpaths = inventorySourceSubpathList(item);
+      if (!subpaths.length) return "";
+      if (subpaths.length <= limit) {
+        return subpaths.join(", ");
+      }
+      return `${subpaths.slice(0, limit).join(", ")} +${subpaths.length - limit}`;
     }
 
     function inventoryIsMeaningfulCollectionGroupRow(item) {
@@ -5301,7 +5339,11 @@
           const managementHint = String(item.management_hint || "").trim();
           const sourceKind = inventoryAggregateKindLabel(item);
           const locator = String(item.install_ref || item.locator || item.source_path || "-").trim() || "-";
-          const sourceSubpath = String(item.source_subpath || "").trim();
+          const sourceSubpaths = inventorySourceSubpathList(item);
+          const sourceSubpathSummary = inventorySourceSubpathSummary(item);
+          const sourceSubpathLabel = sourceSubpaths.length > 1
+            ? t("inventory_skill_meta_subpaths")
+            : t("inventory_skill_meta_subpath");
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
           const provenanceRows = sourceIds
@@ -5347,7 +5389,7 @@ ${installUnitCount ? ` | Units: ${escapeHtml(installUnitCount)}` : ""}
               <div class="meta">
 ${escapeHtml(t("inventory_skill_meta_source"))}: ${escapeHtml(sourceKind)}
  | ${escapeHtml(t("inventory_skill_meta_locator"))}: ${escapeHtml(locator)}
-${sourceSubpath ? ` | ${escapeHtml(t("inventory_skill_meta_subpath"))}: ${escapeHtml(sourceSubpath)}` : ""}
+${sourceSubpathSummary ? ` | ${escapeHtml(sourceSubpathLabel)}: ${escapeHtml(sourceSubpathSummary)}` : ""}
  | ${escapeHtml(t("inventory_skill_meta_policy"))}: ${escapeHtml(updatePolicy)}
  | ${escapeHtml(t("inventory_skill_meta_managed_by"))}: ${escapeHtml(managedBy)}
               </div>
@@ -5435,6 +5477,12 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           || selectedSourceRow.source_path
           || (detailSource ? inventorySourceLocatorText(detailSource) : "-"),
         ).trim() || "-";
+        const heroBoundaryItem = detailCollection || detailInstallUnit || detailSource || selectedSourceRow;
+        const heroSubpaths = inventorySourceSubpathList(heroBoundaryItem);
+        const heroSubpathSummary = inventorySourceSubpathSummary(heroBoundaryItem);
+        const heroSubpathLabel = heroSubpaths.length > 1
+          ? t("inventory_skill_meta_subpaths")
+          : t("inventory_skill_meta_subpath");
         const heroManager = String(
           selectedSourceRow.install_manager
           || selectedSourceRow.managed_by
@@ -5546,6 +5594,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             ${heroInstallId ? `<span class="inventory-chip">Install Unit<strong>${escapeHtml(heroInstallId)}</strong></span>` : ""}
             <span class="inventory-chip">Manager<strong>${escapeHtml(heroManager)}</strong></span>
             <span class="inventory-chip">Locator<strong>${escapeHtml(heroLocator)}</strong></span>
+            ${heroSubpathSummary ? `<span class="inventory-chip">${escapeHtml(heroSubpathLabel)}<strong>${escapeHtml(heroSubpathSummary)}</strong></span>` : ""}
             <span class="inventory-chip">${escapeHtml(t("inventory_skill_meta_provenance"))}<strong>${escapeHtml(heroProvenanceState)}</strong></span>
             <span class="inventory-chip">${escapeHtml(t("inventory_skill_meta_package"))}<strong>${escapeHtml(heroProvenancePackage)}</strong></span>
             <span class="inventory-chip">Sync<strong>${escapeHtml(syncStatus)}</strong></span>
@@ -6000,7 +6049,11 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           const sourceKind = inventoryAggregateKindLabel(item);
           const sourcePath = item.source_path || "-";
           const locator = String(item.install_ref || item.locator || sourcePath || "-").trim() || "-";
-          const sourceSubpath = String(item.source_subpath || "").trim();
+          const sourceSubpaths = inventorySourceSubpathList(item);
+          const sourceSubpathSummary = inventorySourceSubpathSummary(item);
+          const sourceSubpathLabel = sourceSubpaths.length > 1
+            ? t("inventory_skill_meta_subpaths")
+            : t("inventory_skill_meta_subpath");
           const updatePolicy = String(item.update_policy || "-").trim() || "-";
           const managedBy = String(item.managed_by || "-").trim() || "-";
           const memberCount = Number(item.member_count) || 1;
@@ -6043,7 +6096,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
                 ${t("inventory_skill_meta_id")}=${escapeHtml(rowId)} | ${t("inventory_skill_meta_discovered")}=${escapeHtml(discovered)} | ${t("inventory_skill_meta_source")}=${escapeHtml(sourceKind)} | ${t("inventory_skill_meta_members")}=${escapeHtml(memberCount)} | sources=${escapeHtml(sourceCount)}${installUnitCount ? ` | units=${escapeHtml(installUnitCount)}` : ""} | ${t("inventory_skill_meta_scope")}=${escapeHtml(scope)}
               </div>
               <div class="meta">
-                ${t("inventory_skill_meta_locator")}=${escapeHtml(locator)}${sourceSubpath ? ` | ${t("inventory_skill_meta_subpath")}=${escapeHtml(sourceSubpath)}` : ""} | ${t("inventory_skill_meta_policy")}=${escapeHtml(updatePolicy)} | ${t("inventory_skill_meta_managed_by")}=${escapeHtml(managedBy)}
+                ${t("inventory_skill_meta_locator")}=${escapeHtml(locator)}${sourceSubpathSummary ? ` | ${escapeHtml(sourceSubpathLabel)}=${escapeHtml(sourceSubpathSummary)}` : ""} | ${t("inventory_skill_meta_policy")}=${escapeHtml(updatePolicy)} | ${t("inventory_skill_meta_managed_by")}=${escapeHtml(managedBy)}
               </div>
               <div class="meta">
                 ${t("inventory_skill_meta_freshness")}=${escapeHtml(freshnessStatus)} | ${t("inventory_skill_meta_age")}=${escapeHtml(sourceAge)} | ${t("inventory_skill_meta_last_seen")}=${escapeHtml(lastSeen)}
