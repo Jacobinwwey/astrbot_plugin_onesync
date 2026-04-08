@@ -103,9 +103,17 @@ WebUI 与 API：
 - `POST /api/inventory/scan`：触发重新扫描并刷新 inventory 快照。
 - `POST /api/inventory/bindings`：保存绑定；会执行软件-技能兼容性校验。
 - `GET /api/skills/overview`：读取当前 source-first overview 快照，包含 `manifest / lock / source_rows / deploy_rows / doctor`。
+- `GET /api/skills/install-units/{install_unit_id}`：读取 install unit 明细，包含有效 `update_plan` 与 source 成员。
+- `GET /api/skills/collections/{collection_group_id}`：读取 collection group 明细，包含聚合后的 `update_plan`。
 - `GET /api/skills/deploy-targets/{target_id}`：读取单个 Deploy Target 明细，附带 `generated_projection.path / exists / payload / diff`。
 - `POST /api/skills/import`：显式刷新 inventory + skills 快照，并重建 `manifest / lock / sources / generated`。
 - `POST /api/skills/sources/register`：登记新的 source；支持 `manual_local` 路径和带可选 `source_subpath` 的 `manual_git` 仓库。
+- `POST /api/skills/sources/{source_id}/sync`：同步单个 source 的上游元数据。
+- `POST /api/skills/install-units/{install_unit_id}/sync`：同步 install unit 下全部 source 的上游元数据。
+- `POST /api/skills/install-units/{install_unit_id}/update`：执行 install unit 的真实更新命令。
+- `POST /api/skills/collections/{collection_group_id}/sync`：同步 collection group 下全部 source 的上游元数据。
+- `POST /api/skills/collections/{collection_group_id}/update`：执行 collection group 中所有受支持 install unit 的真实更新命令。
+- `POST /api/skills/sources/sync-all`：批量同步当前所有可同步 source。
 - `POST /api/skills/deploy-targets/{target_id}`：保存当前 target 的 selected sources。
 - `POST /api/skills/deploy-targets/{target_id}/reproject`：重建单个 target 的 generated projection，用于消除缓存与落盘状态漂移。
 - `POST /api/skills/deploy-targets/repair-all`：按当前 snapshot 批量修复 repairable targets。
@@ -118,6 +126,10 @@ WebUI 与 API：
 - npx 模式下会优先按“可统一维护的技能包”聚合展示，而不是逐条展开所有 skill。比如 `ce:*` 会折叠成 `Compound Engineering`，并提示统一维护命令。
 - `filesystem/hybrid` 模式下，仍支持从 `skill_roots` 扫描 `SKILL.md` 并与手工 `skill_catalog` 合并去重。
 - `GET /api/skills/*` 当前采用 cache-first 读取，不会在每次页面访问时强制重写 `generated/*.json`；如需刷新真相源，请显式调用 `POST /api/skills/import` 或 target 级 `reproject`。
+- 当前来源归因已可区分 `registry_package / skill_lock_source / documented_source_repo / catalog_source_repo / community_source_repo / local_custom_skill`；例如用户自建的 `doc` skill 会被归类为 `local_custom_skill`。
+- `Sync Source` 与 `Update Install Unit` 不是同一件事：前者当前只支持 npm registry 元数据同步，后者则按 install unit 的有效 `update_plan` 决定是否可执行。
+- 当前“更新功能”属于部分完善：npm 包与带本地 checkout 的 git source 可更新，但 repo 引用型来源、manual/local custom skill 仍不能自动更新。
+- 维护者可参考 [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) 与 [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) 了解完整支持矩阵。
 
 ### Stitch MCP 基线脚本（前端校正）
 

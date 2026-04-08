@@ -75,6 +75,21 @@ class SourceSyncCoreTests(unittest.TestCase):
         self.assertEqual("2026-04-06T12:00:00+00:00", record["sync_checked_at"])
         self.assertEqual("", record["registry_latest_version"])
 
+    def test_build_source_sync_record_marks_non_npm_registry_sources_unsupported(self) -> None:
+        record = build_source_sync_record(
+            {
+                "source_id": "find_skills",
+                "display_name": "find-skills",
+                "registry_package_name": "https://github.com/vercel-labs/skills.git",
+                "registry_package_manager": "github",
+            },
+            checked_at="2026-04-06T12:00:00+00:00",
+        )
+
+        self.assertEqual("unsupported", record["sync_status"])
+        self.assertEqual("", record["sync_kind"])
+        self.assertIn("supported registry package", record["sync_message"])
+
     def test_build_source_sync_record_fetches_npm_registry(self) -> None:
         def _fake_urlopen(_url: str, timeout: int = 0):
             self.assertEqual(8, timeout)

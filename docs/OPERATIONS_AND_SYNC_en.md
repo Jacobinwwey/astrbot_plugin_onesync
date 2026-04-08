@@ -13,6 +13,8 @@ This manual is for repository maintainers and covers:
 
 - User install and config: [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md)
 - About templates: [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
+- Skills source/update audit: [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md)
+- Skills source/update audit (Chinese): [SKILLS_UPDATE_STATUS_zh.md](./SKILLS_UPDATE_STATUS_zh.md)
 
 ## 2. Plugin Upload Metadata
 
@@ -104,3 +106,20 @@ Before pushing, verify:
 - Python files pass syntax checks
 - WebUI JavaScript has no syntax errors
 - WebUI routes are reachable (`/api/health` and `/api/config`)
+
+## 6. Skills Update Maintenance Notes
+
+When reviewing the Skills management stack, separate these operations clearly:
+
+- `POST /api/skills/import`: rebuild local source-first snapshot
+- `Sync Source`: refresh upstream metadata for a source
+- `Update Install Unit` / `Update Collection`: execute real update commands
+
+Current implementation status:
+
+- Source sync is npm-registry-only.
+- Install-unit update is command-capability-based.
+- Git-backed install units are updateable only when a local checkout path is available.
+- Local custom/manual skills are discoverable and deployable, but not auto-updateable.
+
+When diagnosing an update complaint, check the install-unit detail payload first and treat `update_plan` as the source of truth.

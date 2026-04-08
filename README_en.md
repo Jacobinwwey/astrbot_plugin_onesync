@@ -66,8 +66,16 @@ WebUI/API endpoints:
 - `GET /api/inventory/bindings`: read-only binding details (`binding_map` + `binding_map_by_scope`).
 - `POST /api/inventory/scan`: trigger a rescan and refresh inventory snapshot.
 - `POST /api/inventory/bindings`: save bindings with compatibility validation.
+- `GET /api/skills/install-units/{install_unit_id}`: install-unit detail with effective `update_plan` and member sources.
+- `GET /api/skills/collections/{collection_group_id}`: collection-group detail with aggregated `update_plan`.
 - The Skills panel now includes an `Import Source` wizard for `manual_local` and `manual_git` sources, including optional git `source_subpath`.
 - `POST /api/skills/sources/register`: register a new source; supports local paths and git repositories with optional `source_subpath`.
+- `POST /api/skills/sources/{source_id}/sync`: sync upstream metadata for one source.
+- `POST /api/skills/install-units/{install_unit_id}/sync`: sync upstream metadata for all sources under one install unit.
+- `POST /api/skills/install-units/{install_unit_id}/update`: execute the real update command for one install unit.
+- `POST /api/skills/collections/{collection_group_id}/sync`: sync upstream metadata for all sources in one collection group.
+- `POST /api/skills/collections/{collection_group_id}/update`: execute updates for all supported install units in one collection group.
+- `POST /api/skills/sources/sync-all`: batch-sync all currently syncable sources.
 
 Notes:
 
@@ -75,6 +83,10 @@ Notes:
 - Default mode builds the skill inventory from `npx skills ls --json` (project scope) and `npx skills ls -g --json` (global scope).
 - In `npx` mode, the UI prefers package-level bundles over raw skill explosion. For example, `ce:*` is grouped as `Compound Engineering` with one maintenance command.
 - In `filesystem/hybrid` mode, skill discovery can still scan `SKILL.md` under configured `skill_roots` and merge with manual `skill_catalog`.
+- Provenance resolution now distinguishes `registry_package / skill_lock_source / documented_source_repo / catalog_source_repo / community_source_repo / local_custom_skill`; for example, a self-authored `doc` skill can be modeled as `local_custom_skill`.
+- `Sync Source` and `Update Install Unit` are different capabilities: source sync is currently npm-registry-only, while install-unit update depends on the effective `update_plan`.
+- The current update capability is only partially complete: npm packages and git-backed local checkouts are updateable, but repo-reference-only sources and local custom/manual skills are not yet auto-updateable.
+- Maintainers should use [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) and [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) for the full support matrix and audit notes.
 
 ### Stitch MCP Baseline Runner (UI Calibration)
 

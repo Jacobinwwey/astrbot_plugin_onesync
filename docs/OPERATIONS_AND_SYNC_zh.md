@@ -15,6 +15,8 @@
 - 用户安装与配置（英文）： [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md)
 - About 详细模板（中文）： [GITHUB_ABOUT_zh.md](./GITHUB_ABOUT_zh.md)
 - About 详细模板（英文）： [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
+- Skills 来源与更新审计（英文）： [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md)
+- Skills 来源与更新审计（中文）： [SKILLS_UPDATE_STATUS_zh.md](./SKILLS_UPDATE_STATUS_zh.md)
 
 ## 2. 插件上传信息
 
@@ -105,3 +107,20 @@ git push origin main --tags
 - `_conf_schema.json` 是否可被 JSON 解析
 - Python 文件是否通过语法检查
 - WebUI 路由是否可用（至少校验 `/api/health` 与 `/api/config`）
+
+## 6. Skills 更新维护说明
+
+在维护 Skills 管理链路时，需要明确区分以下几类动作：
+
+- `POST /api/skills/import`：重建本地 source-first 快照
+- `Sync Source`：刷新 source 的上游元数据
+- `Update Install Unit` / `Update Collection`：执行真实更新命令
+
+当前实现状态：
+
+- Source sync 目前仅支持 npm registry。
+- Install unit update 取决于是否能推导出可执行命令。
+- git-backed install unit 只有在存在本地 checkout 路径时才支持更新。
+- local custom / manual skills 可以被发现和部署，但仍不支持自动更新。
+
+如果要排查“为什么不能更新”，应优先查看 install unit 详情接口中的 `update_plan`，并以它作为最终真相源。

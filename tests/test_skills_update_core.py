@@ -53,6 +53,26 @@ class SkillsUpdateCoreTests(unittest.TestCase):
         self.assertEqual("git", plan["manager"])
         self.assertEqual(["git -C '/tmp/demo tools' pull --ff-only"], plan["commands"])
 
+    def test_build_install_unit_update_plan_supports_skill_lock_git_checkout(self) -> None:
+        plan = build_install_unit_update_plan(
+            {
+                "install_unit_id": "skill_lock:https://github.com/vercel-labs/skills.git#skills/find-skills",
+                "display_name": "find-skills",
+                "install_manager": "github",
+                "update_policy": "source_sync",
+            },
+            [
+                {
+                    "source_id": "npx_global_find_skills",
+                    "source_path": "/root/.agents/skills/find-skills",
+                },
+            ],
+        )
+
+        self.assertTrue(plan["supported"])
+        self.assertEqual("git", plan["manager"])
+        self.assertEqual(["git -C /root/.agents/skills/find-skills pull --ff-only"], plan["commands"])
+
     def test_build_install_unit_update_plan_rejects_manual_filesystem_units(self) -> None:
         plan = build_install_unit_update_plan(
             {
@@ -70,6 +90,27 @@ class SkillsUpdateCoreTests(unittest.TestCase):
         )
 
         self.assertFalse(plan["supported"])
+        self.assertEqual([], plan["commands"])
+        self.assertIn("unsupported", plan["message"])
+
+    def test_build_install_unit_update_plan_rejects_local_custom_skill_even_if_policy_says_registry(self) -> None:
+        plan = build_install_unit_update_plan(
+            {
+                "install_unit_id": "local_custom:/root/.codex/skills/doc",
+                "display_name": "doc",
+                "install_manager": "manual",
+                "update_policy": "registry",
+            },
+            [
+                {
+                    "source_id": "npx_global_doc",
+                    "source_path": "/root/.codex/skills/doc",
+                },
+            ],
+        )
+
+        self.assertFalse(plan["supported"])
+        self.assertEqual("registry", plan["policy"])
         self.assertEqual([], plan["commands"])
         self.assertIn("unsupported", plan["message"])
 
