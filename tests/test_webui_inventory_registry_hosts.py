@@ -79,6 +79,23 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventorySelectedDetailInstallUnitId", html)
         self.assertIn("data-inventory-install-unit-id", html)
 
+    def test_inventory_panel_exposes_detail_scope_tabs_and_fanout_preview(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventorySourceDetailScopeTabs"', html)
+        self.assertIn('id="inventorySourceDetailScopeCollection"', html)
+        self.assertIn('id="inventorySourceDetailScopeInstallUnit"', html)
+        self.assertIn('id="inventoryFanoutPreviewBar"', html)
+        self.assertIn('id="inventoryFanoutPreviewTitle"', html)
+        self.assertIn('id="inventoryFanoutPreviewRows"', html)
+        self.assertIn("inventory_detail_scope_title", html)
+        self.assertIn("inventory_detail_scope_collection", html)
+        self.assertIn("inventory_detail_scope_install_unit", html)
+        self.assertIn("inventory_fanout_preview_title", html)
+        self.assertIn("inventory_fanout_preview_collection", html)
+        self.assertIn("inventory_fanout_preview_direct", html)
+        self.assertIn("syncInventorySourceDetailScopeTabs()", html)
+
     def test_inventory_panel_doctor_summary_reads_aggregate_health(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

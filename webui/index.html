@@ -1519,6 +1519,53 @@
       white-space: pre-wrap;
     }
 
+    .inventory-fanout-preview-rows {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .inventory-fanout-preview-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 10px 11px;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
+      display: grid;
+      gap: 6px;
+    }
+
+    .inventory-fanout-preview-item.direct {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+      background:
+        radial-gradient(180px 80px at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+        linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--panel-soft) 92%), color-mix(in srgb, var(--panel) 82%, transparent));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .inventory-fanout-preview-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .inventory-fanout-preview-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .inventory-fanout-preview-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
     .inventory-source-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
       border-radius: 10px;
@@ -2086,6 +2133,17 @@
               <div class="inventory-target-hero" id="inventorySourceHero">
                 <div class="debug-empty" id="inventorySourceHeroEmpty">等待选择 Source / Bundle...</div>
               </div>
+              <div class="inventory-install-unit-bar" id="inventorySourceDetailScopeBar">
+                <div class="inventory-install-unit-head">
+                  <div class="inventory-repair-copy">
+                    <div class="inventory-repair-title" id="inventorySourceDetailScopeTitle">详情粒度</div>
+                  </div>
+                  <div class="inventory-segmented" id="inventorySourceDetailScopeTabs">
+                    <button type="button" id="inventorySourceDetailScopeCollection" data-inventory-detail-scope="collection">Collection</button>
+                    <button type="button" id="inventorySourceDetailScopeInstallUnit" data-inventory-detail-scope="install_unit">Install Unit</button>
+                  </div>
+                </div>
+              </div>
               <div class="inventory-install-unit-bar" id="inventorySourceInstallUnitBar">
                 <div class="inventory-install-unit-head">
                   <div class="inventory-repair-copy">
@@ -2095,6 +2153,17 @@
                 </div>
                 <div class="inventory-install-unit-rows" id="inventorySourceInstallUnitRows">
                   <div class="debug-empty" id="inventorySourceInstallUnitRowsEmpty">等待聚合详情...</div>
+                </div>
+              </div>
+              <div class="inventory-install-unit-bar" id="inventoryFanoutPreviewBar">
+                <div class="inventory-install-unit-head">
+                  <div class="inventory-repair-copy">
+                    <div class="inventory-repair-title" id="inventoryFanoutPreviewTitle">动作扇出预览</div>
+                    <div class="inventory-repair-note" id="inventoryFanoutPreviewNote">等待聚合详情...</div>
+                  </div>
+                </div>
+                <div class="inventory-install-unit-rows inventory-fanout-preview-rows" id="inventoryFanoutPreviewRows">
+                  <div class="debug-empty" id="inventoryFanoutPreviewRowsEmpty">等待聚合详情...</div>
                 </div>
               </div>
               <div class="inventory-repair-bar" id="inventoryInstallUnitBar">
@@ -2953,6 +3022,13 @@
         inventory_install_units_note: "在 collection group 与 install unit 之间切换详情粒度，优先下钻到真实维护边界。",
         inventory_install_units_collection: "Collection 概览",
         inventory_install_units_empty: "当前聚合下暂无可下钻的 install unit。",
+        inventory_detail_scope_title: "详情粒度",
+        inventory_detail_scope_collection: "Collection",
+        inventory_detail_scope_install_unit: "Install Unit",
+        inventory_fanout_preview_title: "动作扇出预览",
+        inventory_fanout_preview_collection: "当前 collection / group 动作将扇出到以下 install units；执行前先确认真实影响面。",
+        inventory_fanout_preview_direct: "当前动作已收窄到单个 install unit；以下就是直接维护边界。",
+        inventory_fanout_preview_empty: "等待聚合详情...",
         inventory_install_unit_title: "当前聚合运维",
         inventory_install_unit_note_idle: "围绕真实 install unit 或 collection group 执行 refresh / sync / update / deploy，而不是对每条 leaf skill 分别操作。",
         inventory_install_unit_note_ready: "当前将操作 install unit {installUnit}（直接维护边界），目标宿主 {target}。",
@@ -3411,6 +3487,13 @@
         inventory_install_units_note: "Switch detail scope between the collection group and its install units so actions can land on the real maintenance boundary.",
         inventory_install_units_collection: "Collection Overview",
         inventory_install_units_empty: "No install unit is available under the current aggregate.",
+        inventory_detail_scope_title: "Detail Scope",
+        inventory_detail_scope_collection: "Collection",
+        inventory_detail_scope_install_unit: "Install Unit",
+        inventory_fanout_preview_title: "Action Fan-out Preview",
+        inventory_fanout_preview_collection: "Collection-scope actions fan out across the install units below; verify the real execution surface before running them.",
+        inventory_fanout_preview_direct: "Action scope is narrowed to a single install unit below; this is the direct maintenance boundary.",
+        inventory_fanout_preview_empty: "Waiting for aggregate detail...",
         inventory_install_unit_title: "Current Aggregate Operations",
         inventory_install_unit_note_idle: "Operate on real install units or collection groups for refresh, sync, update, and deploy instead of touching every leaf skill separately.",
         inventory_install_unit_note_ready: "Current action scope: install unit {installUnit} targeting {target}; this is the direct maintenance boundary.",
@@ -3763,6 +3846,28 @@
       });
     }
 
+    function syncInventorySourceDetailScopeTabs() {
+      const detail = state.inventorySourceDetail && typeof state.inventorySourceDetail === "object"
+        ? state.inventorySourceDetail
+        : {};
+      const detailInstallUnitRows = inventoryDetailInstallUnitRows(detail);
+      const hasInstallUnits = detailInstallUnitRows.some((item) => String(item && item.install_unit_id || "").trim());
+      const hasCollection = Boolean(
+        detail.collection_group
+        && typeof detail.collection_group === "object"
+        && String(detail.collection_group.collection_group_id || "").trim(),
+      ) || !hasInstallUnits;
+      const activeScope = String(state.inventorySelectedDetailInstallUnitId || "").trim()
+        ? "install_unit"
+        : "collection";
+      document.querySelectorAll("#inventorySourceDetailScopeTabs [data-inventory-detail-scope]").forEach((el) => {
+        const scope = String(el.getAttribute("data-inventory-detail-scope") || "").trim();
+        const enabled = scope === "install_unit" ? hasInstallUnits : hasCollection;
+        el.disabled = !enabled;
+        el.classList.toggle("active", enabled && scope === activeScope);
+      });
+    }
+
     function isSkillCapableSoftware(item) {
       if (!item || typeof item !== "object") return false;
       if (Object.prototype.hasOwnProperty.call(item, "skill_capable")) {
@@ -4035,8 +4140,13 @@
       $("inventoryDeployInstallAll").textContent = t("inventory_deploy_install_all");
       $("inventoryDoctorBtn").textContent = t("inventory_doctor");
       $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
+      $("inventorySourceDetailScopeTitle").textContent = t("inventory_detail_scope_title");
+      $("inventorySourceDetailScopeCollection").textContent = t("inventory_detail_scope_collection");
+      $("inventorySourceDetailScopeInstallUnit").textContent = t("inventory_detail_scope_install_unit");
       $("inventoryInstallUnitsTitle").textContent = t("inventory_install_units_title");
       $("inventoryInstallUnitsNote").textContent = t("inventory_install_units_note");
+      $("inventoryFanoutPreviewTitle").textContent = t("inventory_fanout_preview_title");
+      $("inventoryFanoutPreviewNote").textContent = t("inventory_fanout_preview_empty");
       $("inventoryInstallUnitTitle").textContent = t("inventory_install_unit_title");
       $("inventoryInstallUnitNote").textContent = t("inventory_install_unit_note_idle");
       $("inventoryRefreshInstallUnitBtn").textContent = state.inventoryRefreshingInstallUnit
@@ -4065,6 +4175,10 @@
       const inventorySourceInstallUnitRowsEmptyEl = $("inventorySourceInstallUnitRowsEmpty");
       if (inventorySourceInstallUnitRowsEmptyEl) {
         inventorySourceInstallUnitRowsEmptyEl.textContent = t("inventory_install_units_empty");
+      }
+      const inventoryFanoutPreviewRowsEmptyEl = $("inventoryFanoutPreviewRowsEmpty");
+      if (inventoryFanoutPreviewRowsEmptyEl) {
+        inventoryFanoutPreviewRowsEmptyEl.textContent = t("inventory_fanout_preview_empty");
       }
       $("inventoryKindFilterLabel").textContent = t("inventory_kind_filter_label");
       $("inventoryKindOptAll").textContent = t("inventory_kind_all");
@@ -5408,9 +5522,13 @@
       const skillListEl = $("inventorySkillList");
       const softwareRowsEl = $("inventorySoftwareRows");
       const sourceHeroEl = $("inventorySourceHero");
+      const sourceDetailScopeTitleEl = $("inventorySourceDetailScopeTitle");
       const installUnitDrilldownBarEl = $("inventorySourceInstallUnitBar");
       const installUnitDrilldownRowsEl = $("inventorySourceInstallUnitRows");
       const installUnitDrilldownNoteEl = $("inventoryInstallUnitsNote");
+      const fanoutPreviewTitleEl = $("inventoryFanoutPreviewTitle");
+      const fanoutPreviewNoteEl = $("inventoryFanoutPreviewNote");
+      const fanoutPreviewRowsEl = $("inventoryFanoutPreviewRows");
       const installUnitTitleEl = $("inventoryInstallUnitTitle");
       const installUnitNoteEl = $("inventoryInstallUnitNote");
       const refreshInstallUnitBtn = $("inventoryRefreshInstallUnitBtn");
@@ -5489,6 +5607,8 @@
       syncInventorySourceViewModeTabs();
       syncInventoryDeployViewModeTabs();
       syncInventoryDeployFilterTabs();
+      sourceDetailScopeTitleEl.textContent = t("inventory_detail_scope_title");
+      fanoutPreviewTitleEl.textContent = t("inventory_fanout_preview_title");
 
       const overview = state.inventoryOverview || {};
       const allSoftwareRows = Array.isArray(overview.software_rows) ? overview.software_rows : [];
@@ -5681,6 +5801,8 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
         sourceHeroEl.innerHTML = `<div class="debug-empty">等待选择 Source / Bundle...</div>`;
         installUnitDrilldownNoteEl.textContent = t("inventory_install_units_note");
         installUnitDrilldownRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
+        fanoutPreviewNoteEl.textContent = t("inventory_fanout_preview_empty");
+        fanoutPreviewRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_fanout_preview_empty"))}</div>`;
       } else {
         const detailCollection = sourceDetail && sourceDetail.collection_group && typeof sourceDetail.collection_group === "object"
           ? sourceDetail.collection_group
@@ -5720,6 +5842,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           ? detailInstallUnitRows.find((item) => String(item.install_unit_id || "").trim() === selectedDetailInstallUnitId) || null
           : null;
         const activeDetailInstallUnit = selectedDetailInstallUnit || detailInstallUnit || null;
+        const fanoutPreviewDirect = Boolean(selectedDetailInstallUnit || (!detailCollection && activeDetailInstallUnit));
         const activeDetailSourceRows = activeDetailInstallUnit
           ? inventorySourceRowsForInstallUnit(detailSourceRows, activeDetailInstallUnit)
           : detailSourceRows;
@@ -5778,6 +5901,35 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             </div>
           `).join("")
           : `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
+        const fanoutPreviewInstallUnits = fanoutPreviewDirect
+          ? (activeDetailInstallUnit ? [activeDetailInstallUnit] : [])
+          : detailInstallUnitRows;
+        fanoutPreviewNoteEl.textContent = fanoutPreviewInstallUnits.length
+          ? t(fanoutPreviewDirect ? "inventory_fanout_preview_direct" : "inventory_fanout_preview_collection")
+          : t("inventory_fanout_preview_empty");
+        fanoutPreviewRowsEl.innerHTML = fanoutPreviewInstallUnits.length
+          ? fanoutPreviewInstallUnits.map((item) => {
+            const installUnitId = String(item.install_unit_id || item.id || "").trim() || "-";
+            const previewLocator = String(item.install_ref || item.locator || item.source_path || "-").trim() || "-";
+            const previewSubpaths = inventorySourceSubpathSummary(item);
+            const previewSourceCount = Number(item.source_count || inventoryAggregateSourceIds(item).length || 0) || 0;
+            const previewMemberCount = Number(item.member_count || previewSourceCount || 0) || 0;
+            const previewDeployCount = inventoryDeployRowsForInstallUnit(detailDeployRows, item).length;
+            return `
+              <div class="inventory-fanout-preview-item ${fanoutPreviewDirect ? "direct" : ""}">
+                <div class="inventory-fanout-preview-kicker">${escapeHtml(inventoryAggregateKindLabel(item))}</div>
+                <div class="inventory-fanout-preview-title">
+                  <span>${escapeHtml(String(item.display_name || installUnitId).trim() || installUnitId)}</span>
+                  ${item.status ? renderSkillsStatusBadge(item.status) : ""}
+                </div>
+                <div class="inventory-fanout-preview-meta">ID: ${escapeHtml(installUnitId)}</div>
+                <div class="inventory-fanout-preview-meta">Locator: ${escapeHtml(previewLocator)}</div>
+                <div class="inventory-fanout-preview-meta">Members: ${escapeHtml(previewMemberCount)} | Sources: ${escapeHtml(previewSourceCount)} | Deploy Targets: ${escapeHtml(previewDeployCount)}</div>
+                ${previewSubpaths ? `<div class="inventory-fanout-preview-meta">${escapeHtml(t("inventory_skill_meta_subpath"))}: ${escapeHtml(previewSubpaths)}</div>` : ""}
+              </div>
+            `;
+          }).join("")
+          : `<div class="debug-empty">${escapeHtml(t("inventory_fanout_preview_empty"))}</div>`;
         const heroKindItem = activeDetailInstallUnit || detailCollection || detailSource || selectedSourceRow;
         const heroKind = inventoryAggregateKindLabel(heroKindItem);
         const heroTitle = String(
@@ -5991,6 +6143,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           </div>
         `;
       }
+      syncInventorySourceDetailScopeTabs();
 
       deployRowsEl.innerHTML = visibleDeployRows.length
         ? visibleDeployRows.map((item) => {
@@ -6096,6 +6249,8 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         sourceHeroEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_source_empty"))}</div>`;
         installUnitDrilldownNoteEl.textContent = t("inventory_install_units_note");
         installUnitDrilldownRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
+        fanoutPreviewNoteEl.textContent = t("inventory_fanout_preview_empty");
+        fanoutPreviewRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_fanout_preview_empty"))}</div>`;
         installUnitNoteEl.textContent = t("inventory_install_unit_note_empty");
         state.inventoryDraftSkillIds = [];
         state.inventoryVisibleCompatibleSkillIds = [];
@@ -6113,6 +6268,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         selectAllBtn.disabled = true;
         selectDiscoveredBtn.disabled = true;
         clearSelectionBtn.disabled = true;
+        syncInventorySourceDetailScopeTabs();
         return;
       }
 
@@ -8298,6 +8454,34 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const installUnitId = String(el.getAttribute("data-inventory-install-unit-id") || "").trim();
         if (installUnitId === String(state.inventorySelectedDetailInstallUnitId || "").trim()) return;
         state.inventorySelectedDetailInstallUnitId = installUnitId;
+        renderInventoryPanel();
+      });
+
+      $("inventorySourceDetailScopeTabs").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-detail-scope]")
+          : null;
+        if (!el || el.disabled) return;
+        const scope = String(el.getAttribute("data-inventory-detail-scope") || "").trim();
+        if (scope === "collection") {
+          if (!String(state.inventorySelectedDetailInstallUnitId || "").trim()) return;
+          state.inventorySelectedDetailInstallUnitId = "";
+          renderInventoryPanel();
+          return;
+        }
+        const detail = state.inventorySourceDetail && typeof state.inventorySourceDetail === "object"
+          ? state.inventorySourceDetail
+          : {};
+        const availableInstallUnitIds = inventoryDetailInstallUnitRows(detail)
+          .map((item) => String(item && item.install_unit_id || "").trim())
+          .filter(Boolean);
+        if (!availableInstallUnitIds.length) return;
+        const currentInstallUnitId = String(state.inventorySelectedDetailInstallUnitId || "").trim();
+        const nextInstallUnitId = availableInstallUnitIds.includes(currentInstallUnitId)
+          ? currentInstallUnitId
+          : availableInstallUnitIds[0];
+        if (nextInstallUnitId === currentInstallUnitId) return;
+        state.inventorySelectedDetailInstallUnitId = nextInstallUnitId;
         renderInventoryPanel();
       });
 
