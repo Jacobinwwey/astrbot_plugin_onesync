@@ -894,871 +894,6 @@
       color: var(--text);
     }
 
-    .inventory-panel {
-      margin-top: 10px;
-      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--panel-strong) 66%, transparent);
-      padding: 10px;
-    }
-
-    .inventory-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-head-copy {
-      display: grid;
-      gap: 3px;
-    }
-
-    .inventory-controls {
-      display: grid;
-      gap: 8px;
-    }
-
-    .inventory-control-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-hidden-select {
-      display: none !important;
-    }
-
-    .inventory-segment-block {
-      display: grid;
-      gap: 5px;
-      min-width: 0;
-    }
-
-    .inventory-segment-label {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    .inventory-segmented {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      padding: 4px;
-      border-radius: 12px;
-      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      background: color-mix(in srgb, var(--panel) 72%, transparent);
-    }
-
-    .inventory-segmented button {
-      min-width: 0;
-      padding: 6px 10px;
-      font-size: 12px;
-      border-radius: 10px;
-      background: transparent;
-      border-color: transparent;
-    }
-
-    .inventory-segmented button.active {
-      background: color-mix(in srgb, var(--accent) 18%, var(--input));
-      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
-      font-weight: 700;
-    }
-
-    .inventory-display-settings {
-      margin: 8px 0 10px;
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
-      overflow: hidden;
-    }
-
-    .inventory-display-settings summary {
-      list-style: none;
-      cursor: pointer;
-      padding: 9px 12px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text);
-      user-select: none;
-    }
-
-    .inventory-display-settings summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .inventory-display-settings[open] summary {
-      border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-      background: color-mix(in srgb, var(--panel-strong) 68%, transparent);
-    }
-
-    .inventory-display-settings-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(320px, 1fr));
-      gap: 10px;
-      padding: 10px 12px 12px;
-    }
-
-    .inventory-display-panel-group {
-      display: grid;
-      gap: 10px;
-      padding: 10px;
-      border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--panel-strong) 54%, transparent);
-    }
-
-    .inventory-display-panel-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-display-panel-title {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .inventory-display-panel-note {
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .inventory-display-panel-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(120px, 1fr));
-      gap: 10px;
-      align-items: end;
-    }
-
-    .inventory-workspace-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin: 10px 0 8px;
-    }
-
-    .inventory-skill-tools {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-filter-tools {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin: 10px 0 8px;
-    }
-
-    .inventory-title {
-      margin: 0;
-      font-family: var(--display);
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    .inventory-head-note {
-      margin: 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-      max-width: 720px;
-    }
-
-    .inventory-summary {
-      margin: 0 0 8px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-
-    .inventory-grid {
-      display: grid;
-      grid-template-columns: 320px minmax(0, 1fr);
-      gap: 12px;
-    }
-
-    .inventory-software-rail,
-    .inventory-workspace {
-      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      border-radius: 14px;
-      padding: 12px;
-      background:
-        radial-gradient(220px 120px at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
-        linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 90%, transparent), color-mix(in srgb, var(--panel) 78%, transparent));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-    }
-
-    .inventory-soft-meta {
-      margin-top: 8px;
-      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      border-radius: 12px;
-      padding: 10px;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.5;
-      white-space: pre-wrap;
-      min-height: 124px;
-      background: color-mix(in srgb, var(--panel-strong) 82%, transparent);
-    }
-
-    .inventory-target-hero {
-      position: relative;
-      overflow: hidden;
-      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      border-radius: 16px;
-      padding: 14px;
-      background:
-        radial-gradient(220px 130px at 100% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
-        radial-gradient(180px 120px at 0% 100%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 60%),
-        linear-gradient(155deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel-strong) 90%, transparent));
-      box-shadow: var(--shadow-lg);
-    }
-
-    .inventory-target-hero::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 32%);
-    }
-
-    .inventory-target-top {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 12px;
-    }
-
-    .inventory-target-copy {
-      display: grid;
-      gap: 5px;
-      min-width: 0;
-    }
-
-    .inventory-target-kicker {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
-
-    .inventory-target-title {
-      margin: 0;
-      font-family: var(--display);
-      font-size: 24px;
-      line-height: 1.05;
-      letter-spacing: 0.01em;
-    }
-
-    .inventory-target-subtitle {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
-      max-width: 780px;
-    }
-
-    .inventory-target-chip-row {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .inventory-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 999px;
-      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-      padding: 5px 10px;
-      font-size: 11px;
-      color: var(--text);
-      background: color-mix(in srgb, var(--panel-soft) 70%, transparent);
-    }
-
-    .inventory-chip strong {
-      font-family: var(--mono);
-      font-size: 11px;
-    }
-
-    .inventory-target-metrics {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 10px;
-    }
-
-    .inventory-target-metric {
-      border-radius: 12px;
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      padding: 10px 11px;
-      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
-    }
-
-    .inventory-target-metric .label {
-      color: var(--muted);
-      font-size: 11px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    .inventory-target-metric .value {
-      margin-top: 4px;
-      font-family: var(--display);
-      font-size: 24px;
-      line-height: 1;
-    }
-
-    .inventory-repair-bar {
-      margin-top: 10px;
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 12px;
-      padding: 11px 12px;
-      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
-      display: grid;
-      gap: 8px;
-    }
-
-    .inventory-repair-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-repair-copy {
-      display: grid;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    .inventory-repair-title {
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .inventory-repair-note {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-      white-space: pre-wrap;
-    }
-
-    .inventory-repair-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .inventory-repair-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    .inventory-action-pill {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      border: 1px solid color-mix(in srgb, var(--warn) 44%, var(--border));
-      padding: 4px 9px;
-      font-size: 11px;
-      color: var(--warn);
-      background: color-mix(in srgb, var(--warn) 12%, transparent);
-    }
-
-    .inventory-selection-note {
-      margin: 0 0 8px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
-    .inventory-target-drift {
-      display: grid;
-      gap: 8px;
-      padding-top: 2px;
-    }
-
-    .inventory-target-drift-title {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .inventory-target-drift-list {
-      display: grid;
-      gap: 8px;
-    }
-
-    .inventory-target-drift-item,
-    .inventory-target-drift-empty {
-      border-radius: 10px;
-      padding: 9px 10px;
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
-    .inventory-target-drift-item {
-      border: 1px solid color-mix(in srgb, var(--warn) 28%, var(--border));
-      background: color-mix(in srgb, var(--warn) 10%, transparent);
-      color: var(--text);
-    }
-
-    .inventory-target-drift-empty {
-      border: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
-      color: var(--muted);
-      background: color-mix(in srgb, var(--panel) 86%, transparent);
-    }
-
-    .inventory-skill-list {
-      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-      border-radius: 12px;
-      padding: 10px;
-      max-height: 430px;
-      overflow: auto;
-      display: grid;
-      gap: 8px;
-      background: color-mix(in srgb, var(--panel-strong) 66%, transparent);
-    }
-
-    .inventory-skill-item {
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 12px;
-      padding: 10px;
-      background: linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 65%, transparent));
-      font-size: 12px;
-      line-height: 1.45;
-      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-      display: grid;
-      gap: 6px;
-    }
-
-    .inventory-skill-item.selected {
-      border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
-    }
-
-    .inventory-skill-item:hover {
-      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
-      transform: translateY(-1px);
-    }
-
-    .inventory-skill-item .meta {
-      color: var(--muted);
-      margin-top: 4px;
-    }
-
-    .inventory-skill-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-skill-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .inventory-quick-title {
-      margin: 10px 0 8px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-    }
-
-    .inventory-software-rows {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 8px;
-      max-height: 470px;
-      overflow: auto;
-    }
-
-    .skills-secondary-grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .skills-subpanel {
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 10px;
-      padding: 10px;
-      background: linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 70%, transparent), color-mix(in srgb, var(--panel) 70%, transparent));
-    }
-
-    .skills-subhead {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .skills-subhead-tools {
-      display: flex;
-      align-items: flex-end;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-doctor-note {
-      margin: 0 0 8px;
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-
-    .inventory-source-rows {
-      display: grid;
-      gap: var(--inventory-source-card-gap);
-      grid-template-columns: 1fr;
-    }
-
-    .inventory-deploy-rows {
-      display: grid;
-      gap: var(--inventory-deploy-card-gap);
-      grid-template-columns: 1fr;
-    }
-
-    .inventory-install-unit-bar {
-      margin-top: 10px;
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 12px;
-      padding: 11px 12px;
-      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
-      display: grid;
-      gap: 8px;
-    }
-
-    .inventory-install-unit-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .inventory-install-unit-rows {
-      display: grid;
-      gap: 8px;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    }
-
-    .inventory-install-unit-item {
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 10px;
-      padding: 9px 10px;
-      background: color-mix(in srgb, var(--panel) 78%, transparent);
-      cursor: pointer;
-      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    .inventory-install-unit-item:hover {
-      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
-      transform: translateY(-1px);
-    }
-
-    .inventory-install-unit-item.active {
-      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
-      background: color-mix(in srgb, var(--accent) 10%, var(--panel) 90%);
-    }
-
-    .inventory-install-unit-item .title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      margin-bottom: 5px;
-    }
-
-    .inventory-install-unit-item .meta {
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-
-    .inventory-fanout-preview-rows {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-
-    .inventory-fanout-preview-item {
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 10px;
-      padding: 10px 11px;
-      background:
-        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
-      display: grid;
-      gap: 6px;
-    }
-
-    .inventory-fanout-preview-item.direct {
-      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
-      background:
-        radial-gradient(180px 80px at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
-        linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--panel-soft) 92%), color-mix(in srgb, var(--panel) 82%, transparent));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
-    }
-
-    .inventory-fanout-preview-kicker {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .inventory-fanout-preview-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .inventory-fanout-preview-meta {
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.45;
-      white-space: pre-wrap;
-    }
-
-    .inventory-operation-plan-rows {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-
-    .inventory-operation-plan-item {
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 10px;
-      padding: 10px 11px;
-      background:
-        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
-      display: grid;
-      gap: 6px;
-    }
-
-    .inventory-operation-plan-item.supported {
-      border-color: color-mix(in srgb, var(--accent-2) 52%, var(--border));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-2) 16%, transparent);
-    }
-
-    .inventory-operation-plan-item.blocked {
-      border-color: color-mix(in srgb, var(--warn) 48%, var(--border));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--warn) 14%, transparent);
-    }
-
-    .inventory-operation-plan-kicker {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .inventory-operation-plan-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .inventory-operation-plan-meta {
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-
-    .inventory-operation-plan-command {
-      border-radius: 8px;
-      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-      background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
-      padding: 7px 8px;
-      font-family: var(--mono);
-      font-size: 11px;
-      line-height: 1.45;
-      word-break: break-word;
-    }
-
-    .inventory-source-item {
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 10px;
-      padding: 9px 10px;
-      min-height: var(--inventory-source-card-min-height);
-      max-width: var(--inventory-source-card-max-width);
-      width: 100%;
-      background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
-      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-      cursor: pointer;
-    }
-
-    .inventory-source-item:hover {
-      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
-      transform: translateY(-1px);
-    }
-
-    .inventory-source-item.active {
-      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
-    }
-
-    .inventory-deploy-item {
-      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 10px;
-      padding: 9px 10px;
-      min-height: var(--inventory-deploy-card-min-height);
-      max-width: var(--inventory-deploy-card-max-width);
-      width: 100%;
-      background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
-    }
-
-    .inventory-deploy-item {
-      cursor: pointer;
-      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-      width: 100%;
-      text-align: left;
-      color: var(--text);
-    }
-
-    .inventory-deploy-item:hover {
-      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
-      transform: translateY(-1px);
-    }
-
-    .inventory-deploy-item.active {
-      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
-    }
-
-    .inventory-source-item .title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: var(--inventory-source-card-title-size);
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-
-    .inventory-deploy-item .title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: var(--inventory-deploy-card-title-size);
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-
-    .inventory-source-badges {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .inventory-source-actions {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .inventory-source-sync-btn {
-      min-width: 0;
-      padding: 4px 8px;
-      font-size: calc(var(--inventory-source-card-font-size) - 1px);
-      border-radius: 999px;
-    }
-
-    .inventory-source-item .meta {
-      color: var(--muted);
-      font-size: var(--inventory-source-card-font-size);
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-
-    .inventory-deploy-item .meta {
-      color: var(--muted);
-      font-size: var(--inventory-deploy-card-font-size);
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-
-    body[data-inventory-source-card-view="double"] .inventory-source-rows {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    body[data-inventory-deploy-card-view="double"] .inventory-deploy-rows {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    body[data-inventory-source-card-view="list"] .inventory-source-rows {
-      gap: 6px;
-    }
-
-    body[data-inventory-deploy-card-view="list"] .inventory-deploy-rows {
-      gap: 6px;
-    }
-
-    body[data-inventory-source-card-view="list"] .inventory-source-item {
-      padding: 7px 9px;
-      min-height: calc(var(--inventory-source-card-min-height) - 16px);
-    }
-
-    body[data-inventory-deploy-card-view="list"] .inventory-deploy-item {
-      padding: 7px 9px;
-      min-height: calc(var(--inventory-deploy-card-min-height) - 16px);
-    }
-
     .skills-status-badge {
       display: inline-flex;
       align-items: center;
@@ -1887,88 +1022,792 @@
     }
 
 
-    .modal-backdrop {
-      background: rgba(8, 15, 30, 0.34);
-      backdrop-filter: blur(10px);
-      align-items: stretch;
-      justify-content: flex-end;
-      padding: 12px;
+    .inventory-controls {
+      display: grid;
+      gap: 8px;
     }
-
-    .modal-panel {
-      width: min(920px, calc(100vw - 24px));
-      height: 100%;
-      max-height: calc(100vh - 24px);
-      border-radius: 26px;
-      background:
-        radial-gradient(280px 160px at 100% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 62%),
-        linear-gradient(175deg, color-mix(in srgb, var(--panel-soft) 98%, transparent), color-mix(in srgb, var(--panel-strong) 92%, transparent));
-      box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
+    .inventory-control-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
-
-    .modal-head {
-      align-items: flex-start;
-      gap: 10px;
-      padding: 16px 18px 14px;
+    .inventory-hidden-select {
+      display: none !important;
+    }
+    .inventory-segment-block {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .inventory-segment-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .inventory-segmented {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .inventory-segmented button {
+      min-width: 0;
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 10px;
+      background: transparent;
+      border-color: transparent;
+    }
+    .inventory-segmented button.active {
+      background: color-mix(in srgb, var(--accent) 18%, var(--input));
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+      font-weight: 700;
+    }
+    .inventory-display-settings summary::-webkit-details-marker {
+      display: none;
+    }
+    .inventory-display-settings[open] summary {
       border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-      background: color-mix(in srgb, var(--panel-soft) 88%, var(--panel) 12%);
+      background: color-mix(in srgb, var(--panel-strong) 68%, transparent);
     }
-
-    .modal-title {
+    .inventory-display-panel-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .inventory-display-panel-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .inventory-display-panel-note {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .inventory-display-panel-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 10px;
+      align-items: end;
+    }
+    .inventory-skill-tools {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .inventory-target-hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 16px;
+      padding: 14px;
+      background:
+        radial-gradient(220px 130px at 100% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
+        radial-gradient(180px 120px at 0% 100%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 60%),
+        linear-gradient(155deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel-strong) 90%, transparent));
+      box-shadow: var(--shadow-lg);
+    }
+    .inventory-target-hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 32%);
+    }
+    .inventory-target-top {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .inventory-target-copy {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .inventory-target-kicker {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .inventory-target-title {
+      margin: 0;
       font-family: var(--display);
-      font-size: 18px;
+      font-size: 24px;
+      line-height: 1.05;
       letter-spacing: 0.01em;
     }
-
-    .modal-body {
-      padding: 16px 18px 18px;
+    .inventory-target-subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 780px;
     }
-
-    .inventory-panel {
-      margin-top: 14px;
+    .inventory-target-chip-row {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .inventory-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      padding: 5px 10px;
+      font-size: 11px;
+      color: var(--text);
+      background: color-mix(in srgb, var(--panel-soft) 70%, transparent);
+    }
+    .inventory-chip strong {
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .inventory-target-metrics {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    .inventory-target-metric {
+      border-radius: 12px;
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-      border-radius: 22px;
+      padding: 10px 11px;
+      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
+    }
+    .inventory-target-metric .label {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .inventory-target-metric .value {
+      margin-top: 4px;
+      font-family: var(--display);
+      font-size: 24px;
+      line-height: 1;
+    }
+    .inventory-repair-bar {
+      margin-top: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
+      display: grid;
+      gap: 8px;
+    }
+    .inventory-repair-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .inventory-repair-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .inventory-repair-title {
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .inventory-repair-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .inventory-repair-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .inventory-repair-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .inventory-action-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--warn) 44%, var(--border));
+      padding: 4px 9px;
+      font-size: 11px;
+      color: var(--warn);
+      background: color-mix(in srgb, var(--warn) 12%, transparent);
+    }
+    .inventory-selection-note {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .inventory-target-drift {
+      display: grid;
+      gap: 8px;
+      padding-top: 2px;
+    }
+    .inventory-target-drift-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .inventory-target-drift-list {
+      display: grid;
+      gap: 8px;
+    }
+    .inventory-target-drift-item,
+    .inventory-target-drift-empty {
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .inventory-target-drift-item {
+      border: 1px solid color-mix(in srgb, var(--warn) 28%, var(--border));
+      background: color-mix(in srgb, var(--warn) 10%, transparent);
+      color: var(--text);
+    }
+    .inventory-target-drift-empty {
+      border: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel) 86%, transparent);
+    }
+    .inventory-skill-item.selected {
+      border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+    }
+    .inventory-skill-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+      transform: translateY(-1px);
+    }
+    .inventory-skill-item .meta {
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .inventory-skill-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .inventory-skill-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .inventory-quick-title {
+      margin: 10px 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .skills-secondary-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .skills-subpanel {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 10px;
+      background: linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 70%, transparent), color-mix(in srgb, var(--panel) 70%, transparent));
+    }
+    .skills-subhead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .skills-subhead-tools {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .inventory-doctor-note {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .inventory-source-rows {
+      display: grid;
+      gap: var(--inventory-source-card-gap);
+      grid-template-columns: 1fr;
+    }
+    .inventory-deploy-rows {
+      display: grid;
+      gap: var(--inventory-deploy-card-gap);
+      grid-template-columns: 1fr;
+    }
+    .inventory-install-unit-bar {
+      margin-top: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
+      display: grid;
+      gap: 8px;
+    }
+    .inventory-install-unit-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .inventory-install-unit-rows {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+    .inventory-install-unit-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--panel) 78%, transparent);
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .inventory-install-unit-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      transform: translateY(-1px);
+    }
+    .inventory-install-unit-item.active {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+      background: color-mix(in srgb, var(--accent) 10%, var(--panel) 90%);
+    }
+    .inventory-install-unit-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .inventory-install-unit-item .meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .inventory-fanout-preview-rows {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .inventory-fanout-preview-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 10px 11px;
       background:
-        radial-gradient(360px 180px at 100% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 68%),
-        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 94%, transparent), color-mix(in srgb, var(--panel-strong) 90%, transparent));
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
+      display: grid;
+      gap: 6px;
+    }
+    .inventory-fanout-preview-item.direct {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+      background:
+        radial-gradient(180px 80px at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+        linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--panel-soft) 92%), color-mix(in srgb, var(--panel) 82%, transparent));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .inventory-fanout-preview-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .inventory-fanout-preview-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .inventory-fanout-preview-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .inventory-operation-plan-rows {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .inventory-operation-plan-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 10px 11px;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
+      display: grid;
+      gap: 6px;
+    }
+    .inventory-operation-plan-item.supported {
+      border-color: color-mix(in srgb, var(--accent-2) 52%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-2) 16%, transparent);
+    }
+    .inventory-operation-plan-item.blocked {
+      border-color: color-mix(in srgb, var(--warn) 48%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--warn) 14%, transparent);
+    }
+    .inventory-operation-plan-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .inventory-operation-plan-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .inventory-operation-plan-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .inventory-operation-plan-command {
+      border-radius: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+      padding: 7px 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .inventory-source-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 9px 10px;
+      min-height: var(--inventory-source-card-min-height);
+      max-width: var(--inventory-source-card-max-width);
+      width: 100%;
+      background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
+    }
+    .inventory-source-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      transform: translateY(-1px);
+    }
+    .inventory-source-item.active {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+    }
+    .inventory-deploy-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 9px 10px;
+      min-height: var(--inventory-deploy-card-min-height);
+      max-width: var(--inventory-deploy-card-max-width);
+      width: 100%;
+      background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
+    }
+    .inventory-deploy-item {
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      width: 100%;
+      text-align: left;
+      color: var(--text);
+    }
+    .inventory-deploy-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      transform: translateY(-1px);
+    }
+    .inventory-deploy-item.active {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+    }
+    .inventory-source-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: var(--inventory-source-card-title-size);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .inventory-deploy-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: var(--inventory-deploy-card-title-size);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .inventory-source-badges {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .inventory-source-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .inventory-source-sync-btn {
+      min-width: 0;
+      padding: 4px 8px;
+      font-size: calc(var(--inventory-source-card-font-size) - 1px);
+      border-radius: 999px;
+    }
+    .inventory-source-item .meta {
+      color: var(--muted);
+      font-size: var(--inventory-source-card-font-size);
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .inventory-deploy-item .meta {
+      color: var(--muted);
+      font-size: var(--inventory-deploy-card-font-size);
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    body[data-inventory-source-card-view="double"] .inventory-source-rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    body[data-inventory-deploy-card-view="double"] .inventory-deploy-rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    body[data-inventory-source-card-view="list"] .inventory-source-rows {
+      gap: 6px;
+    }
+    body[data-inventory-deploy-card-view="list"] .inventory-deploy-rows {
+      gap: 6px;
+    }
+    body[data-inventory-source-card-view="list"] .inventory-source-item {
+      padding: 7px 9px;
+      min-height: calc(var(--inventory-source-card-min-height) - 16px);
+    }
+    body[data-inventory-deploy-card-view="list"] .inventory-deploy-item {
+      padding: 7px 9px;
+      min-height: calc(var(--inventory-deploy-card-min-height) - 16px);
+    }
+    .skills-status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 72px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.45;
+    }
+    .skills-status-ready {
+      background: color-mix(in srgb, #22c55e 18%, transparent);
+      color: #166534;
+      border-color: color-mix(in srgb, #22c55e 36%, transparent);
+    }
+    .skills-status-fresh {
+      background: color-mix(in srgb, #22c55e 18%, transparent);
+      color: #166534;
+      border-color: color-mix(in srgb, #22c55e 36%, transparent);
+    }
+    .skills-status-aging {
+      background: color-mix(in srgb, #f59e0b 16%, transparent);
+      color: #92400e;
+      border-color: color-mix(in srgb, #f59e0b 34%, transparent);
+    }
+    .skills-status-missing,
+    .skills-status-stale {
+      background: color-mix(in srgb, #f97316 14%, transparent);
+      color: #9a3412;
+      border-color: color-mix(in srgb, #f97316 34%, transparent);
+    }
+    .skills-status-idle {
+      background: color-mix(in srgb, #64748b 16%, transparent);
+      color: #334155;
+      border-color: color-mix(in srgb, #64748b 34%, transparent);
+    }
+    .skills-status-unavailable {
+      background: color-mix(in srgb, #ef4444 14%, transparent);
+      color: #991b1b;
+      border-color: color-mix(in srgb, #ef4444 32%, transparent);
+    }
+    .inventory-software-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 8px;
+      background: linear-gradient(165deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), color-mix(in srgb, var(--panel) 66%, transparent));
+      text-align: left;
+      cursor: pointer;
+      color: var(--text);
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .inventory-software-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+      transform: translateY(-1px);
+    }
+    .inventory-software-item.active {
+      border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .inventory-software-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .inventory-kind-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 1px 8px;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+      text-transform: uppercase;
+      line-height: 1.5;
+    }
+    .inventory-kind-cli {
+      background: color-mix(in srgb, #0ea5e9 16%, transparent);
+      color: #0369a1;
+      border-color: color-mix(in srgb, #0ea5e9 36%, transparent);
+    }
+    .inventory-kind-gui {
+      background: color-mix(in srgb, #22c55e 16%, transparent);
+      color: #166534;
+      border-color: color-mix(in srgb, #22c55e 36%, transparent);
+    }
+    .inventory-kind-claw {
+      background: color-mix(in srgb, #f97316 14%, transparent);
+      color: #9a3412;
+      border-color: color-mix(in srgb, #f97316 36%, transparent);
+    }
+    .inventory-kind-other {
+      background: color-mix(in srgb, #64748b 16%, transparent);
+      color: #334155;
+      border-color: color-mix(in srgb, #64748b 36%, transparent);
+    }
+    .inventory-software-item .meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .inventory-panel {
+      margin-top: 16px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 26px;
+      background:
+        radial-gradient(380px 180px at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 68%),
+        radial-gradient(300px 140px at 0% 100%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 72%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel-strong) 90%, transparent));
       box-shadow: var(--shadow-lg);
-      padding: 16px;
+      padding: 18px;
     }
 
     .inventory-head {
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 14px;
+      margin-bottom: 12px;
     }
 
     .inventory-head-copy {
-      gap: 5px;
-      max-width: 860px;
+      display: grid;
+      gap: 6px;
+      max-width: 760px;
     }
 
     .inventory-title {
-      font-size: 22px;
-      line-height: 1.05;
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.02;
       letter-spacing: 0.01em;
     }
 
     .inventory-head-note {
+      margin: 0;
+      color: var(--muted);
       font-size: 13px;
-      line-height: 1.6;
+      line-height: 1.65;
     }
 
     .inventory-summary {
-      margin-bottom: 12px;
+      margin: 0 0 14px;
+      padding: 11px 14px;
+      border: 1px dashed color-mix(in srgb, var(--border) 72%, transparent);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--panel-soft) 88%, transparent);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
     }
 
     .inventory-display-settings {
-      margin: 12px 0 14px;
-      border-radius: 18px;
+      margin: 0 0 16px;
+      border-radius: 20px;
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
+      overflow: hidden;
     }
 
     .inventory-display-settings summary {
       padding: 12px 14px;
-      font-size: 13px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
 
     .inventory-display-settings-grid {
@@ -1977,27 +1816,29 @@
     }
 
     .inventory-display-panel-group {
-      padding: 12px;
-      border-radius: 16px;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+      background: color-mix(in srgb, var(--panel) 76%, var(--panel-soft) 24%);
     }
 
     .inventory-status-strip {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
     .inventory-status-card {
       border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-      border-radius: 18px;
-      padding: 12px 14px;
+      border-radius: 20px;
+      padding: 14px;
       background:
-        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 95%, transparent), color-mix(in srgb, var(--panel) 92%, transparent));
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel) 92%, transparent));
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
       display: grid;
       gap: 6px;
-      min-height: 112px;
+      min-height: 106px;
     }
 
     .inventory-status-card[data-tone="accent"] {
@@ -2044,117 +1885,139 @@
 
     .inventory-shell {
       display: grid;
-      grid-template-columns: minmax(0, 1.6fr) minmax(360px, 0.88fr);
-      gap: 14px;
+      grid-template-columns: minmax(248px, 284px) minmax(0, 1fr) minmax(320px, 372px);
+      gap: 16px;
       align-items: start;
     }
 
     .inventory-grid {
-      gap: 14px;
+      display: contents;
+      gap: 16px;
     }
 
     .inventory-software-rail,
     .inventory-workspace {
-      border-radius: 20px;
-      padding: 14px;
+      min-width: 0;
+      border-radius: 22px;
+      padding: 16px;
+    }
+
+    .inventory-software-rail {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      background:
+        radial-gradient(220px 130px at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 66%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 90%, transparent), color-mix(in srgb, var(--panel) 86%, transparent));
     }
 
     .inventory-workspace {
       display: grid;
-      gap: 12px;
+      gap: 14px;
+      background:
+        radial-gradient(240px 120px at 0% 0%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 70%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 98%, transparent), color-mix(in srgb, var(--panel) 94%, transparent));
     }
 
     .inventory-workspace-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
+      display: grid;
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
     }
 
     .inventory-workspace-copy {
       display: grid;
-      gap: 5px;
+      gap: 6px;
     }
 
     .inventory-workspace-kicker {
       margin: 0;
-      color: var(--muted);
-      font-size: 11px;
+      color: var(--accent);
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
     }
 
     .inventory-workspace-title {
       margin: 0;
       font-family: var(--display);
-      font-size: 18px;
-      line-height: 1.1;
+      font-size: 20px;
+      line-height: 1.08;
     }
 
     .inventory-workspace-note {
       margin: 0;
       color: var(--muted);
       font-size: 12px;
-      line-height: 1.55;
-      max-width: 760px;
+      line-height: 1.65;
+      max-width: 64ch;
     }
 
     .inventory-workspace-actions {
+      display: flex;
+      flex-wrap: wrap;
       gap: 8px;
-      margin: 14px 0 10px;
+      margin: 0;
+      padding-top: 4px;
     }
 
     .inventory-filter-tools {
-      margin: 4px 0 10px;
+      margin: 0;
+      display: grid;
+      gap: 10px;
     }
 
     .inventory-soft-meta {
       margin-top: 0;
-      border-radius: 14px;
-      padding: 12px;
-      line-height: 1.6;
-      min-height: 160px;
+      border-radius: 16px;
+      padding: 14px;
+      line-height: 1.65;
+      min-height: 180px;
     }
 
     .inventory-skill-list {
-      border-radius: 16px;
-      padding: 12px;
-      min-height: 460px;
-      gap: 10px;
+      border-radius: 18px;
+      padding: 14px;
+      min-height: 480px;
+      gap: 12px;
     }
 
     .inventory-skill-item {
-      border-radius: 14px;
-      padding: 12px;
-      line-height: 1.55;
+      border-radius: 16px;
+      padding: 14px;
+      line-height: 1.6;
       gap: 8px;
     }
 
     .inventory-software-rows {
       gap: 10px;
-      max-height: 700px;
+      max-height: min(72vh, 760px);
     }
 
     .inventory-inspector {
       display: grid;
       gap: 12px;
       min-width: 0;
+      align-content: start;
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      border-radius: 22px;
+      padding: 16px;
+      background:
+        radial-gradient(240px 140px at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 68%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 92%, transparent), color-mix(in srgb, var(--panel) 88%, transparent));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 12px 26px rgba(15, 23, 42, 0.05);
     }
 
     .inventory-inspector-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
+      display: grid;
       gap: 12px;
-      flex-wrap: wrap;
-      padding: 14px;
-      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-      border-radius: 20px;
-      background:
-        radial-gradient(220px 130px at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 64%),
-        linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 94%, transparent), color-mix(in srgb, var(--panel) 84%, transparent));
+      padding: 0 0 10px;
+      border: none;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+      border-radius: 0;
+      background: transparent;
     }
 
     .inventory-inspector-copy {
@@ -2164,18 +2027,18 @@
 
     .inventory-inspector-kicker {
       margin: 0;
-      color: var(--muted);
-      font-size: 11px;
+      color: var(--accent);
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
     }
 
     .inventory-inspector-title {
       margin: 0;
       font-family: var(--display);
-      font-size: 17px;
-      line-height: 1.1;
+      font-size: 18px;
+      line-height: 1.08;
     }
 
     .inventory-inspector-panel {
@@ -2187,7 +2050,7 @@
 
     .inventory-inspector-card {
       display: grid;
-      gap: 10px;
+      gap: 12px;
     }
 
     .inventory-inspector-actions {
@@ -2199,26 +2062,27 @@
     .inventory-inspector-actions button {
       width: 100%;
       justify-content: center;
+      min-height: 42px;
     }
 
     .inventory-utility-copy {
       margin: 0;
       color: var(--muted);
       font-size: 12px;
-      line-height: 1.55;
+      line-height: 1.65;
     }
 
-    @media (max-width: 1320px) {
-      .inventory-shell {
+    @media (max-width: 1180px) {
+      .inventory-head {
         grid-template-columns: 1fr;
       }
 
-      .inventory-inspector {
-        position: static;
+      .inventory-shell {
+        grid-template-columns: minmax(232px, 284px) minmax(0, 1fr);
       }
 
-      .inventory-inspector-panel {
-        max-height: none;
+      .inventory-inspector {
+        grid-column: 1 / -1;
       }
     }
 
@@ -2242,8 +2106,14 @@
       .inventory-display-panel-grid {
         grid-template-columns: 1fr;
       }
-      .inventory-grid {
+      .inventory-shell {
         grid-template-columns: 1fr;
+      }
+      .inventory-inspector {
+        grid-column: auto;
+      }
+      .inventory-grid {
+        display: contents;
       }
       .skills-secondary-grid {
         grid-template-columns: 1fr;
@@ -2356,7 +2226,7 @@
           <div class="inventory-head">
             <div class="inventory-head-copy">
               <p class="inventory-title" id="inventoryTitle">Skills管理</p>
-              <p class="inventory-head-note" id="inventoryHeadNote">按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。</p>
+              <p class="inventory-head-note" id="inventoryHeadNote">按 Source package 管理可部署 Skills，围绕宿主软件完成 bundle 绑定、部署选择与 drift 修复；主屏保持简洁，深入细节统一收敛到右侧检查器与抽屉。</p>
             </div>
             <div class="modal-actions">
               <button id="inventoryRefreshBtn">刷新资产</button>
@@ -2495,9 +2365,9 @@
               <div class="inventory-workspace">
                 <div class="inventory-workspace-head">
                   <div class="inventory-workspace-copy">
-                    <p class="inventory-workspace-kicker">Primary workspace</p>
+                    <p class="inventory-workspace-kicker">Workspace</p>
                     <h3 class="inventory-workspace-title">技能选择与绑定</h3>
-                    <p class="inventory-workspace-note">围绕当前宿主软件完成 bundle 选择、绑定保存与漂移修复。Source / Deploy 的深入细节已移到右侧检查器，配置与导入则统一通过抽屉处理。</p>
+                    <p class="inventory-workspace-note">以当前宿主为中心完成 bundle 选择、绑定保存与 drift 修复。Source / Deploy 的深入细节放在右侧检查器，配置、导入与指引统一通过抽屉触发。</p>
                   </div>
                 </div>
                 <div class="inventory-target-hero" id="inventoryTargetHero">
@@ -2533,7 +2403,7 @@
               <div class="inventory-inspector-head">
                 <div class="inventory-inspector-copy">
                   <p class="inventory-inspector-kicker">Inspector</p>
-                  <p class="inventory-inspector-title">右侧检查器</p>
+                  <p class="inventory-inspector-title">运维检查器</p>
                 </div>
                 <div class="inventory-segmented" id="inventoryInspectorTabs">
                   <button type="button" id="inventoryInspectorTabSource" data-inventory-inspector="source">Source</button>
@@ -2644,7 +2514,7 @@
                   <div class="skills-subhead">
                     <p class="inventory-quick-title">抽屉入口</p>
                   </div>
-                  <p class="inventory-utility-copy">把导入、配置、使用指引和 AI 助手统一作为右侧抽屉打开，减少主界面的上下跳转和信息打断。</p>
+                  <p class="inventory-utility-copy">将导入、系统配置、使用指引与 AI 助手都收敛为右侧抽屉，保持主界面聚焦，同时减少运维操作的跳转打断。</p>
                   <div class="inventory-inspector-actions">
                     <button type="button" id="inventoryOpenImportDrawerBtn">导入 Source</button>
                     <button type="button" id="inventoryOpenConfigDrawerBtn">系统配置</button>
@@ -3412,7 +3282,7 @@
         guide_doc_install: "安装与配置手册",
         guide_doc_ops: "操作与同步手册",
         inventory_title: "Skills管理",
-        inventory_head_note: "按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。",
+        inventory_head_note: "按 Source package 管理可部署 Skills，围绕宿主软件完成 bundle 绑定、部署选择与 drift 修复；主屏保持简洁，深入细节统一收敛到右侧检查器与抽屉。",
         inventory_refresh: "刷新资产",
         inventory_import_open: "导入 Source",
         inventory_import_title: "导入 Source",
@@ -3895,7 +3765,7 @@
         guide_doc_install: "Installation & Config Guide",
         guide_doc_ops: "Operations and Sync Manual",
         inventory_title: "Skills Management",
-        inventory_head_note: "Manage deployable skills as source packages, with unified host visibility, deployment selection, and drift repair.",
+        inventory_head_note: "Manage deployable skills as source packages, centered on host bundle binding, deployment curation, and drift repair while keeping the main screen calm and pushing detail into the inspector and drawers.",
         inventory_refresh: "Refresh Inventory",
         inventory_import_open: "Import Source",
         inventory_import_title: "Import Source",
