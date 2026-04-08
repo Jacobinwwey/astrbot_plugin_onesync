@@ -38,6 +38,19 @@ class SkillsAggregationCoreTests(unittest.TestCase):
 
         self.addCleanup(_restore)
 
+    def _set_local_mirror_roots(self, *roots: Path) -> None:
+        previous = os.environ.get("ONESYNC_SKILL_LOCAL_MIRROR_ROOTS")
+        joined = os.pathsep.join(str(root) for root in roots)
+        os.environ["ONESYNC_SKILL_LOCAL_MIRROR_ROOTS"] = joined
+
+        def _restore() -> None:
+            if previous is None:
+                os.environ.pop("ONESYNC_SKILL_LOCAL_MIRROR_ROOTS", None)
+            else:
+                os.environ["ONESYNC_SKILL_LOCAL_MIRROR_ROOTS"] = previous
+
+        self.addCleanup(_restore)
+
     def test_manual_git_subpath_uses_repo_group_and_subpath_install_unit(self) -> None:
         source = {
             "source_id": "manual_git_ui_audit",
@@ -562,6 +575,75 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual("", provenance["provenance_package_name"])
         self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
         self.assertEqual("synthetic_single:npx_global_security_reviewer", aggregation["install_unit_id"])
+
+    def test_npx_single_recovers_local_plugin_bundle_from_exact_skill_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "frontend-skill"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            skill_content = (
+                "---\n"
+                "name: frontend-skill\n"
+                "description: Use when the task asks for a visually strong landing page.\n"
+                "---\n\n"
+                "# Frontend Skill\n\n"
+                "Use this skill when the quality of the work depends on art direction.\n"
+            )
+            (source_skill / "SKILL.md").write_text(skill_content, encoding="utf-8")
+
+            plugin_root = temp_root / ".codex" / ".tmp" / "plugins" / "plugins" / "build-web-apps"
+            mirror_skill = plugin_root / "skills" / "frontend-skill"
+            mirror_skill.mkdir(parents=True, exist_ok=True)
+            (mirror_skill / "SKILL.md").write_text(skill_content, encoding="utf-8")
+            plugin_meta_dir = plugin_root / ".codex-plugin"
+            plugin_meta_dir.mkdir(parents=True, exist_ok=True)
+            (plugin_meta_dir / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "name": "build-web-apps",
+                        "repository": "https://github.com/openai/plugins",
+                        "interface": {
+                            "displayName": "Build Web Apps",
+                        },
+                    },
+                ),
+                encoding="utf-8",
+            )
+
+            self._set_local_mirror_roots(temp_root / ".codex" / ".tmp" / "plugins")
+
+            source_row = {
+                "source_id": "npx_global_frontend_skill",
+                "display_name": "frontend-skill",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["frontend-skill"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("local_plugin_bundle", provenance["provenance_origin_kind"])
+        self.assertEqual(
+            "https://github.com/openai/plugins#build-web-apps",
+            provenance["provenance_origin_ref"],
+        )
+        self.assertEqual("Build Web Apps", provenance["provenance_origin_label"])
+        self.assertEqual("local_plugin_exact_mirror", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+        self.assertEqual(
+            "plugin:https://github.com/openai/plugins#build-web-apps",
+            aggregation["install_unit_id"],
+        )
+        self.assertEqual("local_plugin_bundle", aggregation["install_unit_kind"])
+        self.assertEqual("Build Web Apps", aggregation["install_unit_display_name"])
+        self.assertEqual("plugin_bundle", aggregation["collection_group_kind"])
 
     def test_npx_single_cache_mirror_can_promote_curated_package_group(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

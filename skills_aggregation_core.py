@@ -431,6 +431,19 @@ def _configured_package_cache_roots() -> tuple[str, ...]:
     )
 
 
+def _configured_local_mirror_roots() -> tuple[str, ...]:
+    configured = _split_path_env(os.environ.get("ONESYNC_SKILL_LOCAL_MIRROR_ROOTS", ""))
+    if configured:
+        return configured
+    return tuple(
+        _dedupe_keep_order(
+            [
+                str(Path(os.path.expanduser("~/.codex/.tmp/plugins"))),
+            ],
+        ),
+    )
+
+
 def _skill_markdown_path(path_text: Any) -> Path | None:
     path = _safe_expand_path(path_text)
     if not path:
@@ -504,6 +517,104 @@ def _ignore_cache_candidate_for_provenance(path_text: Any) -> bool:
             "/__tests__/",
         )
     )
+
+
+@lru_cache(maxsize=512)
+def _candidate_local_skill_mirror_documents(skill_dir_name: str, local_roots: tuple[str, ...]) -> tuple[str, ...]:
+    normalized_name = str(skill_dir_name or "").strip()
+    if not normalized_name:
+        return ()
+
+    candidates: list[str] = []
+    for root_text in local_roots:
+        root = _safe_expand_path(root_text)
+        if not root:
+            continue
+        try:
+            if not root.exists():
+                continue
+        except Exception:
+            continue
+        try:
+            for candidate in root.glob(f"**/skills/{normalized_name}/SKILL.md"):
+                if candidate.is_file() and not _ignore_cache_candidate_for_provenance(candidate):
+                    candidates.append(str(candidate))
+        except Exception:
+            continue
+    return tuple(_dedupe_keep_order(candidates))
+
+
+@lru_cache(maxsize=256)
+def _local_plugin_bundle_metadata(candidate_path: str) -> tuple[str, str]:
+    path = _safe_expand_path(candidate_path)
+    if not path:
+        return "", ""
+
+    current = path.parent if path.is_file() else path
+    max_hops = 6
+    for _ in range(max_hops + 1):
+        plugin_json = current / ".codex-plugin" / "plugin.json"
+        if plugin_json.exists() and plugin_json.is_file():
+            try:
+                payload = json.loads(plugin_json.read_text(encoding="utf-8"))
+            except Exception:
+                payload = {}
+            plugin_name = str(payload.get("name") or "").strip()
+            repository = str(payload.get("repository") or "").strip()
+            interface = payload.get("interface") if isinstance(payload.get("interface"), dict) else {}
+            display_name = str(interface.get("displayName") or plugin_name or "").strip()
+            origin_ref = ""
+            if repository and plugin_name:
+                origin_ref = f"{repository}#{plugin_name}"
+            elif plugin_name:
+                origin_ref = plugin_name
+            if origin_ref:
+                return origin_ref, display_name or plugin_name
+        if current.parent == current:
+            break
+        current = current.parent
+    return "", ""
+
+
+def _infer_local_plugin_bundle(source: dict[str, Any]) -> tuple[str, str, str]:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return "", "", ""
+
+    signature = _skill_markdown_signature(source_path)
+    if not signature:
+        return "", "", ""
+
+    skill_dir_name = ""
+    source_dir = _safe_expand_path(source_path)
+    if source_dir:
+        skill_dir_name = str(source_dir.name or "").strip()
+    if not skill_dir_name:
+        member_names = _to_str_list(source.get("member_skill_preview", []))
+        skill_dir_name = str(member_names[0] if member_names else source.get("display_name") or "").strip()
+    if not skill_dir_name:
+        return "", "", ""
+
+    local_roots = _configured_local_mirror_roots()
+    if not local_roots:
+        return "", "", ""
+
+    normalized_source_path = _normalize_path_text(source_path)
+    candidates_by_ref: dict[str, tuple[str, str]] = {}
+    for candidate in _candidate_local_skill_mirror_documents(skill_dir_name, local_roots):
+        if _normalize_path_text(candidate) == normalized_source_path:
+            continue
+        if _skill_markdown_signature(candidate) != signature:
+            continue
+        origin_ref, origin_label = _local_plugin_bundle_metadata(candidate)
+        if not origin_ref:
+            continue
+        candidates_by_ref.setdefault(origin_ref, (origin_ref, origin_label))
+
+    if len(candidates_by_ref) != 1:
+        return "", "", ""
+    origin_ref, origin_label = next(iter(candidates_by_ref.values()))
+    return origin_ref, origin_label, "local_plugin_exact_mirror"
 
 
 @lru_cache(maxsize=512)
@@ -777,6 +888,14 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                     }
                     else "medium"
                 )
+            else:
+                plugin_origin_ref, plugin_origin_label, plugin_strategy = _infer_local_plugin_bundle(source)
+                if plugin_origin_ref:
+                    origin_kind = origin_kind or "local_plugin_bundle"
+                    origin_ref = origin_ref or plugin_origin_ref
+                    origin_label = origin_label or plugin_origin_label or display_name
+                    package_strategy = package_strategy or plugin_strategy
+                    confidence = confidence or "high"
 
     if not rule and package_name:
         rule = _match_curated_rule(
@@ -1034,6 +1153,21 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
         or provenance.get("provenance_package_manager")
         or ""
     ).strip()
+    provenance_origin_kind = str(
+        source.get("provenance_origin_kind")
+        or provenance.get("provenance_origin_kind")
+        or ""
+    ).strip()
+    provenance_origin_ref = str(
+        source.get("provenance_origin_ref")
+        or provenance.get("provenance_origin_ref")
+        or ""
+    ).strip()
+    provenance_origin_label = str(
+        source.get("provenance_origin_label")
+        or provenance.get("provenance_origin_label")
+        or ""
+    ).strip()
     provenance_package_strategy = str(
         source.get("provenance_package_strategy")
         or provenance.get("provenance_package_strategy")
@@ -1119,6 +1253,13 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                 install_manager = registry_package_manager or _infer_manager_from_hint(management_hint, "npm")
                 install_unit_display_name = display_name
                 aggregation_strategy = inferred_strategy
+            elif provenance_origin_kind == "local_plugin_bundle" and provenance_origin_ref:
+                install_unit_id = f"plugin:{provenance_origin_ref}"
+                install_unit_kind = "local_plugin_bundle"
+                install_ref = provenance_origin_ref
+                install_manager = "plugin"
+                install_unit_display_name = provenance_origin_label or display_name
+                aggregation_strategy = provenance_package_strategy or "local_plugin_exact_mirror"
             elif rule:
                 install_unit_id = str(rule.get("install_unit_id") or f"curated:{_slug(display_name, default='pack')}")
                 install_unit_kind = str(rule.get("install_unit_kind") or "curated_npx_pack")
@@ -1153,6 +1294,10 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             collection_group_id = f"collection:package_{_slug(provenance_package_name, default='package')}"
             collection_group_name = install_unit_display_name or provenance_package_name or display_name
             collection_group_kind = "package"
+        elif provenance_origin_kind == "local_plugin_bundle" and provenance_origin_ref:
+            collection_group_id = f"collection:plugin_{_slug(provenance_origin_ref, default='plugin')}"
+            collection_group_name = install_unit_display_name or provenance_origin_label or display_name
+            collection_group_kind = "plugin_bundle"
         elif source_kind in {"manual_git", "manual_local"}:
             collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
                 locator or source_id,
