@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -321,7 +323,10 @@ def _manual_source_collection_group(locator: Any, source_kind: str) -> tuple[str
 
 
 def _match_curated_rule(source: dict[str, Any]) -> dict[str, Any] | None:
-    registry_package_name = str(source.get("registry_package_name") or "").strip().lower()
+    registry_package_name = _first_non_empty(
+        source.get("registry_package_name"),
+        source.get("provenance_package_name"),
+    ).strip().lower()
     names = {
         str(source.get("display_name") or "").strip().lower(),
         *[str(item or "").strip().lower() for item in _to_str_list(source.get("member_skill_preview", []))],
@@ -397,6 +402,138 @@ def _package_name_from_nearest_package_json(path_text: str) -> str:
     return ""
 
 
+def _split_path_env(value: Any) -> tuple[str, ...]:
+    text = str(value or "").strip()
+    if not text:
+        return ()
+    result: list[str] = []
+    for segment in text.split(os.pathsep):
+        normalized = str(segment or "").strip()
+        if normalized:
+            result.append(normalized)
+    return tuple(_dedupe_keep_order(result))
+
+
+def _configured_package_cache_roots() -> tuple[str, ...]:
+    configured = _split_path_env(os.environ.get("ONESYNC_SKILL_PACKAGE_CACHE_ROOTS", ""))
+    if configured:
+        return configured
+    return tuple(
+        _dedupe_keep_order(
+            [
+                str(Path(os.path.expanduser("~/.bun/install/cache"))),
+                str(Path(os.path.expanduser("~/.npm/_npx"))),
+            ],
+        ),
+    )
+
+
+def _skill_markdown_path(path_text: Any) -> Path | None:
+    path = _safe_expand_path(path_text)
+    if not path:
+        return None
+    candidate = path if path.is_file() else path / "SKILL.md"
+    try:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    except Exception:
+        return None
+    return None
+
+
+@lru_cache(maxsize=1024)
+def _skill_markdown_signature(path_text: str) -> str:
+    skill_markdown = _skill_markdown_path(path_text)
+    if not skill_markdown:
+        return ""
+    try:
+        payload = skill_markdown.read_bytes()
+    except Exception:
+        return ""
+    return hashlib.sha1(payload).hexdigest()
+
+
+@lru_cache(maxsize=512)
+def _candidate_package_cache_skill_dirs(skill_dir_name: str, cache_roots: tuple[str, ...]) -> tuple[str, ...]:
+    normalized_name = str(skill_dir_name or "").strip()
+    if not normalized_name:
+        return ()
+
+    candidates: list[str] = []
+    for root_text in cache_roots:
+        root = _safe_expand_path(root_text)
+        if not root:
+            continue
+        try:
+            if not root.exists():
+                continue
+        except Exception:
+            continue
+        try:
+            for candidate in root.glob(f"**/skills/{normalized_name}"):
+                if candidate.is_dir():
+                    candidates.append(str(candidate))
+        except Exception:
+            continue
+    return tuple(_dedupe_keep_order(candidates))
+
+
+def _mirror_package_details(candidate_path: str) -> tuple[str, str]:
+    package_name = _package_name_from_path_heuristic(candidate_path)
+    if package_name:
+        return package_name, "cache_path_heuristic"
+    package_name = _package_name_from_nearest_package_json(candidate_path)
+    if package_name:
+        return package_name, "cache_package_json"
+    return "", ""
+
+
+def _infer_npx_package_from_cache_mirror(source: dict[str, Any]) -> tuple[str, str]:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return "", ""
+
+    signature = _skill_markdown_signature(source_path)
+    if not signature:
+        return "", ""
+
+    skill_dir_name = ""
+    source_dir = _safe_expand_path(source_path)
+    if source_dir:
+        skill_dir_name = str(source_dir.name or "").strip()
+    if not skill_dir_name:
+        member_names = _to_str_list(source.get("member_skill_preview", []))
+        skill_dir_name = str(member_names[0] if member_names else source.get("display_name") or "").strip()
+    if not skill_dir_name:
+        return "", ""
+
+    cache_roots = _configured_package_cache_roots()
+    if not cache_roots:
+        return "", ""
+
+    normalized_source_path = _normalize_path_text(source_path)
+    package_matches: dict[str, set[str]] = {}
+    for candidate in _candidate_package_cache_skill_dirs(skill_dir_name, cache_roots):
+        if _normalize_path_text(candidate) == normalized_source_path:
+            continue
+        if _skill_markdown_signature(candidate) != signature:
+            continue
+        package_name, strategy = _mirror_package_details(candidate)
+        if not package_name:
+            continue
+        package_matches.setdefault(package_name, set()).add(strategy)
+
+    if len(package_matches) != 1:
+        return "", ""
+
+    package_name, strategies = next(iter(package_matches.items()))
+    if "cache_path_heuristic" in strategies:
+        return package_name, "cache_path_heuristic"
+    if "cache_package_json" in strategies:
+        return package_name, "cache_package_json"
+    return "", ""
+
+
 def _infer_npx_package(source: dict[str, Any]) -> tuple[str, str]:
     for candidate in (
         str(source.get("source_path") or "").strip(),
@@ -408,6 +545,9 @@ def _infer_npx_package(source: dict[str, Any]) -> tuple[str, str]:
         package_name = _package_name_from_nearest_package_json(candidate)
         if package_name:
             return package_name, "package_json"
+    package_name, strategy = _infer_npx_package_from_cache_mirror(source)
+    if package_name:
+        return package_name, strategy
     return "", ""
 
 
@@ -489,7 +629,32 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                 origin_kind = origin_kind or "registry_package"
                 origin_ref = origin_ref or inferred_package_name
                 origin_label = origin_label or display_name
-                confidence = confidence or ("high" if inferred_strategy == "package_json" else "medium")
+                confidence = confidence or (
+                    "high"
+                    if inferred_strategy in {"package_json", "cache_package_json", "cache_path_heuristic"}
+                    else "medium"
+                )
+
+    if not rule and package_name:
+        rule = _match_curated_rule(
+            {
+                **source,
+                "registry_package_name": registry_package_name or package_name,
+                "provenance_package_name": package_name,
+            },
+        )
+        rule_registry_packages = _to_str_list(rule.get("registry_packages", [])) if rule else []
+        rule_registry_package = str(rule_registry_packages[0] or "").strip() if rule_registry_packages else ""
+    if rule and package_name and origin_kind == "registry_package":
+        origin_label = str(
+            rule.get("collection_group_name")
+            or rule.get("install_unit_display_name")
+            or package_name
+            or origin_label
+            or display_name
+        )
+        if not confidence:
+            confidence = "high"
 
     if rule and not origin_kind:
         if package_name:
@@ -739,7 +904,13 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
     existing_install_display_name = str(source.get("install_unit_display_name") or "").strip()
     existing_strategy = str(source.get("aggregation_strategy") or "").strip()
 
-    rule = _match_curated_rule(source)
+    rule = _match_curated_rule(
+        {
+            **source,
+            "registry_package_name": registry_package_name or provenance_package_name,
+            "provenance_package_name": provenance_package_name,
+        },
+    )
     install_unit_id = existing_install_unit_id
     install_unit_kind = existing_install_unit_kind
     install_ref = existing_install_ref
@@ -753,7 +924,11 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             install_unit_kind = "npm_package"
             install_ref = provenance_package_name
             install_manager = provenance_package_manager or registry_package_manager or _infer_manager_from_hint(management_hint, "npm")
-            install_unit_display_name = str(rule.get("install_unit_display_name") or display_name) if rule else display_name
+            install_unit_display_name = (
+                str(rule.get("install_unit_display_name") or provenance_package_name or display_name)
+                if rule
+                else provenance_package_name or display_name
+            )
             aggregation_strategy = provenance_package_strategy or ("explicit_rule" if rule else "registry_package")
         elif source_kind == "manual_git":
             repo_label = _repo_label_from_locator(locator or source_id) or display_name
@@ -831,6 +1006,10 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             collection_group_id = str(rule.get("collection_group_id") or f"collection:{_slug(install_unit_display_name, default='group')}")
             collection_group_name = str(rule.get("collection_group_name") or install_unit_display_name or display_name)
             collection_group_kind = str(rule.get("collection_group_kind") or "curated")
+        elif provenance_package_name:
+            collection_group_id = f"collection:package_{_slug(provenance_package_name, default='package')}"
+            collection_group_name = install_unit_display_name or provenance_package_name or display_name
+            collection_group_kind = "package"
         elif source_kind in {"manual_git", "manual_local"}:
             collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
                 locator or source_id,
@@ -924,8 +1103,8 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
                 "collection_group_id": str(source.get("collection_group_id") or ""),
                 "collection_group_name": str(source.get("collection_group_name") or ""),
                 "collection_group_kind": str(source.get("collection_group_kind") or ""),
-                "registry_package_name": str(source.get("registry_package_name") or ""),
-                "registry_package_manager": str(source.get("registry_package_manager") or ""),
+                "registry_package_name": str(source.get("registry_package_name") or source.get("provenance_package_name") or ""),
+                "registry_package_manager": str(source.get("registry_package_manager") or source.get("provenance_package_manager") or ""),
                 "management_hint": str(source.get("management_hint") or ""),
                 "managed_by": str(source.get("managed_by") or ""),
                 "update_policy": str(source.get("update_policy") or ""),
@@ -957,9 +1136,9 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
         row["source_path_values"].append(str(source.get("source_path") or "").strip())
         row["source_subpaths"].append(str(source.get("source_subpath") or "").strip())
         if not row["registry_package_name"]:
-            row["registry_package_name"] = str(source.get("registry_package_name") or "")
+            row["registry_package_name"] = str(source.get("registry_package_name") or source.get("provenance_package_name") or "")
         if not row["registry_package_manager"]:
-            row["registry_package_manager"] = str(source.get("registry_package_manager") or "")
+            row["registry_package_manager"] = str(source.get("registry_package_manager") or source.get("provenance_package_manager") or "")
         if not row["management_hint"]:
             row["management_hint"] = str(source.get("management_hint") or "")
         if not row["managed_by"]:
@@ -1052,8 +1231,8 @@ def build_collection_group_rows(install_unit_rows: list[dict[str, Any]]) -> list
                 "management_hint": "",
                 "managed_by": "",
                 "update_policy": "",
-                "registry_package_name": "",
-                "registry_package_manager": "",
+                "registry_package_name": str(install_unit.get("registry_package_name") or install_unit.get("provenance_primary_package_name") or ""),
+                "registry_package_manager": str(install_unit.get("registry_package_manager") or ""),
             },
         )
         row["install_unit_ids"].append(str(install_unit.get("install_unit_id") or ""))
@@ -1076,7 +1255,7 @@ def build_collection_group_rows(install_unit_rows: list[dict[str, Any]]) -> list
         if not row["update_policy"]:
             row["update_policy"] = str(install_unit.get("update_policy") or "")
         if not row["registry_package_name"]:
-            row["registry_package_name"] = str(install_unit.get("registry_package_name") or "")
+            row["registry_package_name"] = str(install_unit.get("registry_package_name") or install_unit.get("provenance_primary_package_name") or "")
         if not row["registry_package_manager"]:
             row["registry_package_manager"] = str(install_unit.get("registry_package_manager") or "")
 

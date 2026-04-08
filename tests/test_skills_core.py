@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import json
+import os
 import sys
 import tempfile
 import unittest
@@ -26,6 +28,7 @@ class SkillsCoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tempdir.cleanup)
+        self._set_cache_roots(Path(self._tempdir.name) / ".isolated-package-cache")
         self.inventory_snapshot = {
             "ok": True,
             "generated_at": "2026-04-06T08:00:00+00:00",
@@ -134,6 +137,20 @@ class SkillsCoreTests(unittest.TestCase):
             },
             "warnings": [],
         }
+
+    def _set_cache_roots(self, *roots: Path) -> None:
+        previous = os.environ.get("ONESYNC_SKILL_PACKAGE_CACHE_ROOTS")
+        os.environ["ONESYNC_SKILL_PACKAGE_CACHE_ROOTS"] = os.pathsep.join(
+            str(root) for root in roots
+        )
+
+        def _restore() -> None:
+            if previous is None:
+                os.environ.pop("ONESYNC_SKILL_PACKAGE_CACHE_ROOTS", None)
+            else:
+                os.environ["ONESYNC_SKILL_PACKAGE_CACHE_ROOTS"] = previous
+
+        self.addCleanup(_restore)
 
     def test_build_skills_manifest_projects_sources_and_targets(self) -> None:
         manifest = build_skills_manifest(self.inventory_snapshot)
@@ -315,6 +332,102 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(2, meaningful_groups["collection:legacy_family_codex_skills_root_git_global"]["install_unit_count"])
         self.assertEqual(2, meaningful_groups["collection:legacy_family_codex_skills_root_git_global"]["member_count"])
         self.assertNotIn("collection:find_skills", meaningful_groups)
+
+    def test_build_skills_overview_recovers_cache_backed_package_install_units(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            git_commit_source = source_root / "git-commit"
+            git_worktree_source = source_root / "git-worktree"
+            git_commit_source.mkdir(parents=True, exist_ok=True)
+            git_worktree_source.mkdir(parents=True, exist_ok=True)
+            git_commit_content = "---\nname: git-commit\ndescription: Git commit skill\n---\n"
+            git_worktree_content = "---\nname: git-worktree\ndescription: Git worktree skill\n---\n"
+            (git_commit_source / "SKILL.md").write_text(git_commit_content, encoding="utf-8")
+            (git_worktree_source / "SKILL.md").write_text(git_worktree_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "cache123" / "node_modules" / "@every-env" / "compound-plugin"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@every-env/compound-plugin"}),
+                encoding="utf-8",
+            )
+            git_commit_cache = package_root / "plugins" / "compound-engineering" / "skills" / "git-commit"
+            git_worktree_cache = package_root / "plugins" / "compound-engineering" / "skills" / "git-worktree"
+            git_commit_cache.mkdir(parents=True, exist_ok=True)
+            git_worktree_cache.mkdir(parents=True, exist_ok=True)
+            (git_commit_cache / "SKILL.md").write_text(git_commit_content, encoding="utf-8")
+            (git_worktree_cache / "SKILL.md").write_text(git_worktree_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+            snapshot["skill_rows"].extend(
+                [
+                    {
+                        "id": "npx_global_git_commit",
+                        "display_name": "git-commit",
+                        "skill_kind": "skill",
+                        "provider_key": "npx_skills",
+                        "enabled": True,
+                        "discovered": True,
+                        "auto_discovered": True,
+                        "source_scope": "global",
+                        "source_path": str(git_commit_source),
+                        "member_count": 1,
+                        "member_skill_preview": ["git-commit"],
+                        "member_skill_overflow": 0,
+                        "management_hint": "",
+                        "compatible_software_families": ["codex"],
+                        "tags": ["npx-managed"],
+                    },
+                    {
+                        "id": "npx_global_git_worktree",
+                        "display_name": "git-worktree",
+                        "skill_kind": "skill",
+                        "provider_key": "npx_skills",
+                        "enabled": True,
+                        "discovered": True,
+                        "auto_discovered": True,
+                        "source_scope": "global",
+                        "source_path": str(git_worktree_source),
+                        "member_count": 1,
+                        "member_skill_preview": ["git-worktree"],
+                        "member_skill_overflow": 0,
+                        "management_hint": "",
+                        "compatible_software_families": ["codex"],
+                        "tags": ["npx-managed"],
+                    },
+                ],
+            )
+            snapshot["compatibility"]["codex"] = [
+                "npx_bundle_compound_engineering_global",
+                "npx_global_find_skills",
+                "npx_global_git_commit",
+                "npx_global_git_worktree",
+            ]
+
+            overview = build_skills_overview(snapshot)
+
+        install_unit_rows = {
+            item["install_unit_id"]: item
+            for item in overview["install_unit_rows"]
+        }
+        compound_unit = install_unit_rows["npm:@every-env/compound-plugin"]
+        self.assertEqual("Compound Engineering", compound_unit["display_name"])
+        self.assertGreaterEqual(compound_unit["source_count"], 3)
+        self.assertEqual("resolved", compound_unit["provenance_state"])
+
+        meaningful_groups = {
+            item["collection_group_id"]: item
+            for item in overview["meaningful_collection_group_rows"]
+        }
+        self.assertIn("collection:compound_engineering", meaningful_groups)
+        self.assertEqual("package", meaningful_groups["collection:compound_engineering"]["collection_group_kind"])
+        self.assertGreaterEqual(
+            meaningful_groups["collection:compound_engineering"]["member_count"],
+            10,
+        )
 
     def test_build_skills_overview_merges_saved_source_sync_metadata(self) -> None:
         saved_registry = {

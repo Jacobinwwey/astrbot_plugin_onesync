@@ -23,6 +23,22 @@ from inventory_core import (
 
 
 class InventoryCoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tempdir.cleanup)
+        previous = os.environ.get("ONESYNC_SKILL_PACKAGE_CACHE_ROOTS")
+        os.environ["ONESYNC_SKILL_PACKAGE_CACHE_ROOTS"] = str(
+            Path(self._tempdir.name) / ".isolated-package-cache"
+        )
+
+        def _restore() -> None:
+            if previous is None:
+                os.environ.pop("ONESYNC_SKILL_PACKAGE_CACHE_ROOTS", None)
+            else:
+                os.environ["ONESYNC_SKILL_PACKAGE_CACHE_ROOTS"] = previous
+
+        self.addCleanup(_restore)
+
     def test_software_catalog_defaults(self) -> None:
         rows = normalize_software_catalog_payload([], fallback_defaults=True)
         ids = {row["id"] for row in rows}

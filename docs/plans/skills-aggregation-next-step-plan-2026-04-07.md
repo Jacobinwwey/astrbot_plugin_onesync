@@ -98,6 +98,43 @@ depends_on:
 - `legacy_family` 只作为 honest compression layer 保留
 - 真正需要继续推进的是 provenance recovery，而不是继续扩大家族命名规则
 
+## 本轮新增的 provenance recovery 落点（2026-04-07）
+
+在 `legacy_family` 之外，本轮已经补上第一批“真实 package 恢复”能力：
+
+- 对 `npx_single` 增加 package cache mirror 恢复
+- 仅在本机包缓存中找到同名 skill 目录且 `SKILL.md` 内容签名一致时才认定为候选来源
+- 仅当候选最终收敛到唯一 package name 时才恢复 provenance
+- 若命中 curated rule，则直接回归对应 install unit / collection group
+
+当前这层恢复优先覆盖：
+
+- `~/.bun/install/cache`
+- `~/.npm/_npx`
+
+它解决的问题是：
+
+- 某些 leaf skill 明明来自真实 npm 包，但因为安装后只剩目标技能目录，原始 package provenance 丢失
+- 系统现在可以借助“本机缓存镜像 + 内容签名”把这类 leaf 恢复到真实 npm install unit
+
+当前运行态收益：
+
+- `source_provenance_resolved_total` 已从 `8` 提升到 `23`
+- `install_unit_total` 已从 `94` 降到 `79`
+- `Compound Engineering` 现已恢复为包含 `17` 条 source、`24` 个成员的真实 package 聚合
+
+这一步的边界同样明确：
+
+- 不会因为“仅同名”就认定来源
+- 不会在多个候选 package 同时命中时强行归属
+- 不会把本地源码仓库直接伪装成 npm registry package
+
+因此下一步仍应继续：
+
+- 引入更稳定的 installer/import ledger
+- 扩展到非缓存镜像来源的 provenance 恢复
+- 让更多 `legacy_family` 成员逐步晋升为真实 install unit
+
 ## 目标状态
 
 ### 数据层

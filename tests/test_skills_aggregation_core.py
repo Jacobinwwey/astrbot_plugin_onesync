@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,6 +20,24 @@ from skills_aggregation_core import (
 
 
 class SkillsAggregationCoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tempdir.cleanup)
+        self._set_cache_roots(Path(self._tempdir.name) / ".isolated-package-cache")
+
+    def _set_cache_roots(self, *roots: Path) -> None:
+        previous = os.environ.get("ONESYNC_SKILL_PACKAGE_CACHE_ROOTS")
+        joined = os.pathsep.join(str(root) for root in roots)
+        os.environ["ONESYNC_SKILL_PACKAGE_CACHE_ROOTS"] = joined
+
+        def _restore() -> None:
+            if previous is None:
+                os.environ.pop("ONESYNC_SKILL_PACKAGE_CACHE_ROOTS", None)
+            else:
+                os.environ["ONESYNC_SKILL_PACKAGE_CACHE_ROOTS"] = previous
+
+        self.addCleanup(_restore)
+
     def test_manual_git_subpath_uses_repo_group_and_subpath_install_unit(self) -> None:
         source = {
             "source_id": "manual_git_ui_audit",
@@ -224,6 +245,167 @@ class SkillsAggregationCoreTests(unittest.TestCase):
             },
             set(git_group["install_unit_ids"]),
         )
+
+    def test_npx_single_recovers_generic_package_from_cache_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            alpha_source = source_root / "alpha-reviewer"
+            beta_source = source_root / "beta-reviewer"
+            alpha_source.mkdir(parents=True, exist_ok=True)
+            beta_source.mkdir(parents=True, exist_ok=True)
+            alpha_content = "---\nname: alpha-reviewer\ndescription: Alpha reviewer\n---\n"
+            beta_content = "---\nname: beta-reviewer\ndescription: Beta reviewer\n---\n"
+            (alpha_source / "SKILL.md").write_text(alpha_content, encoding="utf-8")
+            (beta_source / "SKILL.md").write_text(beta_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "demo123" / "node_modules" / "@demo" / "review-pack"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@demo/review-pack"}),
+                encoding="utf-8",
+            )
+            alpha_cache = package_root / "skills" / "alpha-reviewer"
+            beta_cache = package_root / "skills" / "beta-reviewer"
+            alpha_cache.mkdir(parents=True, exist_ok=True)
+            beta_cache.mkdir(parents=True, exist_ok=True)
+            (alpha_cache / "SKILL.md").write_text(alpha_content, encoding="utf-8")
+            (beta_cache / "SKILL.md").write_text(beta_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            alpha_source_row = {
+                "source_id": "npx_global_alpha_reviewer",
+                "display_name": "alpha-reviewer",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(alpha_source),
+                "member_count": 1,
+                "member_skill_preview": ["alpha-reviewer"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+            beta_source_row = {
+                "source_id": "npx_global_beta_reviewer",
+                "display_name": "beta-reviewer",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(beta_source),
+                "member_count": 1,
+                "member_skill_preview": ["beta-reviewer"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(alpha_source_row)
+            aggregation = derive_source_aggregation_fields(alpha_source_row)
+            install_unit_rows = build_install_unit_rows(
+                [alpha_source_row, beta_source_row],
+                [],
+            )
+            collection_group_rows = build_collection_group_rows(install_unit_rows)
+
+        self.assertEqual("@demo/review-pack", provenance["provenance_package_name"])
+        self.assertEqual("cache_path_heuristic", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+        self.assertEqual("npm:@demo/review-pack", aggregation["install_unit_id"])
+        self.assertEqual("@demo/review-pack", aggregation["install_unit_display_name"])
+        self.assertEqual("package", aggregation["collection_group_kind"])
+
+        self.assertEqual(1, len(install_unit_rows))
+        self.assertEqual("npm:@demo/review-pack", install_unit_rows[0]["install_unit_id"])
+        self.assertEqual(2, install_unit_rows[0]["source_count"])
+        self.assertEqual(2, install_unit_rows[0]["member_count"])
+        self.assertEqual("@demo/review-pack", install_unit_rows[0]["display_name"])
+        self.assertEqual("package", install_unit_rows[0]["collection_group_kind"])
+        self.assertEqual(1, len(collection_group_rows))
+        self.assertEqual("package", collection_group_rows[0]["collection_group_kind"])
+        self.assertEqual(1, collection_group_rows[0]["install_unit_count"])
+        self.assertEqual(2, collection_group_rows[0]["source_count"])
+
+    def test_npx_single_cache_mirror_can_promote_curated_package_group(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            git_commit_source = source_root / "git-commit"
+            git_worktree_source = source_root / "git-worktree"
+            git_commit_source.mkdir(parents=True, exist_ok=True)
+            git_worktree_source.mkdir(parents=True, exist_ok=True)
+            git_commit_content = "---\nname: git-commit\ndescription: Git commit skill\n---\n"
+            git_worktree_content = "---\nname: git-worktree\ndescription: Git worktree skill\n---\n"
+            (git_commit_source / "SKILL.md").write_text(git_commit_content, encoding="utf-8")
+            (git_worktree_source / "SKILL.md").write_text(git_worktree_content, encoding="utf-8")
+
+            cache_root = temp_root / ".bun" / "install" / "cache"
+            package_root = (
+                cache_root
+                / "@every-env"
+                / "compound-plugin@2.61.0@@@1"
+                / "node_modules"
+                / "@every-env"
+                / "compound-plugin"
+            )
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@every-env/compound-plugin"}),
+                encoding="utf-8",
+            )
+            git_commit_cache = package_root / "plugins" / "compound-engineering" / "skills" / "git-commit"
+            git_worktree_cache = package_root / "plugins" / "compound-engineering" / "skills" / "git-worktree"
+            git_commit_cache.mkdir(parents=True, exist_ok=True)
+            git_worktree_cache.mkdir(parents=True, exist_ok=True)
+            (git_commit_cache / "SKILL.md").write_text(git_commit_content, encoding="utf-8")
+            (git_worktree_cache / "SKILL.md").write_text(git_worktree_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            source_rows = [
+                {
+                    "source_id": "npx_global_git_commit",
+                    "display_name": "git-commit",
+                    "source_kind": "npx_single",
+                    "source_scope": "global",
+                    "source_path": str(git_commit_source),
+                    "member_count": 1,
+                    "member_skill_preview": ["git-commit"],
+                    "compatible_software_ids": ["codex"],
+                    "status": "ready",
+                    "freshness_status": "fresh",
+                },
+                {
+                    "source_id": "npx_global_git_worktree",
+                    "display_name": "git-worktree",
+                    "source_kind": "npx_single",
+                    "source_scope": "global",
+                    "source_path": str(git_worktree_source),
+                    "member_count": 1,
+                    "member_skill_preview": ["git-worktree"],
+                    "compatible_software_ids": ["codex"],
+                    "status": "ready",
+                    "freshness_status": "fresh",
+                },
+            ]
+
+            install_unit_rows = build_install_unit_rows(source_rows, [])
+            collection_group_rows = build_collection_group_rows(install_unit_rows)
+
+        self.assertEqual(1, len(install_unit_rows))
+        self.assertEqual("npm:@every-env/compound-plugin", install_unit_rows[0]["install_unit_id"])
+        self.assertEqual("Compound Engineering", install_unit_rows[0]["display_name"])
+        self.assertEqual("collection:compound_engineering", install_unit_rows[0]["collection_group_id"])
+        self.assertEqual("package", install_unit_rows[0]["collection_group_kind"])
+        self.assertEqual(2, install_unit_rows[0]["source_count"])
+        self.assertEqual(2, install_unit_rows[0]["member_count"])
+        self.assertEqual("@every-env/compound-plugin", install_unit_rows[0]["provenance_primary_package_name"])
+
+        self.assertEqual(1, len(collection_group_rows))
+        self.assertEqual("collection:compound_engineering", collection_group_rows[0]["collection_group_id"])
+        self.assertEqual("Compound Engineering", collection_group_rows[0]["collection_group_name"])
+        self.assertEqual("package", collection_group_rows[0]["collection_group_kind"])
+        self.assertEqual(2, collection_group_rows[0]["source_count"])
 
 
 if __name__ == "__main__":
