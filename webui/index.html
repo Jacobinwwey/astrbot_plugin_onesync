@@ -2046,7 +2046,7 @@
       display: grid;
       grid-template-columns: minmax(0, 1.6fr) minmax(360px, 0.88fr);
       gap: 14px;
-      align-items: stretch;
+      align-items: start;
     }
 
     .inventory-grid {
@@ -2138,12 +2138,9 @@
     }
 
     .inventory-inspector {
-      display: flex;
-      flex-direction: column;
+      display: grid;
       gap: 12px;
       min-width: 0;
-      min-height: 0;
-      align-self: stretch;
     }
 
     .inventory-inspector-head {
@@ -2184,7 +2181,6 @@
     .inventory-inspector-panel {
       display: grid;
       gap: 12px;
-      flex: 1 1 auto;
       min-height: 0;
       align-content: start;
     }
