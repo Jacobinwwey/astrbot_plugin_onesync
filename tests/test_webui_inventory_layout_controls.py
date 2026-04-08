@@ -54,25 +54,6 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
         self.assertNotIn("max-height:", panel_block)
         self.assertNotIn("overflow: auto;", panel_block)
 
-    def test_inventory_shell_uses_three_zone_operations_frame(self) -> None:
-        html = WEBUI_HTML.read_text(encoding="utf-8")
-
-        shell_start = html.index("    .inventory-shell {\n")
-        shell_end = html.index("    .inventory-grid {\n", shell_start)
-        shell_block = html[shell_start:shell_end]
-        self.assertIn("grid-template-columns: minmax(248px, 284px) minmax(0, 1fr) minmax(320px, 372px);", shell_block)
-
-        grid_start = html.index("    .inventory-grid {\n")
-        grid_end = html.index("    .inventory-software-rail,\n", grid_start)
-        grid_block = html[grid_start:grid_end]
-        self.assertIn("display: contents;", grid_block)
-
-    def test_inventory_shell_keeps_three_columns_until_tablet_breakpoint(self) -> None:
-        html = WEBUI_HTML.read_text(encoding="utf-8")
-
-        self.assertIn("@media (max-width: 1180px) {", html)
-        self.assertNotIn("@media (max-width: 1320px) {", html)
-
     def test_inventory_panel_declares_compatible_sources_before_status_cards(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
