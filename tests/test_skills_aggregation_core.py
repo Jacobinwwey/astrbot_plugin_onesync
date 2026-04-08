@@ -442,6 +442,127 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
         self.assertEqual("synthetic_single:npx_global_agent_browser", aggregation["install_unit_id"])
 
+    def test_npx_single_recovers_package_from_agent_export_cache_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "security-reviewer"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            local_content = (
+                "---\n"
+                "name: security-reviewer\n"
+                "description: Conditional code-review persona for security issues.\n"
+                "---\n\n"
+                "# Security Reviewer\n\n"
+                "Review code for exploitable vulnerabilities.\n"
+            )
+            mirror_content = (
+                "---\n"
+                "name: security-reviewer\n"
+                "description: Conditional code-review persona for security issues.\n"
+                "model: inherit\n"
+                "tools: Read, Grep, Glob, Bash\n"
+                "color: blue\n"
+                "---\n\n"
+                "# Security Reviewer\n\n"
+                "Review code for exploitable vulnerabilities.\n"
+            )
+            (source_skill / "SKILL.md").write_text(local_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "cache123" / "node_modules" / "@demo" / "review-pack"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@demo/review-pack"}),
+                encoding="utf-8",
+            )
+            mirror_doc = package_root / "plugins" / "review-pack" / "agents" / "review" / "security-reviewer.md"
+            mirror_doc.parent.mkdir(parents=True, exist_ok=True)
+            mirror_doc.write_text(mirror_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            source_row = {
+                "source_id": "npx_global_security_reviewer",
+                "display_name": "security-reviewer",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["security-reviewer"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("@demo/review-pack", provenance["provenance_package_name"])
+        self.assertEqual("cache_agent_similarity_match", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+        self.assertEqual("npm:@demo/review-pack", aggregation["install_unit_id"])
+        self.assertEqual("package", aggregation["collection_group_kind"])
+
+    def test_npx_single_ignores_test_fixture_agent_export_cache_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "security-reviewer"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            local_content = (
+                "---\n"
+                "name: security-reviewer\n"
+                "description: Conditional code-review persona for security issues.\n"
+                "---\n\n"
+                "# Security Reviewer\n\n"
+                "Review code for exploitable vulnerabilities.\n"
+            )
+            mirror_content = (
+                "---\n"
+                "name: security-reviewer\n"
+                "description: Conditional code-review persona for security issues.\n"
+                "model: inherit\n"
+                "tools: Read, Grep, Glob, Bash\n"
+                "---\n\n"
+                "# Security Reviewer\n\n"
+                "Review code for exploitable vulnerabilities.\n"
+            )
+            (source_skill / "SKILL.md").write_text(local_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "cache123" / "node_modules" / "@demo" / "review-pack"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@demo/review-pack"}),
+                encoding="utf-8",
+            )
+            mirror_doc = package_root / "tests" / "fixtures" / "sample-plugin" / "agents" / "review" / "security-reviewer.md"
+            mirror_doc.parent.mkdir(parents=True, exist_ok=True)
+            mirror_doc.write_text(mirror_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            source_row = {
+                "source_id": "npx_global_security_reviewer",
+                "display_name": "security-reviewer",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["security-reviewer"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("", provenance["provenance_package_name"])
+        self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
+        self.assertEqual("synthetic_single:npx_global_security_reviewer", aggregation["install_unit_id"])
+
     def test_npx_single_cache_mirror_can_promote_curated_package_group(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

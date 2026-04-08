@@ -467,6 +467,45 @@ def _skill_markdown_text(path_text: str) -> str:
         return ""
 
 
+def _canonical_skill_markdown_text(text: Any) -> str:
+    normalized = str(text or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return ""
+    if not normalized.startswith("---\n"):
+        return normalized
+
+    frontmatter_end = normalized.find("\n---\n", 4)
+    if frontmatter_end < 0:
+        return normalized
+
+    frontmatter = normalized[4:frontmatter_end].splitlines()
+    body = normalized[frontmatter_end + len("\n---\n") :].strip()
+    preserved_frontmatter = [
+        line.strip()
+        for line in frontmatter
+        if str(line or "").strip().lower().startswith(("name:", "description:"))
+    ]
+    parts = [segment for segment in ("\n".join(preserved_frontmatter).strip(), body) if segment]
+    return "\n\n".join(parts).strip()
+
+
+@lru_cache(maxsize=1024)
+def _canonical_skill_markdown_text_for_path(path_text: str) -> str:
+    return _canonical_skill_markdown_text(_skill_markdown_text(path_text))
+
+
+def _ignore_cache_candidate_for_provenance(path_text: Any) -> bool:
+    normalized = _normalize_path_text(path_text).lower()
+    return any(
+        marker in normalized
+        for marker in (
+            "/tests/",
+            "/fixtures/",
+            "/__tests__/",
+        )
+    )
+
+
 @lru_cache(maxsize=512)
 def _candidate_package_cache_skill_dirs(skill_dir_name: str, cache_roots: tuple[str, ...]) -> tuple[str, ...]:
     normalized_name = str(skill_dir_name or "").strip()
@@ -492,6 +531,34 @@ def _candidate_package_cache_skill_dirs(skill_dir_name: str, cache_roots: tuple[
     return tuple(_dedupe_keep_order(candidates))
 
 
+@lru_cache(maxsize=512)
+def _candidate_package_cache_skill_documents(skill_dir_name: str, cache_roots: tuple[str, ...]) -> tuple[str, ...]:
+    normalized_name = str(skill_dir_name or "").strip()
+    if not normalized_name:
+        return ()
+
+    candidates: list[str] = []
+    for root_text in cache_roots:
+        root = _safe_expand_path(root_text)
+        if not root:
+            continue
+        try:
+            if not root.exists():
+                continue
+        except Exception:
+            continue
+        try:
+            for candidate in root.glob(f"**/skills/{normalized_name}"):
+                if candidate.is_dir() and not _ignore_cache_candidate_for_provenance(candidate):
+                    candidates.append(str(candidate))
+            for candidate in root.glob(f"**/agents/**/{normalized_name}.md"):
+                if candidate.is_file() and not _ignore_cache_candidate_for_provenance(candidate):
+                    candidates.append(str(candidate))
+        except Exception:
+            continue
+    return tuple(_dedupe_keep_order(candidates))
+
+
 def _mirror_package_details(candidate_path: str) -> tuple[str, str]:
     package_name = _package_name_from_path_heuristic(candidate_path)
     if package_name:
@@ -507,7 +574,7 @@ def _infer_npx_package_from_cache_similarity(source: dict[str, Any]) -> tuple[st
     if not source_path:
         return "", ""
 
-    local_text = _skill_markdown_text(source_path)
+    local_text = _canonical_skill_markdown_text_for_path(source_path)
     if not local_text:
         return "", ""
 
@@ -527,13 +594,14 @@ def _infer_npx_package_from_cache_similarity(source: dict[str, Any]) -> tuple[st
 
     normalized_source_path = _normalize_path_text(source_path)
     package_scores: dict[str, float] = {}
-    for candidate in _candidate_package_cache_skill_dirs(skill_dir_name, cache_roots):
+    package_strategies: dict[str, set[str]] = {}
+    for candidate in _candidate_package_cache_skill_documents(skill_dir_name, cache_roots):
         if _normalize_path_text(candidate) == normalized_source_path:
             continue
         package_name, _ = _mirror_package_details(candidate)
         if not package_name:
             continue
-        candidate_text = _skill_markdown_text(candidate)
+        candidate_text = _canonical_skill_markdown_text_for_path(candidate)
         if not candidate_text:
             continue
         ratio = SequenceMatcher(None, local_text, candidate_text).ratio()
@@ -542,10 +610,19 @@ def _infer_npx_package_from_cache_similarity(source: dict[str, Any]) -> tuple[st
         previous = package_scores.get(package_name, 0.0)
         if ratio > previous:
             package_scores[package_name] = ratio
+        package_strategies.setdefault(package_name, set()).add(
+            "cache_agent_similarity_match" if "/agents/" in _normalize_path_text(candidate).lower() else "cache_similarity_match"
+        )
 
     if len(package_scores) != 1:
         return "", ""
-    return next(iter(package_scores.keys())), "cache_similarity_match"
+    package_name = next(iter(package_scores.keys()))
+    strategies = package_strategies.get(package_name, set())
+    if "cache_similarity_match" in strategies:
+        return package_name, "cache_similarity_match"
+    if "cache_agent_similarity_match" in strategies:
+        return package_name, "cache_agent_similarity_match"
+    return package_name, "cache_similarity_match"
 
 
 def _infer_npx_package_from_cache_mirror(source: dict[str, Any]) -> tuple[str, str]:
@@ -691,7 +768,13 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                 origin_label = origin_label or display_name
                 confidence = confidence or (
                     "high"
-                    if inferred_strategy in {"package_json", "cache_package_json", "cache_path_heuristic", "cache_similarity_match"}
+                    if inferred_strategy in {
+                        "package_json",
+                        "cache_package_json",
+                        "cache_path_heuristic",
+                        "cache_similarity_match",
+                        "cache_agent_similarity_match",
+                    }
                     else "medium"
                 )
 
