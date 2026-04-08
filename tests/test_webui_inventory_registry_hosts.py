@@ -65,6 +65,20 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("扇出", html)
         self.assertIn("subpathCount", html)
 
+    def test_inventory_panel_exposes_install_unit_drilldown_panel(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventorySourceInstallUnitBar"', html)
+        self.assertIn('id="inventoryInstallUnitsTitle"', html)
+        self.assertIn('id="inventoryInstallUnitsNote"', html)
+        self.assertIn('id="inventorySourceInstallUnitRows"', html)
+        self.assertIn("inventory_install_units_title", html)
+        self.assertIn("inventory_install_units_note", html)
+        self.assertIn("inventory_install_units_collection", html)
+        self.assertIn("inventory_install_units_empty", html)
+        self.assertIn("inventorySelectedDetailInstallUnitId", html)
+        self.assertIn("data-inventory-install-unit-id", html)
+
     def test_inventory_panel_doctor_summary_reads_aggregate_health(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

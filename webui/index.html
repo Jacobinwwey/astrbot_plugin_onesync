@@ -1458,6 +1458,67 @@
       grid-template-columns: 1fr;
     }
 
+    .inventory-install-unit-bar {
+      margin-top: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: color-mix(in srgb, var(--panel-strong) 74%, transparent);
+      display: grid;
+      gap: 8px;
+    }
+
+    .inventory-install-unit-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-install-unit-rows {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .inventory-install-unit-item {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--panel) 78%, transparent);
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .inventory-install-unit-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      transform: translateY(-1px);
+    }
+
+    .inventory-install-unit-item.active {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+      background: color-mix(in srgb, var(--accent) 10%, var(--panel) 90%);
+    }
+
+    .inventory-install-unit-item .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .inventory-install-unit-item .meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
     .inventory-source-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
       border-radius: 10px;
@@ -2025,6 +2086,17 @@
               <div class="inventory-target-hero" id="inventorySourceHero">
                 <div class="debug-empty" id="inventorySourceHeroEmpty">等待选择 Source / Bundle...</div>
               </div>
+              <div class="inventory-install-unit-bar" id="inventorySourceInstallUnitBar">
+                <div class="inventory-install-unit-head">
+                  <div class="inventory-repair-copy">
+                    <div class="inventory-repair-title" id="inventoryInstallUnitsTitle">Install Units</div>
+                    <div class="inventory-repair-note" id="inventoryInstallUnitsNote">在 collection group 与 install unit 之间切换详情粒度。</div>
+                  </div>
+                </div>
+                <div class="inventory-install-unit-rows" id="inventorySourceInstallUnitRows">
+                  <div class="debug-empty" id="inventorySourceInstallUnitRowsEmpty">等待聚合详情...</div>
+                </div>
+              </div>
               <div class="inventory-repair-bar" id="inventoryInstallUnitBar">
                 <div class="inventory-repair-top">
                   <div class="inventory-repair-copy">
@@ -2587,7 +2659,8 @@
       inventoryDeployingInstallUnit: false,
       inventoryRepairing: false,
       inventoryRepairAllRunning: false,
-      inventoryReprojecting: false
+      inventoryReprojecting: false,
+      inventorySelectedDetailInstallUnitId: ""
     };
 
     const $ = (id) => document.getElementById(id);
@@ -2876,6 +2949,10 @@
         inventory_selection_note: "按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 ce:* Skill 单独展开。",
         inventory_sync_all: "同步全部 Source",
         inventory_sync_all_running: "同步中",
+        inventory_install_units_title: "Install Units 下钻",
+        inventory_install_units_note: "在 collection group 与 install unit 之间切换详情粒度，优先下钻到真实维护边界。",
+        inventory_install_units_collection: "Collection 概览",
+        inventory_install_units_empty: "当前聚合下暂无可下钻的 install unit。",
         inventory_install_unit_title: "当前聚合运维",
         inventory_install_unit_note_idle: "围绕真实 install unit 或 collection group 执行 refresh / sync / update / deploy，而不是对每条 leaf skill 分别操作。",
         inventory_install_unit_note_ready: "当前将操作 install unit {installUnit}（直接维护边界），目标宿主 {target}。",
@@ -3330,6 +3407,10 @@
         inventory_selection_note: "Manage by source package. Compound Engineering appears as one bundle instead of expanding every ce:* skill.",
         inventory_sync_all: "Sync All Sources",
         inventory_sync_all_running: "Syncing",
+        inventory_install_units_title: "Install Unit Drilldown",
+        inventory_install_units_note: "Switch detail scope between the collection group and its install units so actions can land on the real maintenance boundary.",
+        inventory_install_units_collection: "Collection Overview",
+        inventory_install_units_empty: "No install unit is available under the current aggregate.",
         inventory_install_unit_title: "Current Aggregate Operations",
         inventory_install_unit_note_idle: "Operate on real install units or collection groups for refresh, sync, update, and deploy instead of touching every leaf skill separately.",
         inventory_install_unit_note_ready: "Current action scope: install unit {installUnit} targeting {target}; this is the direct maintenance boundary.",
@@ -3954,6 +4035,8 @@
       $("inventoryDeployInstallAll").textContent = t("inventory_deploy_install_all");
       $("inventoryDoctorBtn").textContent = t("inventory_doctor");
       $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
+      $("inventoryInstallUnitsTitle").textContent = t("inventory_install_units_title");
+      $("inventoryInstallUnitsNote").textContent = t("inventory_install_units_note");
       $("inventoryInstallUnitTitle").textContent = t("inventory_install_unit_title");
       $("inventoryInstallUnitNote").textContent = t("inventory_install_unit_note_idle");
       $("inventoryRefreshInstallUnitBtn").textContent = state.inventoryRefreshingInstallUnit
@@ -3978,6 +4061,10 @@
       const inventorySourceHeroEmptyEl = $("inventorySourceHeroEmpty");
       if (inventorySourceHeroEmptyEl) {
         inventorySourceHeroEmptyEl.textContent = t("inventory_source_empty");
+      }
+      const inventorySourceInstallUnitRowsEmptyEl = $("inventorySourceInstallUnitRowsEmpty");
+      if (inventorySourceInstallUnitRowsEmptyEl) {
+        inventorySourceInstallUnitRowsEmptyEl.textContent = t("inventory_install_units_empty");
       }
       $("inventoryKindFilterLabel").textContent = t("inventory_kind_filter_label");
       $("inventoryKindOptAll").textContent = t("inventory_kind_all");
@@ -4509,6 +4596,56 @@
       return `${subpaths.slice(0, limit).join(", ")} +${subpaths.length - limit}`;
     }
 
+    function inventoryDetailInstallUnitRows(detail) {
+      if (!detail || typeof detail !== "object") return [];
+      if (Array.isArray(detail.install_unit_rows)) {
+        return detail.install_unit_rows.filter((item) => item && typeof item === "object");
+      }
+      if (detail.install_unit && typeof detail.install_unit === "object") {
+        return [detail.install_unit];
+      }
+      return [];
+    }
+
+    function inventoryDeployRowTouchesSourceIds(row, sourceIds) {
+      if (!row || typeof row !== "object") return false;
+      const relatedSourceIds = new Set(
+        (Array.isArray(sourceIds) ? sourceIds : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+      );
+      if (!relatedSourceIds.size) return false;
+      const rowSourceIds = [
+        ...inventoryAggregateSourceIds(row),
+        ...(Array.isArray(row.selected_source_ids) ? row.selected_source_ids : []),
+        ...(Array.isArray(row.available_source_ids) ? row.available_source_ids : []),
+        ...(Array.isArray(row.ready_source_ids) ? row.ready_source_ids : []),
+        ...(Array.isArray(row.missing_source_ids) ? row.missing_source_ids : []),
+        ...(Array.isArray(row.incompatible_source_ids) ? row.incompatible_source_ids : []),
+      ]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+      return rowSourceIds.some((item) => relatedSourceIds.has(item));
+    }
+
+    function inventorySourceRowsForInstallUnit(sourceRows, installUnit) {
+      const unitSourceIds = inventoryAggregateSourceIds(installUnit);
+      if (!unitSourceIds.length) {
+        return Array.isArray(sourceRows) ? sourceRows : [];
+      }
+      return (Array.isArray(sourceRows) ? sourceRows : [])
+        .filter((item) => unitSourceIds.includes(String(item && item.source_id || "").trim()));
+    }
+
+    function inventoryDeployRowsForInstallUnit(deployRows, installUnit) {
+      const unitSourceIds = inventoryAggregateSourceIds(installUnit);
+      if (!unitSourceIds.length) {
+        return Array.isArray(deployRows) ? deployRows : [];
+      }
+      return (Array.isArray(deployRows) ? deployRows : [])
+        .filter((item) => inventoryDeployRowTouchesSourceIds(item, unitSourceIds));
+    }
+
     function inventoryBoundarySubpathList(item, installUnitRows = []) {
       const directSubpaths = inventorySourceSubpathList(item);
       const rowSubpaths = Array.isArray(installUnitRows)
@@ -4631,11 +4768,21 @@
 
     function getSelectedInstallUnitRowFromDetail() {
       const detail = state.inventorySourceDetail;
+      const selectedDetailInstallUnitId = String(state.inventorySelectedDetailInstallUnitId || "").trim();
+      const detailInstallUnitRows = inventoryDetailInstallUnitRows(detail);
+      if (selectedDetailInstallUnitId) {
+        const selectedDetailInstallUnit = detailInstallUnitRows.find(
+          (item) => String(item.install_unit_id || "").trim() === selectedDetailInstallUnitId,
+        );
+        if (selectedDetailInstallUnit) {
+          return selectedDetailInstallUnit;
+        }
+      }
       if (detail && detail.install_unit && typeof detail.install_unit === "object") {
         return detail.install_unit;
       }
-      if (detail && Array.isArray(detail.install_unit_rows) && detail.install_unit_rows.length === 1) {
-        return detail.install_unit_rows[0];
+      if (detailInstallUnitRows.length === 1) {
+        return detailInstallUnitRows[0];
       }
       const overview = state.inventoryOverview && typeof state.inventoryOverview === "object"
         ? state.inventoryOverview
@@ -4652,9 +4799,27 @@
       const detail = state.inventorySourceDetail && typeof state.inventorySourceDetail === "object"
         ? state.inventorySourceDetail
         : {};
+      const selectedDetailInstallUnitId = String(state.inventorySelectedDetailInstallUnitId || "").trim();
       const selectedSourceKey = String(state.inventorySelectedSourceKey || "").trim();
       const collectionGroupRows = Array.isArray(overview.collection_group_rows) ? overview.collection_group_rows : [];
       const installUnitRows = Array.isArray(overview.install_unit_rows) ? overview.install_unit_rows : [];
+      const detailInstallUnitRows = inventoryDetailInstallUnitRows(detail);
+
+      if (selectedDetailInstallUnitId) {
+        const selectedDetailInstallUnit = detailInstallUnitRows.find(
+          (item) => String(item.install_unit_id || "").trim() === selectedDetailInstallUnitId,
+        );
+        if (selectedDetailInstallUnit) {
+          return {
+            kind: "install_unit",
+            id: selectedDetailInstallUnitId,
+            aggregate: selectedDetailInstallUnit,
+            installUnitCount: 1,
+            sourceIds: inventoryAggregateSourceIds(selectedDetailInstallUnit),
+            endpointBase: `/api/skills/install-units/${encodeURIComponent(selectedDetailInstallUnitId)}`,
+          };
+        }
+      }
 
       const collectionGroup = collectionGroupRows.find(
         (item) => String(item.collection_group_id || "").trim() === selectedSourceKey,
@@ -4692,7 +4857,6 @@
       if (detail.collection_group && typeof detail.collection_group === "object") {
         const collectionGroupId = String(detail.collection_group.collection_group_id || "").trim();
         if (collectionGroupId) {
-          const detailInstallUnitRows = Array.isArray(detail.install_unit_rows) ? detail.install_unit_rows : [];
           return {
             kind: "collection_group",
             id: collectionGroupId,
@@ -4739,7 +4903,10 @@
       const detail = state.inventorySourceDetail && typeof state.inventorySourceDetail === "object"
         ? state.inventorySourceDetail
         : {};
-      const deployRows = Array.isArray(detail.deploy_rows) ? detail.deploy_rows : [];
+      const selectedInstallUnit = getSelectedInstallUnitRowFromDetail();
+      const deployRows = selectedInstallUnit
+        ? inventoryDeployRowsForInstallUnit(detail.deploy_rows, selectedInstallUnit)
+        : (Array.isArray(detail.deploy_rows) ? detail.deploy_rows : []);
       return [...new Set(
         deployRows
           .filter((item) => item && typeof item === "object")
@@ -5031,6 +5198,7 @@
       const endpoint = resolveInventorySourceDetailEndpoint(sourceKey);
       if (!endpoint) {
         state.inventorySourceDetail = null;
+        state.inventorySelectedDetailInstallUnitId = "";
         renderInventoryPanel();
         return null;
       }
@@ -5042,6 +5210,7 @@
         return detail;
       } catch (err) {
         state.inventorySourceDetail = null;
+        state.inventorySelectedDetailInstallUnitId = "";
         renderInventoryPanel();
         if (!silent) {
           throw err;
@@ -5239,6 +5408,9 @@
       const skillListEl = $("inventorySkillList");
       const softwareRowsEl = $("inventorySoftwareRows");
       const sourceHeroEl = $("inventorySourceHero");
+      const installUnitDrilldownBarEl = $("inventorySourceInstallUnitBar");
+      const installUnitDrilldownRowsEl = $("inventorySourceInstallUnitRows");
+      const installUnitDrilldownNoteEl = $("inventoryInstallUnitsNote");
       const installUnitTitleEl = $("inventoryInstallUnitTitle");
       const installUnitNoteEl = $("inventoryInstallUnitNote");
       const refreshInstallUnitBtn = $("inventoryRefreshInstallUnitBtn");
@@ -5382,10 +5554,12 @@
         : (availableSourceKeys[0] || "");
       if (selectedSourceKey !== currentSelectedSourceKey) {
         state.inventorySelectedSourceKey = selectedSourceKey;
+        state.inventorySelectedDetailInstallUnitId = "";
       }
       const currentSourceDetailKey = inventorySourceDetailKey(state.inventorySourceDetail);
       if (currentSourceDetailKey && currentSourceDetailKey !== selectedSourceKey) {
         state.inventorySourceDetail = null;
+        state.inventorySelectedDetailInstallUnitId = "";
       }
       const sourceDetail = state.inventorySourceDetail
         && inventorySourceDetailKey(state.inventorySourceDetail) === selectedSourceKey
@@ -5505,6 +5679,8 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
 
       if (!selectedSourceRow) {
         sourceHeroEl.innerHTML = `<div class="debug-empty">等待选择 Source / Bundle...</div>`;
+        installUnitDrilldownNoteEl.textContent = t("inventory_install_units_note");
+        installUnitDrilldownRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
       } else {
         const detailCollection = sourceDetail && sourceDetail.collection_group && typeof sourceDetail.collection_group === "object"
           ? sourceDetail.collection_group
@@ -5527,17 +5703,92 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
         const detailWarnings = sourceDetail && Array.isArray(sourceDetail.warnings)
           ? sourceDetail.warnings.map((item) => String(item || "").trim()).filter(Boolean)
           : [];
-        const heroKindItem = detailCollection || detailInstallUnit || detailSource || selectedSourceRow;
+        const availableDetailInstallUnitIds = detailInstallUnitRows
+          .map((item) => String(item && item.install_unit_id || "").trim())
+          .filter(Boolean);
+        const currentDetailInstallUnitId = String(state.inventorySelectedDetailInstallUnitId || "").trim();
+        const defaultDetailInstallUnitId = detailCollection
+          ? ""
+          : (availableDetailInstallUnitIds.length === 1 ? availableDetailInstallUnitIds[0] : "");
+        const selectedDetailInstallUnitId = availableDetailInstallUnitIds.includes(currentDetailInstallUnitId)
+          ? currentDetailInstallUnitId
+          : defaultDetailInstallUnitId;
+        if (selectedDetailInstallUnitId !== currentDetailInstallUnitId) {
+          state.inventorySelectedDetailInstallUnitId = selectedDetailInstallUnitId;
+        }
+        const selectedDetailInstallUnit = selectedDetailInstallUnitId
+          ? detailInstallUnitRows.find((item) => String(item.install_unit_id || "").trim() === selectedDetailInstallUnitId) || null
+          : null;
+        const activeDetailInstallUnit = selectedDetailInstallUnit || detailInstallUnit || null;
+        const activeDetailSourceRows = activeDetailInstallUnit
+          ? inventorySourceRowsForInstallUnit(detailSourceRows, activeDetailInstallUnit)
+          : detailSourceRows;
+        const activeDetailDeployRows = activeDetailInstallUnit
+          ? inventoryDeployRowsForInstallUnit(detailDeployRows, activeDetailInstallUnit)
+          : detailDeployRows;
+        installUnitDrilldownNoteEl.textContent = detailCollection
+          ? t("inventory_install_units_note")
+          : (availableDetailInstallUnitIds.length
+            ? t("inventory_install_unit_note_ready", {
+              installUnit: activeDetailInstallUnit && activeDetailInstallUnit.install_unit_id
+                ? activeDetailInstallUnit.install_unit_id
+                : availableDetailInstallUnitIds[0],
+              target: getSelectedInventoryTargetId() || "-",
+            })
+            : t("inventory_install_units_empty"));
+        const drilldownRows = [];
+        if (detailCollection && typeof detailCollection === "object") {
+          drilldownRows.push({
+            key: "__collection__",
+            label: t("inventory_install_units_collection"),
+            active: !selectedDetailInstallUnit,
+            meta: `${t("inventory_skill_meta_source")}: ${inventoryAggregateKindLabel(detailCollection)} | ${t("inventory_skill_meta_locator")}: ${String(detailCollection.locator || detailCollection.source_path || "-").trim() || "-"}`,
+          });
+        }
+        detailInstallUnitRows.forEach((item) => {
+          const installUnitId = String(item.install_unit_id || "").trim();
+          if (!installUnitId) return;
+          const drilldownSubpaths = inventorySourceSubpathSummary(item);
+          const drilldownMetaParts = [
+            `${t("inventory_skill_meta_members")}: ${Number(item.member_count || 0) || 0}`,
+            `Sources: ${Number(item.source_count || inventoryAggregateSourceIds(item).length || 0) || 0}`,
+          ];
+          if (drilldownSubpaths) {
+            drilldownMetaParts.push(`${t("inventory_skill_meta_subpath")}: ${drilldownSubpaths}`);
+          }
+          drilldownRows.push({
+            key: installUnitId,
+            label: String(item.display_name || installUnitId).trim() || installUnitId,
+            active: installUnitId === selectedDetailInstallUnitId || (!detailCollection && installUnitId === String(activeDetailInstallUnit && activeDetailInstallUnit.install_unit_id || "").trim()),
+            meta: drilldownMetaParts.join(" | "),
+            status: String(item.status || "").trim(),
+          });
+        });
+        installUnitDrilldownRowsEl.innerHTML = drilldownRows.length
+          ? drilldownRows.map((item) => `
+            <div
+              class="inventory-install-unit-item ${item.active ? "active" : ""}"
+              data-inventory-install-unit-id="${escapeHtml(item.key === "__collection__" ? "" : item.key)}"
+            >
+              <div class="title">
+                <span>${escapeHtml(item.label)}</span>
+                ${item.status ? renderSkillsStatusBadge(item.status) : ""}
+              </div>
+              <div class="meta">${escapeHtml(item.meta)}</div>
+            </div>
+          `).join("")
+          : `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
+        const heroKindItem = activeDetailInstallUnit || detailCollection || detailSource || selectedSourceRow;
         const heroKind = inventoryAggregateKindLabel(heroKindItem);
         const heroTitle = String(
-          (detailCollection && detailCollection.display_name)
-          || (detailInstallUnit && detailInstallUnit.display_name)
+          (activeDetailInstallUnit && activeDetailInstallUnit.display_name)
+          || (detailCollection && detailCollection.display_name)
           || (detailSource && detailSource.display_name)
           || selectedSourceRow.display_name
           || selectedSourceKey,
         ).trim() || selectedSourceKey;
         const heroId = String(
-          (detailInstallUnit && detailInstallUnit.install_unit_id)
+          (activeDetailInstallUnit && activeDetailInstallUnit.install_unit_id)
           || (detailCollection && detailCollection.collection_group_id)
           || (detailSource && detailSource.source_id)
           || selectedSourceKey,
@@ -5548,17 +5799,18 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           || "",
         ).trim();
         const heroInstallId = String(
-          (detailInstallUnit && detailInstallUnit.install_unit_id)
+          (activeDetailInstallUnit && activeDetailInstallUnit.install_unit_id)
           || selectedSourceRow.install_unit_id
           || "",
         ).trim();
         const heroLocator = String(
-          selectedSourceRow.install_ref
+          (activeDetailInstallUnit && (activeDetailInstallUnit.install_ref || activeDetailInstallUnit.locator || activeDetailInstallUnit.source_path))
+          || selectedSourceRow.install_ref
           || selectedSourceRow.locator
           || selectedSourceRow.source_path
           || (detailSource ? inventorySourceLocatorText(detailSource) : "-"),
         ).trim() || "-";
-        const heroBoundaryItem = detailCollection || detailInstallUnit || detailSource || selectedSourceRow;
+        const heroBoundaryItem = activeDetailInstallUnit || detailCollection || detailSource || selectedSourceRow;
         const heroSubpaths = inventorySourceSubpathList(heroBoundaryItem);
         const heroSubpathSummary = inventorySourceSubpathSummary(heroBoundaryItem);
         const heroSubpathLabel = heroSubpaths.length > 1
@@ -5566,39 +5818,43 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           : t("inventory_skill_meta_subpath");
         const boundaryNotes = inventoryBoundaryNotes({
           collectionGroup: detailCollection,
-          installUnit: detailInstallUnit,
-          source: detailSource || selectedSourceRow,
+          installUnit: activeDetailInstallUnit,
+          source: activeDetailSourceRows[0] || detailSource || selectedSourceRow,
           installUnitRows: detailInstallUnitRows,
         });
         const heroManager = String(
-          selectedSourceRow.install_manager
+          (activeDetailInstallUnit && activeDetailInstallUnit.install_manager)
+          || selectedSourceRow.install_manager
           || selectedSourceRow.managed_by
           || (detailSource && detailSource.managed_by)
           || "-",
         ).trim() || "-";
         const installUnitCount = Number(
-          (detailCollection && detailCollection.install_unit_count)
+          (selectedDetailInstallUnit && 1)
+          || (detailCollection && detailCollection.install_unit_count)
           || detailInstallUnitRows.length
           || (heroInstallId ? 1 : 0),
         ) || 0;
         const sourceCount = Number(
-          (detailCollection && detailCollection.source_count)
-          || (detailInstallUnit && detailInstallUnit.source_count)
-          || detailSourceRows.length
+          (selectedDetailInstallUnit && activeDetailSourceRows.length)
+          || (detailCollection && detailCollection.source_count)
+          || (activeDetailInstallUnit && activeDetailInstallUnit.source_count)
+          || activeDetailSourceRows.length
           || selectedSourceRow.source_count
           || inventoryAggregateSourceIds(selectedSourceRow).length,
         ) || 0;
         const memberCount = Number(
-          (detailCollection && detailCollection.member_count)
-          || (detailInstallUnit && detailInstallUnit.member_count)
+          (selectedDetailInstallUnit && activeDetailInstallUnit && activeDetailInstallUnit.member_count)
+          || (detailCollection && detailCollection.member_count)
+          || (activeDetailInstallUnit && activeDetailInstallUnit.member_count)
           || (detailSource && detailSource.member_count)
           || selectedSourceRow.member_count
-          || detailSourceRows.length,
+          || activeDetailSourceRows.length,
         ) || 0;
         const deployedTargetCount = Number(
-          detailDeployRows.length
+          activeDetailDeployRows.length
           || (detailCollection && detailCollection.deployed_target_count)
-          || (detailInstallUnit && detailInstallUnit.deployed_target_count)
+          || (activeDetailInstallUnit && activeDetailInstallUnit.deployed_target_count)
           || (detailSource && detailSource.deployed_target_count)
           || selectedSourceRow.deployed_target_count,
         ) || 0;
@@ -5618,7 +5874,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           || "-",
         ).trim() || "-";
         const memberPreview = [...new Set(
-          detailSourceRows.flatMap((row) => {
+          activeDetailSourceRows.flatMap((row) => {
             const preview = Array.isArray(row && row.member_skill_preview)
               ? row.member_skill_preview.map((item) => String(item || "").trim()).filter(Boolean)
               : [];
@@ -5629,7 +5885,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             return sourceId ? [sourceId] : [];
           }),
         )].filter(Boolean).slice(0, 8);
-        const deployNotes = detailDeployRows
+        const deployNotes = activeDetailDeployRows
           .map((row) => {
             const targetId = String(row && row.target_id || "").trim();
             if (!targetId) return "";
@@ -5638,7 +5894,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           .filter(Boolean)
           .slice(0, 6);
         const heroProvenance = inventorySourceProvenanceSummary(
-          detailSourceRows.length ? detailSourceRows : [selectedSourceRow],
+          activeDetailSourceRows.length ? activeDetailSourceRows : [selectedSourceRow],
         );
         const heroProvenanceState = inventorySourceProvenanceStateLabel(heroProvenance);
         const heroProvenanceOrigin = heroProvenance.originLabel || heroProvenance.originKind || "-";
@@ -5837,6 +6093,9 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         repairActionsEl.innerHTML = "";
         skillListEl.innerHTML = `<div class="debug-empty">${t("inventory_no_skills")}</div>`;
         softwareRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(noVisibleSoftwareText)}</div>`;
+        sourceHeroEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_source_empty"))}</div>`;
+        installUnitDrilldownNoteEl.textContent = t("inventory_install_units_note");
+        installUnitDrilldownRowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_install_units_empty"))}</div>`;
         installUnitNoteEl.textContent = t("inventory_install_unit_note_empty");
         state.inventoryDraftSkillIds = [];
         state.inventoryVisibleCompatibleSkillIds = [];
@@ -8022,12 +8281,24 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         if (!sourceKey || sourceKey === String(state.inventorySelectedSourceKey || "").trim()) return;
         state.inventorySelectedSourceKey = sourceKey;
         state.inventorySourceDetail = null;
+        state.inventorySelectedDetailInstallUnitId = "";
         renderInventoryPanel();
         try {
           await refreshSelectedInventorySourceDetail({ silent: false });
         } catch (err) {
           alert(`Failed to load source detail: ${err.message}`);
         }
+      });
+
+      $("inventorySourceInstallUnitRows").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-install-unit-id]")
+          : null;
+        if (!el) return;
+        const installUnitId = String(el.getAttribute("data-inventory-install-unit-id") || "").trim();
+        if (installUnitId === String(state.inventorySelectedDetailInstallUnitId || "").trim()) return;
+        state.inventorySelectedDetailInstallUnitId = installUnitId;
+        renderInventoryPanel();
       });
 
       $("inventorySkillList").addEventListener("click", async (evt) => {
