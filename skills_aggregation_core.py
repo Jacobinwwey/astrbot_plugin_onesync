@@ -769,6 +769,82 @@ def _infer_curated_reference_repo_hint(source: dict[str, Any]) -> tuple[str, str
     return "", "", ""
 
 
+def _embedded_local_skill_derivative_base_names(skill_path: str) -> tuple[str, ...]:
+    candidates: list[str] = []
+    for filename in _EMBEDDED_SOURCE_DOC_FILENAMES:
+        text = _skill_support_file_text(skill_path, filename)
+        if not text:
+            continue
+        for match in re.finditer(r"The local `([A-Za-z0-9_.-]+)` skill", text, re.IGNORECASE):
+            candidates.append(str(match.group(1) or "").strip())
+        for match in re.finditer(r"\.codex/skills/([A-Za-z0-9_.-]+)/assets/", text, re.IGNORECASE):
+            candidates.append(str(match.group(1) or "").strip())
+    return tuple(_dedupe_keep_order(candidates))
+
+
+def _related_local_skill_source(source: dict[str, Any], related_name: str) -> dict[str, Any] | None:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return None
+    source_dir = _safe_expand_path(source_path)
+    if not source_dir:
+        return None
+    current_dir = source_dir if source_dir.is_dir() else source_dir.parent
+    related_dir = current_dir.parent / str(related_name or "").strip()
+    try:
+        if not related_dir.exists() or not related_dir.is_dir() or related_dir == current_dir:
+            return None
+    except Exception:
+        return None
+
+    return {
+        "source_id": f"related_local_{_slug(related_name, default='skill')}",
+        "display_name": related_name,
+        "source_kind": "npx_single",
+        "source_scope": str(source.get("source_scope") or "global"),
+        "source_path": str(related_dir),
+        "member_count": 1,
+        "member_skill_preview": [related_name],
+        "compatible_software_ids": _to_str_list(source.get("compatible_software_ids", [])),
+        "status": str(source.get("status") or "ready"),
+        "freshness_status": str(source.get("freshness_status") or "fresh"),
+    }
+
+
+def _infer_local_skill_derivative(source: dict[str, Any]) -> tuple[str, str]:
+    display_name = str(source.get("display_name") or "").strip().lower()
+    for base_name in _embedded_local_skill_derivative_base_names(str(source.get("source_path") or "").strip()):
+        normalized_base_name = str(base_name or "").strip()
+        if not normalized_base_name or normalized_base_name.lower() == display_name:
+            continue
+        related_source = _related_local_skill_source(source, normalized_base_name)
+        if not related_source:
+            continue
+        related_provenance = derive_source_provenance_fields(related_source)
+        if str(related_provenance.get("provenance_confidence") or "").strip().lower() not in {"high", "medium"}:
+            continue
+        if str(related_provenance.get("provenance_origin_kind") or "").strip().lower() in {
+            "documented_source_repo",
+            "catalog_source_repo",
+            "local_plugin_bundle",
+        }:
+            return normalized_base_name, "embedded_local_derivative_notice"
+    return "", ""
+
+
+def _resolve_local_skill_derivative_collection(source: dict[str, Any], base_name: str) -> tuple[str, str, str]:
+    related_source = _related_local_skill_source(source, base_name)
+    if not related_source:
+        return "", "", ""
+    related_aggregation = derive_source_aggregation_fields(related_source)
+    collection_group_id = str(related_aggregation.get("collection_group_id") or "").strip()
+    collection_group_name = str(related_aggregation.get("collection_group_name") or "").strip()
+    collection_group_kind = str(related_aggregation.get("collection_group_kind") or "").strip()
+    if not collection_group_id:
+        return "", "", ""
+    return collection_group_id, collection_group_name, collection_group_kind
+
+
 @lru_cache(maxsize=512)
 def _candidate_local_skill_mirror_documents(skill_dir_name: str, local_roots: tuple[str, ...]) -> tuple[str, ...]:
     normalized_name = str(skill_dir_name or "").strip()
@@ -1185,6 +1261,14 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                             origin_label = origin_label or hinted_origin_label or display_name
                             package_strategy = package_strategy or hinted_strategy
                             confidence = confidence or "medium"
+                        else:
+                            derivative_base_name, derivative_strategy = _infer_local_skill_derivative(source)
+                            if derivative_base_name:
+                                origin_kind = origin_kind or "local_skill_derivative"
+                                origin_ref = origin_ref or derivative_base_name
+                                origin_label = origin_label or derivative_base_name
+                                package_strategy = package_strategy or derivative_strategy
+                                confidence = confidence or "medium"
 
     if not rule and package_name:
         rule = _match_curated_rule(
@@ -1571,6 +1655,13 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                     f"{repo_label} :: {repo_subpath}" if repo_subpath else repo_label
                 )
                 aggregation_strategy = provenance_package_strategy or "catalog_reference_hint"
+            elif provenance_origin_kind == "local_skill_derivative" and provenance_origin_ref:
+                install_unit_id = f"derived:{source_id}"
+                install_unit_kind = "local_skill_derivative"
+                install_ref = display_name or source_id
+                install_manager = "manual"
+                install_unit_display_name = display_name
+                aggregation_strategy = provenance_package_strategy or "embedded_local_derivative_notice"
             elif rule:
                 install_unit_id = str(rule.get("install_unit_id") or f"curated:{_slug(display_name, default='pack')}")
                 install_unit_kind = str(rule.get("install_unit_kind") or "curated_npx_pack")
@@ -1620,6 +1711,11 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
                 repo_locator or provenance_origin_ref,
                 "manual_git",
+            )
+        elif provenance_origin_kind == "local_skill_derivative" and provenance_origin_ref:
+            collection_group_id, collection_group_name, collection_group_kind = _resolve_local_skill_derivative_collection(
+                source,
+                provenance_origin_ref,
             )
         elif source_kind in {"manual_git", "manual_local"}:
             collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(

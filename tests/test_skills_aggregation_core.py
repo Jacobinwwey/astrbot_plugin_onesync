@@ -885,6 +885,114 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual("low", provenance["provenance_confidence"])
         self.assertEqual("synthetic_single:npx_global_javascript_pro", aggregation["install_unit_id"])
 
+    def test_npx_single_recovers_local_derivative_group_from_embedded_base_skill_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+
+            base_skill = source_root / "playwright"
+            base_skill.mkdir(parents=True, exist_ok=True)
+            (base_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: playwright\n"
+                "description: Browser automation from the terminal.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            (base_skill / "NOTICE.txt").write_text(
+                "This skill includes material derived from the Microsoft playwright-cli repository.\n\n"
+                "Source:\n"
+                "- Repository: microsoft/playwright-cli\n"
+                "- Path: skills/playwright-cli/SKILL.md\n",
+                encoding="utf-8",
+            )
+
+            source_skill = source_root / "playwright-interactive"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: playwright-interactive\n"
+                "description: Persistent browser and Electron interaction through js_repl.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            (source_skill / "NOTICE.txt").write_text(
+                "This skill reuses the Playwright icon assets from `.codex/skills/playwright/assets/`.\n\n"
+                "The local `playwright` skill attributes those assets to the Microsoft\n"
+                "`playwright-cli` repository.\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_playwright_interactive",
+                "display_name": "playwright-interactive",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["playwright-interactive"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("local_skill_derivative", provenance["provenance_origin_kind"])
+        self.assertEqual("playwright", provenance["provenance_origin_ref"])
+        self.assertEqual("playwright", provenance["provenance_origin_label"])
+        self.assertEqual("embedded_local_derivative_notice", provenance["provenance_package_strategy"])
+        self.assertEqual("medium", provenance["provenance_confidence"])
+
+        self.assertEqual("derived:npx_global_playwright_interactive", aggregation["install_unit_id"])
+        self.assertEqual("local_skill_derivative", aggregation["install_unit_kind"])
+        self.assertEqual("playwright-interactive", aggregation["install_unit_display_name"])
+        self.assertEqual("collection:source_repo_microsoft_playwright_cli", aggregation["collection_group_id"])
+        self.assertEqual("source_repo", aggregation["collection_group_kind"])
+
+    def test_npx_single_local_derivative_notice_requires_resolvable_base_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+
+            source_skill = source_root / "playwright-interactive"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: playwright-interactive\n"
+                "description: Persistent browser and Electron interaction through js_repl.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            (source_skill / "NOTICE.txt").write_text(
+                "This skill reuses the Playwright icon assets from `.codex/skills/playwright/assets/`.\n\n"
+                "The local `playwright` skill attributes those assets to the Microsoft\n"
+                "`playwright-cli` repository.\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_playwright_interactive",
+                "display_name": "playwright-interactive",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["playwright-interactive"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("skills_root", provenance["provenance_origin_kind"])
+        self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
+        self.assertEqual("low", provenance["provenance_confidence"])
+        self.assertEqual("synthetic_single:npx_global_playwright_interactive", aggregation["install_unit_id"])
+
     def test_npx_single_recovers_package_from_structured_cache_skill_variant(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
