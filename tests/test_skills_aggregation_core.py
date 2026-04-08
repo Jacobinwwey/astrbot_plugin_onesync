@@ -1159,6 +1159,63 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         )
         self.assertEqual("community_source_repo", aggregation["install_unit_kind"])
 
+    def test_npx_single_recovers_explicit_local_custom_skill_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "doc"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: doc\n"
+                "description: Improve project documentation\n"
+                "---\n\n"
+                "Local custom documentation workflow.\n",
+                encoding="utf-8",
+            )
+
+            previous_hints = dict(skills_core._LOCAL_CUSTOM_SKILL_HINTS)
+            skills_core._LOCAL_CUSTOM_SKILL_HINTS = {
+                "doc": {
+                    "origin_label": "Local Custom Skill",
+                }
+            }
+            self.addCleanup(
+                setattr,
+                skills_core,
+                "_LOCAL_CUSTOM_SKILL_HINTS",
+                previous_hints,
+            )
+
+            source_row = {
+                "source_id": "npx_global_doc",
+                "display_name": "doc",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["doc"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("local_custom_skill", provenance["provenance_origin_kind"])
+        self.assertEqual(str(source_skill), provenance["provenance_origin_ref"])
+        self.assertEqual("Local Custom Skill", provenance["provenance_origin_label"])
+        self.assertEqual("explicit_local_custom_hint", provenance["provenance_package_strategy"])
+        self.assertEqual("medium", provenance["provenance_confidence"])
+        self.assertEqual(f"local_custom:{source_skill}", aggregation["install_unit_id"])
+        self.assertEqual("local_custom_skill", aggregation["install_unit_kind"])
+        self.assertEqual(str(source_skill), aggregation["install_ref"])
+        self.assertEqual("doc", aggregation["install_unit_display_name"])
+        self.assertEqual("collection:local_custom_codex_home_skills", aggregation["collection_group_id"])
+        self.assertEqual("Local Custom Skills", aggregation["collection_group_name"])
+        self.assertEqual("local_custom", aggregation["collection_group_kind"])
+
     def test_npx_single_recovers_local_derivative_group_from_embedded_base_skill_notice(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

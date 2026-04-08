@@ -180,6 +180,13 @@ _COMMUNITY_MARKDOWN_TAIL_DERIVATIVE_SKILL_REPO_HINTS: dict[str, dict[str, str]] 
         "required_tail_signature": "21156536ebf16514a845d32a01883bbf855043f0",
     },
 }
+_LOCAL_CUSTOM_SKILL_HINTS: dict[str, dict[str, str]] = {
+    # User-confirmed local authored skills. These are intentionally modeled as
+    # local custom artifacts rather than forced into package/repo provenance.
+    "doc": {
+        "origin_label": "Local Custom Skill",
+    },
+}
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -921,6 +928,30 @@ def _infer_community_markdown_tail_derivative_repo_hint(source: dict[str, Any]) 
     return "", "", ""
 
 
+def _infer_local_custom_skill_hint(source: dict[str, Any]) -> tuple[str, str, str]:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return "", "", ""
+
+    candidate_names = [
+        str(source.get("display_name") or "").strip().lower(),
+        *[
+            str(item or "").strip().lower()
+            for item in _to_str_list(source.get("member_skill_preview", []))
+        ],
+    ]
+    for name in candidate_names:
+        if not name:
+            continue
+        rule = _LOCAL_CUSTOM_SKILL_HINTS.get(name) or {}
+        if not rule:
+            continue
+        origin_label = str(rule.get("origin_label") or "Local Custom Skill").strip()
+        if origin_label:
+            return source_path, origin_label, "explicit_local_custom_hint"
+    return "", "", ""
+
+
 def _embedded_local_skill_derivative_base_names(skill_path: str) -> tuple[str, ...]:
     candidates: list[str] = []
     for filename in _EMBEDDED_SOURCE_DOC_FILENAMES:
@@ -1438,13 +1469,21 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                                         package_strategy = package_strategy or community_tail_strategy
                                         confidence = confidence or "medium"
                                     else:
-                                        derivative_base_name, derivative_strategy = _infer_local_skill_derivative(source)
-                                        if derivative_base_name:
-                                            origin_kind = origin_kind or "local_skill_derivative"
-                                            origin_ref = origin_ref or derivative_base_name
-                                            origin_label = origin_label or derivative_base_name
-                                            package_strategy = package_strategy or derivative_strategy
+                                        local_custom_ref, local_custom_label, local_custom_strategy = _infer_local_custom_skill_hint(source)
+                                        if local_custom_ref:
+                                            origin_kind = origin_kind or "local_custom_skill"
+                                            origin_ref = origin_ref or local_custom_ref
+                                            origin_label = origin_label or local_custom_label or display_name
+                                            package_strategy = package_strategy or local_custom_strategy
                                             confidence = confidence or "medium"
+                                        else:
+                                            derivative_base_name, derivative_strategy = _infer_local_skill_derivative(source)
+                                            if derivative_base_name:
+                                                origin_kind = origin_kind or "local_skill_derivative"
+                                                origin_ref = origin_ref or derivative_base_name
+                                                origin_label = origin_label or derivative_base_name
+                                                package_strategy = package_strategy or derivative_strategy
+                                                confidence = confidence or "medium"
 
     if not rule and package_name:
         rule = _match_curated_rule(
@@ -1842,6 +1881,13 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                     f"{repo_label} :: {repo_subpath}" if repo_subpath else repo_label
                 )
                 aggregation_strategy = provenance_package_strategy or "community_reference_hint"
+            elif provenance_origin_kind == "local_custom_skill" and provenance_origin_ref:
+                install_unit_id = f"local_custom:{provenance_origin_ref}"
+                install_unit_kind = "local_custom_skill"
+                install_ref = provenance_origin_ref
+                install_manager = "manual"
+                install_unit_display_name = display_name
+                aggregation_strategy = provenance_package_strategy or "explicit_local_custom_hint"
             elif provenance_origin_kind == "local_skill_derivative" and provenance_origin_ref:
                 install_unit_id = f"derived:{source_id}"
                 install_unit_kind = "local_skill_derivative"
@@ -1905,6 +1951,15 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                 repo_locator or provenance_origin_ref,
                 "manual_git",
             )
+        elif provenance_origin_kind == "local_custom_skill":
+            root_kind = str(
+                source.get("provenance_root_kind")
+                or provenance.get("provenance_root_kind")
+                or ""
+            ).strip()
+            collection_group_id = f"collection:local_custom_{_slug(root_kind or 'skills_root', default='skills_root')}"
+            collection_group_name = "Local Custom Skills"
+            collection_group_kind = "local_custom"
         elif provenance_origin_kind == "local_skill_derivative" and provenance_origin_ref:
             collection_group_id, collection_group_name, collection_group_kind = _resolve_local_skill_derivative_collection(
                 source,
