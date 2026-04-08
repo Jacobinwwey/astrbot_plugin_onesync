@@ -237,13 +237,84 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertTrue(compound["source_exists"])
         self.assertEqual("fresh", compound["freshness_status"])
         self.assertEqual("@every-env/compound-plugin", compound["registry_package_name"])
-
         self.assertEqual(1, overview["counts"]["source_fresh_total"])
         self.assertEqual(1, overview["counts"]["source_missing_total"])
         self.assertEqual(0, overview["counts"]["source_aging_total"])
         self.assertEqual(0, overview["counts"]["source_stale_total"])
         self.assertEqual(1, overview["doctor"]["source_freshness"]["fresh"])
         self.assertEqual(1, overview["doctor"]["source_freshness"]["missing"])
+
+    def test_build_skills_overview_surfaces_legacy_family_collection_groups_for_unresolved_roots(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["skill_rows"].extend(
+            [
+                {
+                    "id": "npx_global_git_commit",
+                    "display_name": "git-commit",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/git-commit",
+                    "member_count": 1,
+                    "member_skill_preview": ["git-commit"],
+                    "member_skill_overflow": 0,
+                    "management_hint": "",
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+                {
+                    "id": "npx_global_git_worktree",
+                    "display_name": "git-worktree",
+                    "skill_kind": "skill",
+                    "provider_key": "npx_skills",
+                    "enabled": True,
+                    "discovered": True,
+                    "auto_discovered": True,
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/git-worktree",
+                    "member_count": 1,
+                    "member_skill_preview": ["git-worktree"],
+                    "member_skill_overflow": 0,
+                    "management_hint": "",
+                    "compatible_software_families": ["codex"],
+                    "tags": ["npx-managed"],
+                },
+            ],
+        )
+        snapshot["compatibility"]["codex"] = [
+            "npx_bundle_compound_engineering_global",
+            "npx_global_find_skills",
+            "npx_global_git_commit",
+            "npx_global_git_worktree",
+        ]
+
+        overview = build_skills_overview(snapshot)
+
+        install_unit_rows = {
+            item["install_unit_id"]: item
+            for item in overview["install_unit_rows"]
+        }
+        self.assertEqual(
+            "collection:legacy_family_codex_skills_root_git_global",
+            install_unit_rows["synthetic_single:npx_global_git_commit"]["collection_group_id"],
+        )
+        self.assertEqual(
+            "collection:legacy_family_codex_skills_root_git_global",
+            install_unit_rows["synthetic_single:npx_global_git_worktree"]["collection_group_id"],
+        )
+
+        meaningful_groups = {
+            item["collection_group_id"]: item
+            for item in overview["meaningful_collection_group_rows"]
+        }
+        self.assertIn("collection:legacy_family_codex_skills_root_git_global", meaningful_groups)
+        self.assertEqual("legacy_family", meaningful_groups["collection:legacy_family_codex_skills_root_git_global"]["collection_group_kind"])
+        self.assertEqual(2, meaningful_groups["collection:legacy_family_codex_skills_root_git_global"]["install_unit_count"])
+        self.assertEqual(2, meaningful_groups["collection:legacy_family_codex_skills_root_git_global"]["member_count"])
+        self.assertNotIn("collection:find_skills", meaningful_groups)
 
     def test_build_skills_overview_merges_saved_source_sync_metadata(self) -> None:
         saved_registry = {

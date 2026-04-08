@@ -117,6 +117,18 @@ SKILLS_ROOT_PROVENANCE_RULES: list[dict[str, str]] = [
     },
 ]
 
+LEGACY_FAMILY_LABEL_OVERRIDES = {
+    "api": "API",
+    "cli": "CLI",
+    "dhh": "DHH",
+    "git": "Git",
+    "javascript": "JavaScript",
+    "kieran": "Kieran",
+    "todo": "Todo",
+    "ui": "UI",
+    "ux": "UX",
+}
+
 
 def _slug(value: Any, default: str = "") -> str:
     text = str(value or "").strip().lower()
@@ -227,6 +239,29 @@ def _looks_like_remote_locator(locator: str) -> bool:
 
 def _normalize_subpath_text(path_text: Any) -> str:
     return str(path_text or "").strip().replace("\\", "/").strip("/")
+
+
+def _legacy_family_token(name_text: Any) -> str:
+    text = str(name_text or "").strip().lower()
+    if not text:
+        return ""
+    if ":" in text:
+        head, _, _ = text.partition(":")
+        return _slug(head, default="")
+    if "-" in text:
+        head, _, _ = text.partition("-")
+        return _slug(head, default="")
+    return ""
+
+
+def _legacy_family_label(token: str) -> str:
+    normalized = _slug(token, default="")
+    if not normalized:
+        return ""
+    override = LEGACY_FAMILY_LABEL_OVERRIDES.get(normalized)
+    if override:
+        return override
+    return " ".join(segment.capitalize() for segment in normalized.split("_") if segment) or normalized
 
 
 def _repo_label_from_locator(locator: Any) -> str:
@@ -615,6 +650,66 @@ def build_provenance_summary(rows: list[dict[str, Any]] | dict[str, Any] | None)
     }
 
 
+def _legacy_family_collection_candidate(install_unit: dict[str, Any]) -> dict[str, str] | None:
+    if not isinstance(install_unit, dict):
+        return None
+    if str(install_unit.get("install_unit_kind") or "").strip().lower() != "synthetic_single":
+        return None
+    if str(install_unit.get("collection_group_kind") or "").strip().lower() != "install_unit":
+        return None
+    if str(install_unit.get("registry_package_name") or "").strip():
+        return None
+    if str(install_unit.get("provenance_primary_origin_kind") or "").strip().lower() != "skills_root":
+        return None
+    if str(install_unit.get("provenance_note_kind") or "").strip().lower() != "legacy_root_only":
+        return None
+
+    member_names = _to_str_list(install_unit.get("member_skill_preview", []))
+    token = _legacy_family_token(member_names[0] if member_names else install_unit.get("display_name"))
+    if not token:
+        return None
+
+    scope = str(install_unit.get("scope") or "").strip().lower() or "mixed"
+    origin_label = str(install_unit.get("provenance_primary_origin_label") or "").strip() or "skills_root"
+    root_slug = _slug(origin_label, default="skills_root")
+    collection_group_id = f"collection:legacy_family_{root_slug}_{token}_{_slug(scope, default='mixed')}"
+    collection_group_name = _legacy_family_label(token)
+    if not collection_group_name:
+        return None
+    return {
+        "collection_group_id": collection_group_id,
+        "collection_group_name": collection_group_name,
+        "collection_group_kind": "legacy_family",
+    }
+
+
+def _apply_legacy_family_collection_groups(install_unit_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped_candidates: dict[str, dict[str, Any]] = {}
+    for index, install_unit in enumerate(install_unit_rows):
+        candidate = _legacy_family_collection_candidate(install_unit)
+        if not candidate:
+            continue
+        group = grouped_candidates.setdefault(
+            candidate["collection_group_id"],
+            {
+                "candidate": candidate,
+                "indexes": [],
+            },
+        )
+        group["indexes"].append(index)
+
+    for group in grouped_candidates.values():
+        indexes = group["indexes"]
+        if len(indexes) < 2:
+            continue
+        candidate = group["candidate"]
+        for index in indexes:
+            install_unit_rows[index]["collection_group_id"] = candidate["collection_group_id"]
+            install_unit_rows[index]["collection_group_name"] = candidate["collection_group_name"]
+            install_unit_rows[index]["collection_group_kind"] = candidate["collection_group_kind"]
+    return install_unit_rows
+
+
 def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
     source_id = str(source.get("source_id") or source.get("id") or "").strip()
     display_name = str(source.get("display_name") or source_id).strip() or source_id
@@ -921,6 +1016,7 @@ def build_install_unit_rows(source_rows: list[dict[str, Any]], deploy_rows: list
             },
         )
 
+    result = _apply_legacy_family_collection_groups(result)
     result.sort(key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("install_unit_id", "")).lower()))
     return result
 

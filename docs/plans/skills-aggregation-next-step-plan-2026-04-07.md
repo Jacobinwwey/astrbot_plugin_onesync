@@ -60,6 +60,44 @@ depends_on:
 
 而不是继续把当前模糊聚合逻辑平移到更多来源。
 
+## 本轮已落地的中间态修正（2026-04-07）
+
+为避免前端继续把大量 unresolved root leaf 平铺成“看似独立、实际上不可维护”的主卡片，本轮已经增加一层有限度的 `legacy_family` collection group：
+
+- 仅作用于 `synthetic_single`
+- 仅作用于 provenance 仍然停留在 `skills_root`
+- 仅作用于 `legacy_root_only` 这类低置信度历史遗留条目
+- 仅在同 scope、同 root label、同前缀家族达到 `2+` 成员时生效
+
+当前运行态已可见的 `legacy_family` 例子包括：
+
+- `Adversarial`
+- `Agent`
+- `CLI`
+- `Data`
+- `Git`
+- `JavaScript`
+- `Kieran`
+- `Performance`
+- `Security`
+- `Test`
+- `Todo`
+
+这层修正的目标只有一个：
+
+- 让 UI 从“噪声化 leaf 平铺”回到“可解释的家族压缩”
+
+这层修正明确不代表：
+
+- 已恢复真实 npm 包边界
+- 已恢复可统一升级的真实 install unit
+- 已恢复 package/source provenance ledger
+
+因此接下来的工程方向仍然不变：
+
+- `legacy_family` 只作为 honest compression layer 保留
+- 真正需要继续推进的是 provenance recovery，而不是继续扩大家族命名规则
+
 ## 目标状态
 
 ### 数据层

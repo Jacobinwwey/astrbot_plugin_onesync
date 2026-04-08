@@ -147,6 +147,84 @@ class SkillsAggregationCoreTests(unittest.TestCase):
             install_unit_by_id["git:https://github.com/demo/skills.git#packages/ui-audit"]["source_subpaths"],
         )
 
+    def test_build_install_units_promotes_legacy_root_family_groups_without_merging_install_units(self) -> None:
+        source_rows = [
+            {
+                "source_id": "npx_global_git_commit",
+                "display_name": "git-commit",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": "/root/.codex/skills/git-commit",
+                "member_count": 1,
+                "member_skill_preview": ["git-commit"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            },
+            {
+                "source_id": "npx_global_git_worktree",
+                "display_name": "git-worktree",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": "/root/.codex/skills/git-worktree",
+                "member_count": 1,
+                "member_skill_preview": ["git-worktree"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            },
+            {
+                "source_id": "npx_global_find_skills",
+                "display_name": "find-skills",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": "/root/.agents/skills/find-skills",
+                "member_count": 1,
+                "member_skill_preview": ["find-skills"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            },
+        ]
+
+        install_unit_rows = build_install_unit_rows(source_rows, [])
+        collection_group_rows = build_collection_group_rows(install_unit_rows)
+
+        install_unit_by_id = {item["install_unit_id"]: item for item in install_unit_rows}
+        git_commit = install_unit_by_id["synthetic_single:npx_global_git_commit"]
+        git_worktree = install_unit_by_id["synthetic_single:npx_global_git_worktree"]
+        find_skills = install_unit_by_id["synthetic_single:npx_global_find_skills"]
+
+        self.assertEqual(
+            "collection:legacy_family_codex_skills_root_git_global",
+            git_commit["collection_group_id"],
+        )
+        self.assertEqual(
+            "collection:legacy_family_codex_skills_root_git_global",
+            git_worktree["collection_group_id"],
+        )
+        self.assertEqual("Git", git_commit["collection_group_name"])
+        self.assertEqual("legacy_family", git_commit["collection_group_kind"])
+        self.assertEqual("collection:find_skills", find_skills["collection_group_id"])
+        self.assertEqual("install_unit", find_skills["collection_group_kind"])
+
+        collection_group_by_id = {
+            item["collection_group_id"]: item
+            for item in collection_group_rows
+        }
+        git_group = collection_group_by_id["collection:legacy_family_codex_skills_root_git_global"]
+        self.assertEqual("legacy_family", git_group["collection_group_kind"])
+        self.assertEqual(2, git_group["install_unit_count"])
+        self.assertEqual(2, git_group["source_count"])
+        self.assertEqual(2, git_group["member_count"])
+        self.assertEqual(
+            {
+                "synthetic_single:npx_global_git_commit",
+                "synthetic_single:npx_global_git_worktree",
+            },
+            set(git_group["install_unit_ids"]),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
