@@ -1886,6 +1886,345 @@
       white-space: pre-wrap;
     }
 
+
+    .modal-backdrop {
+      background: rgba(8, 15, 30, 0.34);
+      backdrop-filter: blur(10px);
+      align-items: stretch;
+      justify-content: flex-end;
+      padding: 12px;
+    }
+
+    .modal-panel {
+      width: min(920px, calc(100vw - 24px));
+      height: 100%;
+      max-height: calc(100vh - 24px);
+      border-radius: 26px;
+      background:
+        radial-gradient(280px 160px at 100% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 62%),
+        linear-gradient(175deg, color-mix(in srgb, var(--panel-soft) 98%, transparent), color-mix(in srgb, var(--panel-strong) 92%, transparent));
+      box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
+    }
+
+    .modal-head {
+      align-items: flex-start;
+      gap: 10px;
+      padding: 16px 18px 14px;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+      background: color-mix(in srgb, var(--panel-soft) 88%, var(--panel) 12%);
+    }
+
+    .modal-title {
+      font-family: var(--display);
+      font-size: 18px;
+      letter-spacing: 0.01em;
+    }
+
+    .modal-body {
+      padding: 16px 18px 18px;
+    }
+
+    .inventory-panel {
+      margin-top: 14px;
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 22px;
+      background:
+        radial-gradient(360px 180px at 100% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 68%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 94%, transparent), color-mix(in srgb, var(--panel-strong) 90%, transparent));
+      box-shadow: var(--shadow-lg);
+      padding: 16px;
+    }
+
+    .inventory-head {
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .inventory-head-copy {
+      gap: 5px;
+      max-width: 860px;
+    }
+
+    .inventory-title {
+      font-size: 22px;
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+    }
+
+    .inventory-head-note {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .inventory-summary {
+      margin-bottom: 12px;
+    }
+
+    .inventory-display-settings {
+      margin: 12px 0 14px;
+      border-radius: 18px;
+    }
+
+    .inventory-display-settings summary {
+      padding: 12px 14px;
+      font-size: 13px;
+    }
+
+    .inventory-display-settings-grid {
+      gap: 12px;
+      padding: 12px 14px 14px;
+    }
+
+    .inventory-display-panel-group {
+      padding: 12px;
+      border-radius: 16px;
+    }
+
+    .inventory-status-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .inventory-status-card {
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      border-radius: 18px;
+      padding: 12px 14px;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 95%, transparent), color-mix(in srgb, var(--panel) 92%, transparent));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+      display: grid;
+      gap: 6px;
+      min-height: 112px;
+    }
+
+    .inventory-status-card[data-tone="accent"] {
+      border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+      background:
+        radial-gradient(180px 110px at 100% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 68%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel) 92%, transparent));
+    }
+
+    .inventory-status-card[data-tone="warn"] {
+      border-color: color-mix(in srgb, var(--warn) 34%, var(--border));
+      background:
+        radial-gradient(180px 110px at 100% 0%, color-mix(in srgb, var(--warn) 14%, transparent), transparent 68%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel) 92%, transparent));
+    }
+
+    .inventory-status-card[data-tone="success"] {
+      border-color: color-mix(in srgb, var(--accent-2) 30%, var(--border));
+      background:
+        radial-gradient(180px 110px at 100% 0%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 68%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 96%, transparent), color-mix(in srgb, var(--panel) 92%, transparent));
+    }
+
+    .inventory-status-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .inventory-status-value {
+      font-family: var(--display);
+      font-size: 24px;
+      line-height: 1.06;
+      word-break: break-word;
+    }
+
+    .inventory-status-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .inventory-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(360px, 0.88fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .inventory-grid {
+      gap: 14px;
+    }
+
+    .inventory-software-rail,
+    .inventory-workspace {
+      border-radius: 20px;
+      padding: 14px;
+    }
+
+    .inventory-workspace {
+      display: grid;
+      gap: 12px;
+    }
+
+    .inventory-workspace-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-workspace-copy {
+      display: grid;
+      gap: 5px;
+    }
+
+    .inventory-workspace-kicker {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .inventory-workspace-title {
+      margin: 0;
+      font-family: var(--display);
+      font-size: 18px;
+      line-height: 1.1;
+    }
+
+    .inventory-workspace-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+      max-width: 760px;
+    }
+
+    .inventory-workspace-actions {
+      gap: 8px;
+      margin: 14px 0 10px;
+    }
+
+    .inventory-filter-tools {
+      margin: 4px 0 10px;
+    }
+
+    .inventory-soft-meta {
+      margin-top: 0;
+      border-radius: 14px;
+      padding: 12px;
+      line-height: 1.6;
+      min-height: 160px;
+    }
+
+    .inventory-skill-list {
+      border-radius: 16px;
+      padding: 12px;
+      min-height: 460px;
+      gap: 10px;
+    }
+
+    .inventory-skill-item {
+      border-radius: 14px;
+      padding: 12px;
+      line-height: 1.55;
+      gap: 8px;
+    }
+
+    .inventory-software-rows {
+      gap: 10px;
+      max-height: 700px;
+    }
+
+    .inventory-inspector {
+      position: sticky;
+      top: 12px;
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .inventory-inspector-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 14px;
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      border-radius: 20px;
+      background:
+        radial-gradient(220px 130px at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 64%),
+        linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 94%, transparent), color-mix(in srgb, var(--panel) 84%, transparent));
+    }
+
+    .inventory-inspector-copy {
+      display: grid;
+      gap: 4px;
+    }
+
+    .inventory-inspector-kicker {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .inventory-inspector-title {
+      margin: 0;
+      font-family: var(--display);
+      font-size: 17px;
+      line-height: 1.1;
+    }
+
+    .inventory-inspector-panel {
+      display: grid;
+      gap: 12px;
+      max-height: calc(100vh - 182px);
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .inventory-inspector-card {
+      display: grid;
+      gap: 10px;
+    }
+
+    .inventory-inspector-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .inventory-inspector-actions button {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .inventory-utility-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1320px) {
+      .inventory-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .inventory-inspector {
+        position: static;
+      }
+
+      .inventory-inspector-panel {
+        max-height: none;
+      }
+    }
+
     @media (max-width: 980px) {
       body {
         padding: 8px;
@@ -2029,6 +2368,9 @@
             </div>
           </div>
           <p class="inventory-summary" id="inventorySummary">正在加载资产信息...</p>
+          <div class="inventory-status-strip" id="inventoryStatusStrip">
+            <div class="debug-empty" id="inventoryStatusStripEmpty">正在整理运维状态...</div>
+          </div>
           <details class="inventory-display-settings" id="inventoryDisplaySettings">
             <summary id="inventoryDisplaySettingsSummary">面板设置</summary>
             <div class="inventory-display-settings-grid">
@@ -2112,174 +2454,222 @@
               </div>
             </div>
           </details>
-          <div class="inventory-grid">
-            <div class="inventory-software-rail">
-              <div class="inventory-controls">
-                <label class="cfg-label">
-                  <span id="inventorySoftwareLabel">选择软件</span>
-                  <select id="inventorySoftwareSelect"></select>
-                </label>
-                <div class="inventory-segment-block">
-                  <span class="inventory-segment-label" id="inventoryScopeLabel">绑定范围</span>
-                  <div class="inventory-segmented" id="inventoryScopeTabs">
-                    <button type="button" id="inventoryScopeTabGlobal" data-inventory-scope="global">全局</button>
-                    <button type="button" id="inventoryScopeTabWorkspace" data-inventory-scope="workspace">工作区</button>
-                  </div>
-                  <select id="inventoryScopeSelect" class="inventory-hidden-select" aria-hidden="true" tabindex="-1">
-                    <option value="global" id="inventoryScopeOptGlobal">全局</option>
-                    <option value="workspace" id="inventoryScopeOptWorkspace">工作区</option>
-                  </select>
-                </div>
-              </div>
-              <div class="inventory-soft-meta" id="inventorySoftwareMeta">-</div>
-              <div class="inventory-filter-tools">
-                <label class="cfg-label">
-                  <span id="inventoryKindFilterLabel">软件类型</span>
-                  <select id="inventoryKindFilterSelect">
-                    <option value="all" id="inventoryKindOptAll">全部</option>
-                    <option value="cli" id="inventoryKindOptCli">CLI</option>
-                    <option value="gui" id="inventoryKindOptGui">GUI</option>
-                    <option value="claw" id="inventoryKindOptClaw">CLAW</option>
-                    <option value="other" id="inventoryKindOptOther">OTHER</option>
-                  </select>
-                </label>
-                <label class="cfg-label">
-                  <span id="inventoryShowUninstalledLabel">显示未安装</span>
-                  <input id="inventoryShowUninstalledToggle" type="checkbox">
-                </label>
-              </div>
-              <p class="inventory-quick-title" id="inventoryQuickTitle">宿主速览</p>
-              <div class="inventory-software-rows" id="inventorySoftwareRows">
-                <div class="debug-empty" id="inventorySoftwareRowsEmpty">暂无软件资产</div>
-              </div>
-            </div>
-            <div class="inventory-workspace">
-              <div class="inventory-target-hero" id="inventoryTargetHero">
-                <div class="debug-empty" id="inventoryTargetHeroEmpty">等待选择宿主软件...</div>
-              </div>
-              <div class="inventory-repair-bar" id="inventoryRepairBar">
-                <div class="inventory-repair-top">
-                  <div class="inventory-repair-copy">
-                    <div class="inventory-repair-title" id="inventoryRepairTitle">当前目标修复</div>
-                    <div class="inventory-repair-note" id="inventoryRepairNote">等待最新 drift 状态...</div>
-                  </div>
-                  <div class="inventory-repair-buttons">
-                    <button id="inventoryReprojectTargetBtn" type="button">重建当前投影</button>
-                    <button id="inventoryRepairAllBtn" type="button">修复全部漂移目标</button>
-                    <button id="inventoryRepairTargetBtn" class="warn" type="button">修复当前目标</button>
-                  </div>
-                </div>
-                <div class="inventory-repair-actions" id="inventoryRepairActions"></div>
-              </div>
-              <div class="inventory-workspace-actions">
-                <button id="inventorySaveBindingsBtn" class="success">保存 Skill 绑定</button>
-                <button id="inventorySelectAllBtn" type="button">全选兼容</button>
-                <button id="inventorySelectDiscoveredBtn" type="button">仅已发现</button>
-                <button id="inventoryClearSelectionBtn" type="button">清空选择</button>
-              </div>
-              <p class="inventory-selection-note" id="inventorySelectionNote">按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 `ce:*` Skill 单独展开。</p>
-              <div class="inventory-skill-list" id="inventorySkillList">
-                <div class="debug-empty" id="inventorySkillEmpty">暂无 Skill 数据</div>
-              </div>
-            </div>
-          </div>
-          <div class="skills-secondary-grid">
-            <div class="skills-subpanel">
-              <div class="skills-subhead">
-                <p class="inventory-quick-title" id="inventorySourcesTitle">Source / Bundle 视图</p>
-                <button id="inventoryDoctorBtn" type="button">健康检查</button>
-              </div>
-              <p class="inventory-doctor-note" id="inventoryDoctorSummary">等待最新状态...</p>
-              <div class="inventory-target-hero" id="inventorySourceHero">
-                <div class="debug-empty" id="inventorySourceHeroEmpty">等待选择 Source / Bundle...</div>
-              </div>
-              <div class="inventory-install-unit-bar" id="inventorySourceDetailScopeBar">
-                <div class="inventory-install-unit-head">
-                  <div class="inventory-repair-copy">
-                    <div class="inventory-repair-title" id="inventorySourceDetailScopeTitle">详情粒度</div>
-                  </div>
-                  <div class="inventory-segmented" id="inventorySourceDetailScopeTabs">
-                    <button type="button" id="inventorySourceDetailScopeCollection" data-inventory-detail-scope="collection">Collection</button>
-                    <button type="button" id="inventorySourceDetailScopeInstallUnit" data-inventory-detail-scope="install_unit">Install Unit</button>
-                  </div>
-                </div>
-              </div>
-              <div class="inventory-install-unit-bar" id="inventorySourceInstallUnitBar">
-                <div class="inventory-install-unit-head">
-                  <div class="inventory-repair-copy">
-                    <div class="inventory-repair-title" id="inventoryInstallUnitsTitle">Install Units</div>
-                    <div class="inventory-repair-note" id="inventoryInstallUnitsNote">在 collection group 与 install unit 之间切换详情粒度。</div>
-                  </div>
-                </div>
-                <div class="inventory-install-unit-rows" id="inventorySourceInstallUnitRows">
-                  <div class="debug-empty" id="inventorySourceInstallUnitRowsEmpty">等待聚合详情...</div>
-                </div>
-              </div>
-              <div class="inventory-install-unit-bar" id="inventoryFanoutPreviewBar">
-                <div class="inventory-install-unit-head">
-                  <div class="inventory-repair-copy">
-                    <div class="inventory-repair-title" id="inventoryFanoutPreviewTitle">动作扇出预览</div>
-                    <div class="inventory-repair-note" id="inventoryFanoutPreviewNote">等待聚合详情...</div>
-                  </div>
-                </div>
-                <div class="inventory-install-unit-rows inventory-fanout-preview-rows" id="inventoryFanoutPreviewRows">
-                  <div class="debug-empty" id="inventoryFanoutPreviewRowsEmpty">等待聚合详情...</div>
-                </div>
-              </div>
-              <div class="inventory-install-unit-bar" id="inventoryOperationPlanBar">
-                <div class="inventory-install-unit-head">
-                  <div class="inventory-repair-copy">
-                    <div class="inventory-repair-title" id="inventoryOperationPlanTitle">运维计划预览</div>
-                    <div class="inventory-repair-note" id="inventoryOperationPlanNote">等待聚合详情...</div>
-                  </div>
-                </div>
-                <div class="inventory-install-unit-rows inventory-operation-plan-rows" id="inventoryOperationPlanRows">
-                  <div class="debug-empty" id="inventoryOperationPlanRowsEmpty">等待聚合详情...</div>
-                </div>
-              </div>
-              <div class="inventory-repair-bar" id="inventoryInstallUnitBar">
-                <div class="inventory-repair-top">
-                  <div class="inventory-repair-copy">
-                    <div class="inventory-repair-title" id="inventoryInstallUnitTitle">当前 Install Unit 运维</div>
-                    <div class="inventory-repair-note" id="inventoryInstallUnitNote">等待聚合详情...</div>
-                  </div>
-                  <div class="inventory-repair-buttons">
-                    <button id="inventoryRefreshInstallUnitBtn" type="button">刷新当前 Unit</button>
-                    <button id="inventorySyncInstallUnitBtn" type="button">同步当前 Unit</button>
-                    <button id="inventoryUpdateInstallUnitBtn" type="button">更新当前聚合</button>
-                    <button id="inventoryRepairInstallUnitBtn" class="warn" type="button">修复当前聚合</button>
-                    <button id="inventoryDeployInstallUnitBtn" class="success" type="button">部署当前 Unit</button>
-                  </div>
-                </div>
-              </div>
-              <div class="inventory-source-rows" id="inventorySourceRows">
-                <div class="debug-empty" id="inventorySourceRowsEmpty">暂无 Source 数据</div>
-              </div>
-            </div>
-            <div class="skills-subpanel">
-              <div class="skills-subhead">
-                <p class="inventory-quick-title" id="inventoryDeployTitle">Deploy Targets</p>
-                <div class="skills-subhead-tools">
+          <div class="inventory-shell">
+            <div class="inventory-grid">
+              <div class="inventory-software-rail">
+                <div class="inventory-controls">
+                  <label class="cfg-label">
+                    <span id="inventorySoftwareLabel">选择软件</span>
+                    <select id="inventorySoftwareSelect"></select>
+                  </label>
                   <div class="inventory-segment-block">
-                    <span class="inventory-segment-label" id="inventoryDeployScopeFilterLabel">显示范围</span>
-                    <div class="inventory-segmented" id="inventoryDeployScopeTabs">
-                      <button type="button" id="inventoryDeployScopeGlobal" data-inventory-deploy-scope="global">全局</button>
-                      <button type="button" id="inventoryDeployScopeWorkspace" data-inventory-deploy-scope="workspace">工作区</button>
+                    <span class="inventory-segment-label" id="inventoryScopeLabel">绑定范围</span>
+                    <div class="inventory-segmented" id="inventoryScopeTabs">
+                      <button type="button" id="inventoryScopeTabGlobal" data-inventory-scope="global">全局</button>
+                      <button type="button" id="inventoryScopeTabWorkspace" data-inventory-scope="workspace">工作区</button>
+                    </div>
+                    <select id="inventoryScopeSelect" class="inventory-hidden-select" aria-hidden="true" tabindex="-1">
+                      <option value="global" id="inventoryScopeOptGlobal">全局</option>
+                      <option value="workspace" id="inventoryScopeOptWorkspace">工作区</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="inventory-filter-tools">
+                  <label class="cfg-label">
+                    <span id="inventoryKindFilterLabel">软件类型</span>
+                    <select id="inventoryKindFilterSelect">
+                      <option value="all" id="inventoryKindOptAll">全部</option>
+                      <option value="cli" id="inventoryKindOptCli">CLI</option>
+                      <option value="gui" id="inventoryKindOptGui">GUI</option>
+                      <option value="claw" id="inventoryKindOptClaw">CLAW</option>
+                      <option value="other" id="inventoryKindOptOther">OTHER</option>
+                    </select>
+                  </label>
+                  <label class="cfg-label">
+                    <span id="inventoryShowUninstalledLabel">显示未安装</span>
+                    <input id="inventoryShowUninstalledToggle" type="checkbox">
+                  </label>
+                </div>
+                <p class="inventory-quick-title" id="inventoryQuickTitle">宿主速览</p>
+                <div class="inventory-software-rows" id="inventorySoftwareRows">
+                  <div class="debug-empty" id="inventorySoftwareRowsEmpty">暂无软件资产</div>
+                </div>
+              </div>
+              <div class="inventory-workspace">
+                <div class="inventory-workspace-head">
+                  <div class="inventory-workspace-copy">
+                    <p class="inventory-workspace-kicker">Primary workspace</p>
+                    <h3 class="inventory-workspace-title">技能选择与绑定</h3>
+                    <p class="inventory-workspace-note">围绕当前宿主软件完成 bundle 选择、绑定保存与漂移修复。Source / Deploy 的深入细节已移到右侧检查器，配置与导入则统一通过抽屉处理。</p>
+                  </div>
+                </div>
+                <div class="inventory-target-hero" id="inventoryTargetHero">
+                  <div class="debug-empty" id="inventoryTargetHeroEmpty">等待选择宿主软件...</div>
+                </div>
+                <div class="inventory-repair-bar" id="inventoryRepairBar">
+                  <div class="inventory-repair-top">
+                    <div class="inventory-repair-copy">
+                      <div class="inventory-repair-title" id="inventoryRepairTitle">当前目标修复</div>
+                      <div class="inventory-repair-note" id="inventoryRepairNote">等待最新 drift 状态...</div>
+                    </div>
+                    <div class="inventory-repair-buttons">
+                      <button id="inventoryReprojectTargetBtn" type="button">重建当前投影</button>
+                      <button id="inventoryRepairAllBtn" type="button">修复全部漂移目标</button>
+                      <button id="inventoryRepairTargetBtn" class="warn" type="button">修复当前目标</button>
                     </div>
                   </div>
-                  <div class="inventory-segment-block">
-                    <span class="inventory-segment-label" id="inventoryDeployInstallFilterLabel">显示对象</span>
-                    <div class="inventory-segmented" id="inventoryDeployInstallTabs">
-                      <button type="button" id="inventoryDeployInstallInstalled" data-inventory-deploy-install="installed">已安装</button>
-                      <button type="button" id="inventoryDeployInstallAll" data-inventory-deploy-install="all">全部</button>
+                  <div class="inventory-repair-actions" id="inventoryRepairActions"></div>
+                </div>
+                <div class="inventory-workspace-actions">
+                  <button id="inventorySaveBindingsBtn" class="success">保存 Skill 绑定</button>
+                  <button id="inventorySelectAllBtn" type="button">全选兼容</button>
+                  <button id="inventorySelectDiscoveredBtn" type="button">仅已发现</button>
+                  <button id="inventoryClearSelectionBtn" type="button">清空选择</button>
+                </div>
+                <p class="inventory-selection-note" id="inventorySelectionNote">按 Source package 管理。像 Compound Engineering 会以一个聚合包显示，而不是将每条 `ce:*` Skill 单独展开。</p>
+                <div class="inventory-skill-list" id="inventorySkillList">
+                  <div class="debug-empty" id="inventorySkillEmpty">暂无 Skill 数据</div>
+                </div>
+              </div>
+            </div>
+            <aside class="inventory-inspector">
+              <div class="inventory-inspector-head">
+                <div class="inventory-inspector-copy">
+                  <p class="inventory-inspector-kicker">Inspector</p>
+                  <p class="inventory-inspector-title">右侧检查器</p>
+                </div>
+                <div class="inventory-segmented" id="inventoryInspectorTabs">
+                  <button type="button" id="inventoryInspectorTabSource" data-inventory-inspector="source">Source</button>
+                  <button type="button" id="inventoryInspectorTabDeploy" data-inventory-inspector="deploy">Deploy</button>
+                  <button type="button" id="inventoryInspectorTabUtility" data-inventory-inspector="utility">Utility</button>
+                </div>
+              </div>
+              <div class="inventory-inspector-panel" id="inventoryInspectorSourcePanel">
+                <div class="skills-subpanel inventory-inspector-card">
+                  <div class="skills-subhead">
+                    <p class="inventory-quick-title" id="inventorySourcesTitle">Source / Bundle 视图</p>
+                  </div>
+                  <div class="inventory-target-hero" id="inventorySourceHero">
+                    <div class="debug-empty" id="inventorySourceHeroEmpty">等待选择 Source / Bundle...</div>
+                  </div>
+                  <div class="inventory-install-unit-bar" id="inventorySourceDetailScopeBar">
+                    <div class="inventory-install-unit-head">
+                      <div class="inventory-repair-copy">
+                        <div class="inventory-repair-title" id="inventorySourceDetailScopeTitle">详情粒度</div>
+                      </div>
+                      <div class="inventory-segmented" id="inventorySourceDetailScopeTabs">
+                        <button type="button" id="inventorySourceDetailScopeCollection" data-inventory-detail-scope="collection">Collection</button>
+                        <button type="button" id="inventorySourceDetailScopeInstallUnit" data-inventory-detail-scope="install_unit">Install Unit</button>
+                      </div>
                     </div>
+                  </div>
+                  <div class="inventory-install-unit-bar" id="inventorySourceInstallUnitBar">
+                    <div class="inventory-install-unit-head">
+                      <div class="inventory-repair-copy">
+                        <div class="inventory-repair-title" id="inventoryInstallUnitsTitle">Install Units</div>
+                        <div class="inventory-repair-note" id="inventoryInstallUnitsNote">在 collection group 与 install unit 之间切换详情粒度。</div>
+                      </div>
+                    </div>
+                    <div class="inventory-install-unit-rows" id="inventorySourceInstallUnitRows">
+                      <div class="debug-empty" id="inventorySourceInstallUnitRowsEmpty">等待聚合详情...</div>
+                    </div>
+                  </div>
+                  <div class="inventory-install-unit-bar" id="inventoryFanoutPreviewBar">
+                    <div class="inventory-install-unit-head">
+                      <div class="inventory-repair-copy">
+                        <div class="inventory-repair-title" id="inventoryFanoutPreviewTitle">动作扇出预览</div>
+                        <div class="inventory-repair-note" id="inventoryFanoutPreviewNote">等待聚合详情...</div>
+                      </div>
+                    </div>
+                    <div class="inventory-install-unit-rows inventory-fanout-preview-rows" id="inventoryFanoutPreviewRows">
+                      <div class="debug-empty" id="inventoryFanoutPreviewRowsEmpty">等待聚合详情...</div>
+                    </div>
+                  </div>
+                  <div class="inventory-install-unit-bar" id="inventoryOperationPlanBar">
+                    <div class="inventory-install-unit-head">
+                      <div class="inventory-repair-copy">
+                        <div class="inventory-repair-title" id="inventoryOperationPlanTitle">运维计划预览</div>
+                        <div class="inventory-repair-note" id="inventoryOperationPlanNote">等待聚合详情...</div>
+                      </div>
+                    </div>
+                    <div class="inventory-install-unit-rows inventory-operation-plan-rows" id="inventoryOperationPlanRows">
+                      <div class="debug-empty" id="inventoryOperationPlanRowsEmpty">等待聚合详情...</div>
+                    </div>
+                  </div>
+                  <div class="inventory-repair-bar" id="inventoryInstallUnitBar">
+                    <div class="inventory-repair-top">
+                      <div class="inventory-repair-copy">
+                        <div class="inventory-repair-title" id="inventoryInstallUnitTitle">当前 Install Unit 运维</div>
+                        <div class="inventory-repair-note" id="inventoryInstallUnitNote">等待聚合详情...</div>
+                      </div>
+                      <div class="inventory-repair-buttons">
+                        <button id="inventoryRefreshInstallUnitBtn" type="button">刷新当前 Unit</button>
+                        <button id="inventorySyncInstallUnitBtn" type="button">同步当前 Unit</button>
+                        <button id="inventoryUpdateInstallUnitBtn" type="button">更新当前聚合</button>
+                        <button id="inventoryRepairInstallUnitBtn" class="warn" type="button">修复当前聚合</button>
+                        <button id="inventoryDeployInstallUnitBtn" class="success" type="button">部署当前 Unit</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="inventory-source-rows" id="inventorySourceRows">
+                    <div class="debug-empty" id="inventorySourceRowsEmpty">暂无 Source 数据</div>
                   </div>
                 </div>
               </div>
-              <div class="inventory-deploy-rows" id="inventoryDeployRows">
-                <div class="debug-empty" id="inventoryDeployRowsEmpty">暂无 Deploy Target</div>
+              <div class="inventory-inspector-panel hidden" id="inventoryInspectorDeployPanel">
+                <div class="skills-subpanel inventory-inspector-card">
+                  <div class="skills-subhead">
+                    <p class="inventory-quick-title" id="inventoryDeployTitle">Deploy Targets</p>
+                    <div class="skills-subhead-tools">
+                      <div class="inventory-segment-block">
+                        <span class="inventory-segment-label" id="inventoryDeployScopeFilterLabel">显示范围</span>
+                        <div class="inventory-segmented" id="inventoryDeployScopeTabs">
+                          <button type="button" id="inventoryDeployScopeGlobal" data-inventory-deploy-scope="global">全局</button>
+                          <button type="button" id="inventoryDeployScopeWorkspace" data-inventory-deploy-scope="workspace">工作区</button>
+                        </div>
+                      </div>
+                      <div class="inventory-segment-block">
+                        <span class="inventory-segment-label" id="inventoryDeployInstallFilterLabel">显示对象</span>
+                        <div class="inventory-segmented" id="inventoryDeployInstallTabs">
+                          <button type="button" id="inventoryDeployInstallInstalled" data-inventory-deploy-install="installed">已安装</button>
+                          <button type="button" id="inventoryDeployInstallAll" data-inventory-deploy-install="all">全部</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="inventory-deploy-rows" id="inventoryDeployRows">
+                    <div class="debug-empty" id="inventoryDeployRowsEmpty">暂无 Deploy Target</div>
+                  </div>
+                </div>
               </div>
-            </div>
+              <div class="inventory-inspector-panel hidden" id="inventoryInspectorUtilityPanel">
+                <div class="skills-subpanel inventory-inspector-card">
+                  <div class="skills-subhead">
+                    <p class="inventory-quick-title">抽屉入口</p>
+                  </div>
+                  <p class="inventory-utility-copy">把导入、配置、使用指引和 AI 助手统一作为右侧抽屉打开，减少主界面的上下跳转和信息打断。</p>
+                  <div class="inventory-inspector-actions">
+                    <button type="button" id="inventoryOpenImportDrawerBtn">导入 Source</button>
+                    <button type="button" id="inventoryOpenConfigDrawerBtn">系统配置</button>
+                    <button type="button" id="inventoryOpenGuideDrawerBtn">使用指引</button>
+                    <button type="button" id="inventoryOpenAiDrawerBtn" class="primary">AI 助手</button>
+                  </div>
+                </div>
+                <div class="skills-subpanel inventory-inspector-card">
+                  <div class="skills-subhead">
+                    <p class="inventory-quick-title">运行健康</p>
+                    <button id="inventoryDoctorBtn" type="button">健康检查</button>
+                  </div>
+                  <p class="inventory-doctor-note" id="inventoryDoctorSummary">等待最新状态...</p>
+                </div>
+                <div class="skills-subpanel inventory-inspector-card">
+                  <div class="skills-subhead">
+                    <p class="inventory-quick-title">当前软件元数据</p>
+                  </div>
+                  <div class="inventory-soft-meta" id="inventorySoftwareMeta">-</div>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
 
@@ -2782,6 +3172,7 @@
       inventoryDeployInstallFilter: "installed",
       inventoryKindFilter: "all",
       inventoryShowUninstalled: false,
+      inventoryInspectorTab: "source",
       inventoryDraftSkillIds: [],
       inventoryVisibleCompatibleSkillIds: [],
       inventoryVisibleDiscoveredSkillIds: [],
@@ -3951,6 +4342,22 @@
         const filter = normalizeInventoryDeployInstallFilter(el.getAttribute("data-inventory-deploy-install"));
         el.classList.toggle("active", filter === activeInstall);
       });
+    }
+
+    function normalizeInventoryInspectorTab(value) {
+      const text = String(value || "").trim().toLowerCase();
+      return ["source", "deploy", "utility"].includes(text) ? text : "source";
+    }
+
+    function syncInventoryInspectorTabs() {
+      const activeTab = normalizeInventoryInspectorTab(state.inventoryInspectorTab);
+      document.querySelectorAll("#inventoryInspectorTabs [data-inventory-inspector]").forEach((el) => {
+        const tab = normalizeInventoryInspectorTab(el.getAttribute("data-inventory-inspector"));
+        el.classList.toggle("active", tab === activeTab);
+      });
+      $("inventoryInspectorSourcePanel").classList.toggle("hidden", activeTab !== "source");
+      $("inventoryInspectorDeployPanel").classList.toggle("hidden", activeTab !== "deploy");
+      $("inventoryInspectorUtilityPanel").classList.toggle("hidden", activeTab !== "utility");
     }
 
     function syncInventorySourceDetailScopeTabs() {
@@ -5831,6 +6238,7 @@
 
     function renderInventoryPanel() {
       const summaryEl = $("inventorySummary");
+      const statusStripEl = $("inventoryStatusStrip");
       const selectEl = $("inventorySoftwareSelect");
       const scopeEl = $("inventoryScopeSelect");
       const sourceCardFontEl = $("inventorySourceCardFontSizeSelect");
@@ -5888,6 +6296,7 @@
       const deployInstallFilter = normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter);
       const kindFilter = normalizeInventoryKindFilter(state.inventoryKindFilter);
       const showUninstalled = Boolean(state.inventoryShowUninstalled);
+      const inspectorTab = normalizeInventoryInspectorTab(state.inventoryInspectorTab);
       state.inventorySelectedScope = bindingScope;
       state.inventorySourceCardView = sourceCardView;
       state.inventorySourceCardFontSize = sourceCardFontSize;
@@ -5901,6 +6310,7 @@
       state.inventoryDeployInstallFilter = deployInstallFilter;
       state.inventoryKindFilter = kindFilter;
       state.inventoryShowUninstalled = showUninstalled;
+      state.inventoryInspectorTab = inspectorTab;
       if (scopeEl && scopeEl.value !== bindingScope) {
         scopeEl.value = bindingScope;
       }
@@ -5933,6 +6343,7 @@
       syncInventorySourceViewModeTabs();
       syncInventoryDeployViewModeTabs();
       syncInventoryDeployFilterTabs();
+      syncInventoryInspectorTabs();
       sourceDetailScopeTitleEl.textContent = t("inventory_detail_scope_title");
       fanoutPreviewTitleEl.textContent = t("inventory_fanout_preview_title");
       operationPlanTitleEl.textContent = t("inventory_operation_plan_title");
@@ -6575,6 +6986,13 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
           ? (showUninstalled ? t("no_rows") : t("inventory_no_installed"))
           : t("inventory_no_software");
         summaryEl.textContent = noVisibleSoftwareText;
+        statusStripEl.innerHTML = `
+          <div class="inventory-status-card" data-tone="warn">
+            <div class="inventory-status-label">Inventory</div>
+            <div class="inventory-status-value">待接入</div>
+            <div class="inventory-status-note">${escapeHtml(noVisibleSoftwareText)}</div>
+          </div>
+        `;
         selectEl.innerHTML = `<option value="">${escapeHtml(noVisibleSoftwareText)}</option>`;
         metaEl.textContent = "-";
         targetHeroEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_target_empty"))}</div>`;
@@ -6651,6 +7069,45 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
       const hiddenUninstalledCandidates = Math.max(0, skillCapableRows.length - softwareRows.length);
+      const statusCards = [
+        {
+          label: "当前宿主",
+          value: selectedSoftware.display_name || selectedSoftwareId || "-",
+          note: `${String(selectedSoftware.software_kind || "other").toUpperCase()} · ${inventoryScopeLabel(bindingScope)}`,
+          tone: "accent",
+        },
+        {
+          label: "兼容聚合",
+          value: String(compatibleSources.length),
+          note: `可见源 ${state.inventoryVisibleCompatibleSkillIds.length} · 已发现 ${state.inventoryVisibleDiscoveredSkillIds.length}`,
+          tone: compatibleSources.length ? "success" : "warn",
+        },
+        {
+          label: "已选 Source",
+          value: String(state.inventoryDraftSkillIds.length),
+          note: `绑定目标 ${currentTargetId}`,
+          tone: state.inventoryDraftSkillIds.length ? "accent" : "neutral",
+        },
+        {
+          label: "Source 同步",
+          value: String(counts.source_syncable_total || 0),
+          note: `OK ${counts.source_synced_total || 0} · stale ${counts.source_stale_total || 0}`,
+          tone: (counts.source_syncable_total || 0) > 0 || (counts.source_stale_total || 0) > 0 ? "warn" : "success",
+        },
+        {
+          label: "Deploy 漂移",
+          value: String(repairableTotal),
+          note: `ready ${counts.deploy_ready_total || 0} · unavailable ${counts.deploy_unavailable_total || 0}`,
+          tone: repairableTotal ? "warn" : "success",
+        },
+      ];
+      statusStripEl.innerHTML = statusCards.map((card) => `
+        <div class="inventory-status-card" data-tone="${escapeHtml(card.tone || "neutral")}">
+          <div class="inventory-status-label">${escapeHtml(card.label)}</div>
+          <div class="inventory-status-value">${escapeHtml(card.value)}</div>
+          <div class="inventory-status-note">${escapeHtml(card.note)}</div>
+        </div>
+      `).join("");
       if (actionableInstallUnitId) {
         installUnitNoteEl.textContent = t("inventory_install_unit_note_ready", {
           installUnit: actionableInstallUnitId,
@@ -8636,6 +9093,26 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         openInventoryImportModal();
       });
 
+      $("inventoryOpenImportDrawerBtn").addEventListener("click", () => {
+        state.inventoryInspectorTab = "utility";
+        openInventoryImportModal();
+      });
+
+      $("inventoryOpenConfigDrawerBtn").addEventListener("click", async () => {
+        state.inventoryInspectorTab = "utility";
+        await openConfigModal();
+      });
+
+      $("inventoryOpenGuideDrawerBtn").addEventListener("click", () => {
+        state.inventoryInspectorTab = "utility";
+        openGuideModal("user");
+      });
+
+      $("inventoryOpenAiDrawerBtn").addEventListener("click", () => {
+        state.inventoryInspectorTab = "utility";
+        openAiModal();
+      });
+
       $("inventoryImportCloseBtn").addEventListener("click", () => {
         closeInventoryImportModal();
       });
@@ -8781,6 +9258,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         if (!itemEl) return;
         const sourceKey = String(itemEl.getAttribute("data-inventory-source-key") || "").trim();
         if (!sourceKey || sourceKey === String(state.inventorySelectedSourceKey || "").trim()) return;
+        state.inventoryInspectorTab = "source";
         state.inventorySelectedSourceKey = sourceKey;
         state.inventorySourceDetail = null;
         state.inventorySelectedDetailInstallUnitId = "";
@@ -8799,6 +9277,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         if (!el) return;
         const installUnitId = String(el.getAttribute("data-inventory-install-unit-id") || "").trim();
         if (installUnitId === String(state.inventorySelectedDetailInstallUnitId || "").trim()) return;
+        state.inventoryInspectorTab = "source";
         state.inventorySelectedDetailInstallUnitId = installUnitId;
         renderInventoryPanel();
       });
@@ -8898,6 +9377,15 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         if (!el) return;
         state.inventoryDeployScopeFilter = normalizeInventoryDeployScopeFilter(el.getAttribute("data-inventory-deploy-scope"));
         persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryInspectorTabs").addEventListener("click", (evt) => {
+        const el = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-inspector]")
+          : null;
+        if (!el) return;
+        state.inventoryInspectorTab = normalizeInventoryInspectorTab(el.getAttribute("data-inventory-inspector"));
         renderInventoryPanel();
       });
 
@@ -9007,6 +9495,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const targetId = String(el.getAttribute("data-inventory-target-id") || "").trim();
         if (!targetId) return;
         const [softwareId, scope = "global"] = targetId.split(":");
+        state.inventoryInspectorTab = "deploy";
         state.inventorySelectedSoftwareId = softwareId;
         state.inventorySelectedScope = normalizeInventoryScope(scope);
         ensureInventorySoftwareVisible(softwareId);
