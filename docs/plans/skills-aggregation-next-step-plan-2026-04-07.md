@@ -291,6 +291,7 @@ collection group 不能替代 install unit 成为唯一真相。
   - `manual_local` 现在按 `root#subpath` 形成 install unit，并归到稳定的 `source_root` collection group
   - install-unit / collection-group row contract 已补 `locator` 与 `source_subpaths`
   - WebUI 已能把 manual source 渲染成 `Source Repository` / `Source Root`，并显示 subpath boundary summary
+  - WebUI hero/detail 已新增 `边界 / 扇出` 说明区，并把 collection-group 动作文案明确为 fan-out 到 install units / subpaths
 
 ## Phase E：Provenance foundation（新的第一优先级）
 

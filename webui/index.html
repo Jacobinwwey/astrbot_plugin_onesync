@@ -2878,8 +2878,8 @@
         inventory_sync_all_running: "同步中",
         inventory_install_unit_title: "当前聚合运维",
         inventory_install_unit_note_idle: "围绕真实 install unit 或 collection group 执行 refresh / sync / update / deploy，而不是对每条 leaf skill 分别操作。",
-        inventory_install_unit_note_ready: "当前将操作 install unit {installUnit}，目标宿主 {target}。",
-        inventory_install_unit_note_group: "当前将操作 collection group {collectionGroup}（{count} 个 install unit），目标宿主 {target}。",
+        inventory_install_unit_note_ready: "当前将操作 install unit {installUnit}（直接维护边界），目标宿主 {target}。",
+        inventory_install_unit_note_group: "当前将操作 collection group {collectionGroup}，目标宿主 {target}。该动作会扇出到 {count} 个 install unit / {subpathCount} 个子路径边界。",
         inventory_install_unit_note_empty: "当前没有可执行的聚合动作。",
         inventory_install_unit_refresh: "刷新当前聚合",
         inventory_install_unit_refreshing: "刷新中",
@@ -3019,6 +3019,11 @@
         inventory_aggregate_kind_install_unit: "Install Unit",
         inventory_aggregate_kind_source_repo: "源码仓库组",
         inventory_aggregate_kind_source_root: "本地根目录组",
+        inventory_boundary_title: "边界 / 扇出",
+        inventory_boundary_collection: "Collection 边界: {kind} · {locator}",
+        inventory_boundary_install_unit: "Install unit 边界: {installUnit}",
+        inventory_boundary_fanout: "扇出范围: {count} 个 install unit",
+        inventory_boundary_subpaths: "子路径边界: {subpaths}",
         inventory_source_sync: "同步源",
         inventory_source_syncing: "同步中",
         inventory_sync_pending: "未同步",
@@ -3327,8 +3332,8 @@
         inventory_sync_all_running: "Syncing",
         inventory_install_unit_title: "Current Aggregate Operations",
         inventory_install_unit_note_idle: "Operate on real install units or collection groups for refresh, sync, update, and deploy instead of touching every leaf skill separately.",
-        inventory_install_unit_note_ready: "Current action scope: install unit {installUnit} targeting {target}.",
-        inventory_install_unit_note_group: "Current action scope: collection group {collectionGroup} with {count} install units targeting {target}.",
+        inventory_install_unit_note_ready: "Current action scope: install unit {installUnit} targeting {target}; this is the direct maintenance boundary.",
+        inventory_install_unit_note_group: "Current action scope: collection group {collectionGroup} targeting {target}; actions fan out to {count} install units / {subpathCount} subpaths.",
         inventory_install_unit_note_empty: "No aggregate action is available for the current selection.",
         inventory_install_unit_refresh: "Refresh Aggregate",
         inventory_install_unit_refreshing: "Refreshing",
@@ -3468,6 +3473,11 @@
         inventory_aggregate_kind_install_unit: "Install Unit",
         inventory_aggregate_kind_source_repo: "Source Repository",
         inventory_aggregate_kind_source_root: "Source Root",
+        inventory_boundary_title: "Boundary / Fan-out",
+        inventory_boundary_collection: "Collection boundary: {kind} · {locator}",
+        inventory_boundary_install_unit: "Install-unit boundary: {installUnit}",
+        inventory_boundary_fanout: "Fan out: {count} install units",
+        inventory_boundary_subpaths: "Subpath boundaries: {subpaths}",
         inventory_source_sync: "Sync Source",
         inventory_source_syncing: "Syncing",
         inventory_sync_pending: "unsynced",
@@ -4499,6 +4509,78 @@
       return `${subpaths.slice(0, limit).join(", ")} +${subpaths.length - limit}`;
     }
 
+    function inventoryBoundarySubpathList(item, installUnitRows = []) {
+      const directSubpaths = inventorySourceSubpathList(item);
+      const rowSubpaths = Array.isArray(installUnitRows)
+        ? installUnitRows.flatMap((row) => inventorySourceSubpathList(row))
+        : [];
+      return [...new Set(
+        [...directSubpaths, ...rowSubpaths]
+          .map((entry) => String(entry || "").trim())
+          .filter(Boolean),
+      )];
+    }
+
+    function inventoryBoundaryNotes({
+      collectionGroup = null,
+      installUnit = null,
+      source = null,
+      installUnitRows = [],
+    } = {}) {
+      const notes = [];
+      const boundaryItem = collectionGroup && typeof collectionGroup === "object" && Object.keys(collectionGroup).length
+        ? collectionGroup
+        : (installUnit && typeof installUnit === "object" && Object.keys(installUnit).length
+          ? installUnit
+          : source);
+      if (!boundaryItem || typeof boundaryItem !== "object") {
+        return notes;
+      }
+
+      const boundaryKind = inventoryAggregateKindLabel(boundaryItem);
+      const boundaryLocator = String(
+        boundaryItem.locator
+        || boundaryItem.source_path
+        || boundaryItem.install_ref
+        || "-",
+      ).trim() || "-";
+      notes.push(t("inventory_boundary_collection", {
+        kind: boundaryKind,
+        locator: boundaryLocator,
+      }));
+
+      const normalizedInstallUnitRows = Array.isArray(installUnitRows)
+        ? installUnitRows.filter((row) => row && typeof row === "object")
+        : [];
+      const boundarySubpaths = inventoryBoundarySubpathList(boundaryItem, normalizedInstallUnitRows);
+      if (installUnit && typeof installUnit === "object" && String(installUnit.install_unit_id || "").trim()) {
+        const installUnitBoundary = inventorySourceSubpathSummary(installUnit)
+          || String(installUnit.install_ref || installUnit.install_unit_id || "").trim()
+          || "-";
+        notes.push(t("inventory_boundary_install_unit", {
+          installUnit: installUnitBoundary,
+        }));
+      }
+      if (collectionGroup && typeof collectionGroup === "object" && String(collectionGroup.collection_group_id || "").trim()) {
+        const installUnitCount = normalizedInstallUnitRows.length
+          || Number(collectionGroup.install_unit_count || 0)
+          || 0;
+        notes.push(t("inventory_boundary_fanout", {
+          count: installUnitCount,
+        }));
+        if (boundarySubpaths.length) {
+          const subpathSummary = boundarySubpaths.length <= 3
+            ? boundarySubpaths.join(", ")
+            : `${boundarySubpaths.slice(0, 3).join(", ")} +${boundarySubpaths.length - 3}`;
+          notes.push(t("inventory_boundary_subpaths", {
+            subpaths: subpathSummary,
+          }));
+        }
+      }
+
+      return notes;
+    }
+
     function inventoryIsMeaningfulCollectionGroupRow(item) {
       if (!item || typeof item !== "object") {
         return false;
@@ -5445,9 +5527,8 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
         const detailWarnings = sourceDetail && Array.isArray(sourceDetail.warnings)
           ? sourceDetail.warnings.map((item) => String(item || "").trim()).filter(Boolean)
           : [];
-        const heroKind = detailCollection
-          ? "Collection Group"
-          : (detailInstallUnit ? "Install Unit" : "Source");
+        const heroKindItem = detailCollection || detailInstallUnit || detailSource || selectedSourceRow;
+        const heroKind = inventoryAggregateKindLabel(heroKindItem);
         const heroTitle = String(
           (detailCollection && detailCollection.display_name)
           || (detailInstallUnit && detailInstallUnit.display_name)
@@ -5483,6 +5564,12 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
         const heroSubpathLabel = heroSubpaths.length > 1
           ? t("inventory_skill_meta_subpaths")
           : t("inventory_skill_meta_subpath");
+        const boundaryNotes = inventoryBoundaryNotes({
+          collectionGroup: detailCollection,
+          installUnit: detailInstallUnit,
+          source: detailSource || selectedSourceRow,
+          installUnitRows: detailInstallUnitRows,
+        });
         const heroManager = String(
           selectedSourceRow.install_manager
           || selectedSourceRow.managed_by
@@ -5620,6 +5707,14 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             <div class="inventory-target-metric">
               <div class="label">Checked</div>
               <div class="value">${escapeHtml(toLocalTime(checkedAt))}</div>
+            </div>
+          </div>
+          <div class="inventory-target-drift">
+            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_boundary_title"))}</div>
+            <div class="inventory-target-drift-list">
+              ${boundaryNotes.length
+                ? boundaryNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">No boundary notes yet.</div>`}
             </div>
           </div>
           <div class="inventory-target-drift">
@@ -5790,6 +5885,9 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const detailInstallUnitRows = state.inventorySourceDetail && Array.isArray(state.inventorySourceDetail.install_unit_rows)
         ? state.inventorySourceDetail.install_unit_rows
         : [];
+      const actionableAggregateSubpathCount = actionableAggregate && actionableAggregate.aggregate
+        ? inventoryBoundarySubpathList(actionableAggregate.aggregate, detailInstallUnitRows).length
+        : 0;
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
       const hiddenUninstalledCandidates = Math.max(0, skillCapableRows.length - softwareRows.length);
@@ -5802,6 +5900,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         installUnitNoteEl.textContent = t("inventory_install_unit_note_group", {
           collectionGroup: actionableCollectionGroupId,
           count: Number(actionableAggregate && actionableAggregate.installUnitCount || 0) || detailInstallUnitRows.length || 1,
+          subpathCount: actionableAggregateSubpathCount,
           target: currentTargetId,
         });
       } else if (selectedSourceRow) {

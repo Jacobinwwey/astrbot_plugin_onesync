@@ -51,6 +51,19 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_aggregate_kind_source_repo", html)
         self.assertIn("inventory_aggregate_kind_source_root", html)
         self.assertIn("function inventorySourceSubpathSummary(", html)
+        self.assertIn("inventory_boundary_title", html)
+        self.assertIn("inventory_boundary_collection", html)
+        self.assertIn("inventory_boundary_install_unit", html)
+        self.assertIn("inventory_boundary_fanout", html)
+        self.assertIn("inventory_boundary_subpaths", html)
+        self.assertIn("function inventoryBoundaryNotes(", html)
+
+    def test_inventory_panel_exposes_collection_group_fanout_action_note(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("fan out", html)
+        self.assertIn("扇出", html)
+        self.assertIn("subpathCount", html)
 
     def test_inventory_panel_doctor_summary_reads_aggregate_health(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
