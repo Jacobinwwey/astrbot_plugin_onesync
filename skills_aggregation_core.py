@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -130,6 +131,8 @@ LEGACY_FAMILY_LABEL_OVERRIDES = {
     "ui": "UI",
     "ux": "UX",
 }
+
+_CACHE_SIMILARITY_MATCH_THRESHOLD = 0.97
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -453,6 +456,17 @@ def _skill_markdown_signature(path_text: str) -> str:
     return hashlib.sha1(payload).hexdigest()
 
 
+@lru_cache(maxsize=1024)
+def _skill_markdown_text(path_text: str) -> str:
+    skill_markdown = _skill_markdown_path(path_text)
+    if not skill_markdown:
+        return ""
+    try:
+        return skill_markdown.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
 @lru_cache(maxsize=512)
 def _candidate_package_cache_skill_dirs(skill_dir_name: str, cache_roots: tuple[str, ...]) -> tuple[str, ...]:
     normalized_name = str(skill_dir_name or "").strip()
@@ -486,6 +500,52 @@ def _mirror_package_details(candidate_path: str) -> tuple[str, str]:
     if package_name:
         return package_name, "cache_package_json"
     return "", ""
+
+
+def _infer_npx_package_from_cache_similarity(source: dict[str, Any]) -> tuple[str, str]:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return "", ""
+
+    local_text = _skill_markdown_text(source_path)
+    if not local_text:
+        return "", ""
+
+    skill_dir_name = ""
+    source_dir = _safe_expand_path(source_path)
+    if source_dir:
+        skill_dir_name = str(source_dir.name or "").strip()
+    if not skill_dir_name:
+        member_names = _to_str_list(source.get("member_skill_preview", []))
+        skill_dir_name = str(member_names[0] if member_names else source.get("display_name") or "").strip()
+    if not skill_dir_name:
+        return "", ""
+
+    cache_roots = _configured_package_cache_roots()
+    if not cache_roots:
+        return "", ""
+
+    normalized_source_path = _normalize_path_text(source_path)
+    package_scores: dict[str, float] = {}
+    for candidate in _candidate_package_cache_skill_dirs(skill_dir_name, cache_roots):
+        if _normalize_path_text(candidate) == normalized_source_path:
+            continue
+        package_name, _ = _mirror_package_details(candidate)
+        if not package_name:
+            continue
+        candidate_text = _skill_markdown_text(candidate)
+        if not candidate_text:
+            continue
+        ratio = SequenceMatcher(None, local_text, candidate_text).ratio()
+        if ratio < _CACHE_SIMILARITY_MATCH_THRESHOLD:
+            continue
+        previous = package_scores.get(package_name, 0.0)
+        if ratio > previous:
+            package_scores[package_name] = ratio
+
+    if len(package_scores) != 1:
+        return "", ""
+    return next(iter(package_scores.keys())), "cache_similarity_match"
 
 
 def _infer_npx_package_from_cache_mirror(source: dict[str, Any]) -> tuple[str, str]:
@@ -524,14 +584,14 @@ def _infer_npx_package_from_cache_mirror(source: dict[str, Any]) -> tuple[str, s
         package_matches.setdefault(package_name, set()).add(strategy)
 
     if len(package_matches) != 1:
-        return "", ""
+        return _infer_npx_package_from_cache_similarity(source)
 
     package_name, strategies = next(iter(package_matches.items()))
     if "cache_path_heuristic" in strategies:
         return package_name, "cache_path_heuristic"
     if "cache_package_json" in strategies:
         return package_name, "cache_package_json"
-    return "", ""
+    return _infer_npx_package_from_cache_similarity(source)
 
 
 def _infer_npx_package(source: dict[str, Any]) -> tuple[str, str]:
@@ -631,7 +691,7 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                 origin_label = origin_label or display_name
                 confidence = confidence or (
                     "high"
-                    if inferred_strategy in {"package_json", "cache_package_json", "cache_path_heuristic"}
+                    if inferred_strategy in {"package_json", "cache_package_json", "cache_path_heuristic", "cache_similarity_match"}
                     else "medium"
                 )
 

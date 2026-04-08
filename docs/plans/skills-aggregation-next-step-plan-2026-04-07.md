@@ -123,6 +123,33 @@ depends_on:
 - `install_unit_total` 已从 `94` 降到 `79`
 - `Compound Engineering` 现已恢复为包含 `17` 条 source、`24` 个成员的真实 package 聚合
 
+## 本轮新增的第二阶段缓存匹配（2026-04-07）
+
+在首批“内容签名严格一致”的 cache mirror 恢复之外，本轮进一步增加了第二阶段匹配：
+
+- 仅在 strict match 失败后才进入
+- 仍然要求候选 skill 名称一致
+- 仍然要求最终只收敛到唯一 package name
+- 仅当 `SKILL.md` 文本相似度达到高阈值时才接受
+
+这层匹配是为了解决一个真实运行态问题：
+
+- 本地已安装 skill 与缓存里的包内 skill 往往只差少量文案修订、命令别名调整、路径示例修正
+- 严格内容签名会把这些“明显同源”的技能错误留在 unresolved
+
+因此这层近似匹配明确采用保守约束：
+
+- 不接受低相似度候选
+- 不接受多 package 同时命中的歧义场景
+- 不会跳过 package root / package.json 的最终归属校验
+
+当前运行态收益进一步提升为：
+
+- `source_provenance_resolved_total` 已提升到 `37`
+- `install_unit_total` 已降到 `65`
+- `meaningful_collection_group_total` 已从 `16` 降到 `13`
+- `Compound Engineering` 现已恢复为包含 `31` 条 source、`38` 个成员的真实 package 聚合
+
 这一步的边界同样明确：
 
 - 不会因为“仅同名”就认定来源

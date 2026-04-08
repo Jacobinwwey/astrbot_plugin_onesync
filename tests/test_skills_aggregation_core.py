@@ -326,6 +326,122 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual(1, collection_group_rows[0]["install_unit_count"])
         self.assertEqual(2, collection_group_rows[0]["source_count"])
 
+    def test_npx_single_recovers_package_from_high_similarity_cache_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "agent-browser"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            local_content = (
+                "---\n"
+                "name: agent-browser\n"
+                "description: Browser automation CLI for AI agents.\n"
+                "---\n\n"
+                "Priority order: ~/.agent-browser/config.json < .the agent-browser skill.json < env vars.\n"
+                "Use AGENT_BROWSER_CONFIG for custom config.\n"
+            )
+            cache_content = (
+                "---\n"
+                "name: agent-browser\n"
+                "description: Browser automation CLI for AI agents.\n"
+                "---\n\n"
+                "Priority order: ~/.agent-browser/config.json < ./agent-browser.json < env vars.\n"
+                "Use AGENT_BROWSER_CONFIG for custom config.\n"
+            )
+            (source_skill / "SKILL.md").write_text(local_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "cache123" / "node_modules" / "@demo" / "browser-pack"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@demo/browser-pack"}),
+                encoding="utf-8",
+            )
+            cache_skill = package_root / "skills" / "agent-browser"
+            cache_skill.mkdir(parents=True, exist_ok=True)
+            (cache_skill / "SKILL.md").write_text(cache_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            source_row = {
+                "source_id": "npx_global_agent_browser",
+                "display_name": "agent-browser",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["agent-browser"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("@demo/browser-pack", provenance["provenance_package_name"])
+        self.assertEqual("cache_similarity_match", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+        self.assertEqual("npm:@demo/browser-pack", aggregation["install_unit_id"])
+        self.assertEqual("package", aggregation["collection_group_kind"])
+
+    def test_npx_single_does_not_recover_package_when_cache_match_is_too_different(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "agent-browser"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            local_content = (
+                "---\n"
+                "name: agent-browser\n"
+                "description: Browser automation CLI for AI agents.\n"
+                "---\n\n"
+                "Completely different local content.\n"
+                "This should not be treated as the same installed package.\n"
+            )
+            cache_content = (
+                "---\n"
+                "name: agent-browser\n"
+                "description: Browser automation CLI for AI agents.\n"
+                "---\n\n"
+                "Canonical cache content with many operational details.\n"
+                "Use AGENT_BROWSER_CONFIG for custom config.\n"
+            )
+            (source_skill / "SKILL.md").write_text(local_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "cache123" / "node_modules" / "@demo" / "browser-pack"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@demo/browser-pack"}),
+                encoding="utf-8",
+            )
+            cache_skill = package_root / "skills" / "agent-browser"
+            cache_skill.mkdir(parents=True, exist_ok=True)
+            (cache_skill / "SKILL.md").write_text(cache_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            source_row = {
+                "source_id": "npx_global_agent_browser",
+                "display_name": "agent-browser",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["agent-browser"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("", provenance["provenance_package_name"])
+        self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
+        self.assertEqual("synthetic_single:npx_global_agent_browser", aggregation["install_unit_id"])
+
     def test_npx_single_cache_mirror_can_promote_curated_package_group(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
