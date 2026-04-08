@@ -150,6 +150,36 @@ _CURATED_REFERENCE_SKILL_REPO_HINTS: dict[str, str] = {
     # `ai-toolbox`) and the upstream repository layout.
     "ui-ux-pro-max": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git#.claude/skills/ui-ux-pro-max",
 }
+_COMMUNITY_REFERENCE_SKILL_REPO_HINTS: dict[str, str] = {
+    # Narrow allowlist for community upstreams whose current local skill bodies
+    # were manually cross-checked against the upstream repository before being
+    # promoted. This is intentionally sparse: unresolved is better than a false
+    # provenance claim.
+    "godot-gdscript-patterns": "https://github.com/sickn33/antigravity-awesome-skills.git#skills/godot-gdscript-patterns",
+    "javascript-mastery": "https://github.com/sickn33/antigravity-awesome-skills.git#skills/javascript-mastery",
+    "powershell-windows": "https://github.com/sickn33/antigravity-awesome-skills.git#skills/powershell-windows",
+    "sql-optimization-patterns": "https://github.com/sickn33/antigravity-awesome-skills.git#skills/sql-optimization-patterns",
+}
+_COMMUNITY_DERIVATIVE_SKILL_REPO_HINTS: dict[str, dict[str, str]] = {
+    # Narrow allowlist for host-adapted skills whose local support files were
+    # manually cross-checked against an upstream repo mirror. The local skill
+    # may have wrapper/frontmatter changes, but the shared artifact hash must
+    # still match before we promote provenance.
+    "database-migrations-sql-migrations": {
+        "origin_ref": "https://github.com/sickn33/antigravity-awesome-skills.git#skills/database-migrations-sql-migrations",
+        "required_support_file": "resources/implementation-playbook.md",
+        "required_support_signature": "1ec33c72d94daef96cf4f87af7a8fd2d332c2e87",
+    },
+}
+_COMMUNITY_MARKDOWN_TAIL_DERIVATIVE_SKILL_REPO_HINTS: dict[str, dict[str, str]] = {
+    # Host-adapted skills whose downstream wrapper adds local guidance ahead of
+    # an otherwise exact upstream markdown tail.
+    "javascript-pro": {
+        "origin_ref": "https://github.com/AndyAnh174/wellness.git#.agent/skills/javascript-pro",
+        "required_tail_marker": "## Focus Areas",
+        "required_tail_signature": "21156536ebf16514a845d32a01883bbf855043f0",
+    },
+}
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -484,6 +514,13 @@ def _skill_markdown_path(path_text: Any) -> Path | None:
     return None
 
 
+def _normalized_text_sha1(text: Any) -> str:
+    normalized = str(text or "").replace("\r\n", "\n")
+    if not normalized:
+        return ""
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+
+
 @lru_cache(maxsize=1024)
 def _skill_support_file_text(path_text: str, filename: str) -> str:
     base = _safe_expand_path(path_text)
@@ -496,6 +533,11 @@ def _skill_support_file_text(path_text: str, filename: str) -> str:
     except Exception:
         return ""
     return ""
+
+
+@lru_cache(maxsize=1024)
+def _skill_support_file_signature(path_text: str, filename: str) -> str:
+    return _normalized_text_sha1(_skill_support_file_text(path_text, filename))
 
 
 @lru_cache(maxsize=1024)
@@ -519,6 +561,18 @@ def _skill_markdown_text(path_text: str) -> str:
         return skill_markdown.read_text(encoding="utf-8")
     except Exception:
         return ""
+
+
+def _skill_markdown_body_text(text: Any) -> str:
+    normalized = str(text or "").replace("\r\n", "\n")
+    if not normalized:
+        return ""
+    if not normalized.startswith("---\n"):
+        return normalized
+    frontmatter_end = normalized.find("\n---\n", 4)
+    if frontmatter_end < 0:
+        return normalized
+    return normalized[frontmatter_end + len("\n---\n") :]
 
 
 def _canonical_skill_markdown_text(text: Any) -> str:
@@ -546,6 +600,17 @@ def _canonical_skill_markdown_text(text: Any) -> str:
 @lru_cache(maxsize=1024)
 def _canonical_skill_markdown_text_for_path(path_text: str) -> str:
     return _canonical_skill_markdown_text(_skill_markdown_text(path_text))
+
+
+def _markdown_tail_signature(text: Any, marker: str) -> str:
+    normalized = _skill_markdown_body_text(text)
+    marker_text = str(marker or "").strip()
+    if not normalized or not marker_text:
+        return ""
+    marker_index = normalized.find(marker_text)
+    if marker_index < 0:
+        return ""
+    return _normalized_text_sha1(normalized[marker_index:])
 
 
 def _skill_markdown_identity_fields(text: Any) -> tuple[str, str]:
@@ -766,6 +831,93 @@ def _infer_curated_reference_repo_hint(source: dict[str, Any]) -> tuple[str, str
         origin_label = _repo_label_from_locator(locator or origin_ref)
         if origin_label:
             return origin_ref, origin_label, "catalog_reference_hint"
+    return "", "", ""
+
+
+def _infer_community_reference_repo_hint(source: dict[str, Any]) -> tuple[str, str, str]:
+    candidate_names = [
+        str(source.get("display_name") or "").strip().lower(),
+        *[
+            str(item or "").strip().lower()
+            for item in _to_str_list(source.get("member_skill_preview", []))
+        ],
+    ]
+    for name in candidate_names:
+        if not name:
+            continue
+        origin_ref = str(_COMMUNITY_REFERENCE_SKILL_REPO_HINTS.get(name) or "").strip()
+        if not origin_ref:
+            continue
+        locator, _ = _split_locator_with_subpath(origin_ref)
+        origin_label = _repo_label_from_locator(locator or origin_ref)
+        if origin_label:
+            return origin_ref, origin_label, "community_reference_hint"
+    return "", "", ""
+
+
+def _infer_community_derivative_repo_hint(source: dict[str, Any]) -> tuple[str, str, str]:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return "", "", ""
+
+    candidate_names = [
+        str(source.get("display_name") or "").strip().lower(),
+        *[
+            str(item or "").strip().lower()
+            for item in _to_str_list(source.get("member_skill_preview", []))
+        ],
+    ]
+    for name in candidate_names:
+        if not name:
+            continue
+        rule = _COMMUNITY_DERIVATIVE_SKILL_REPO_HINTS.get(name) or {}
+        origin_ref = str(rule.get("origin_ref") or "").strip()
+        required_support_file = str(rule.get("required_support_file") or "").strip()
+        required_support_signature = str(rule.get("required_support_signature") or "").strip().lower()
+        if not origin_ref or not required_support_file or not required_support_signature:
+            continue
+        actual_support_signature = _skill_support_file_signature(source_path, required_support_file).lower()
+        if not actual_support_signature or actual_support_signature != required_support_signature:
+            continue
+        locator, _ = _split_locator_with_subpath(origin_ref)
+        origin_label = _repo_label_from_locator(locator or origin_ref)
+        if origin_label:
+            return origin_ref, origin_label, "community_support_file_derivative"
+    return "", "", ""
+
+
+def _infer_community_markdown_tail_derivative_repo_hint(source: dict[str, Any]) -> tuple[str, str, str]:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return "", "", ""
+
+    markdown_text = _skill_markdown_text(source_path)
+    if not markdown_text:
+        return "", "", ""
+
+    candidate_names = [
+        str(source.get("display_name") or "").strip().lower(),
+        *[
+            str(item or "").strip().lower()
+            for item in _to_str_list(source.get("member_skill_preview", []))
+        ],
+    ]
+    for name in candidate_names:
+        if not name:
+            continue
+        rule = _COMMUNITY_MARKDOWN_TAIL_DERIVATIVE_SKILL_REPO_HINTS.get(name) or {}
+        origin_ref = str(rule.get("origin_ref") or "").strip()
+        required_tail_marker = str(rule.get("required_tail_marker") or "").strip()
+        required_tail_signature = str(rule.get("required_tail_signature") or "").strip().lower()
+        if not origin_ref or not required_tail_marker or not required_tail_signature:
+            continue
+        actual_tail_signature = _markdown_tail_signature(markdown_text, required_tail_marker).lower()
+        if not actual_tail_signature or actual_tail_signature != required_tail_signature:
+            continue
+        locator, _ = _split_locator_with_subpath(origin_ref)
+        origin_label = _repo_label_from_locator(locator or origin_ref)
+        if origin_label:
+            return origin_ref, origin_label, "community_markdown_tail_derivative"
     return "", "", ""
 
 
@@ -1262,13 +1414,37 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                             package_strategy = package_strategy or hinted_strategy
                             confidence = confidence or "medium"
                         else:
-                            derivative_base_name, derivative_strategy = _infer_local_skill_derivative(source)
-                            if derivative_base_name:
-                                origin_kind = origin_kind or "local_skill_derivative"
-                                origin_ref = origin_ref or derivative_base_name
-                                origin_label = origin_label or derivative_base_name
-                                package_strategy = package_strategy or derivative_strategy
+                            community_origin_ref, community_origin_label, community_strategy = _infer_community_reference_repo_hint(source)
+                            if community_origin_ref:
+                                origin_kind = origin_kind or "community_source_repo"
+                                origin_ref = origin_ref or community_origin_ref
+                                origin_label = origin_label or community_origin_label or display_name
+                                package_strategy = package_strategy or community_strategy
                                 confidence = confidence or "medium"
+                            else:
+                                community_derivative_ref, community_derivative_label, community_derivative_strategy = _infer_community_derivative_repo_hint(source)
+                                if community_derivative_ref:
+                                    origin_kind = origin_kind or "community_source_repo"
+                                    origin_ref = origin_ref or community_derivative_ref
+                                    origin_label = origin_label or community_derivative_label or display_name
+                                    package_strategy = package_strategy or community_derivative_strategy
+                                    confidence = confidence or "medium"
+                                else:
+                                    community_tail_ref, community_tail_label, community_tail_strategy = _infer_community_markdown_tail_derivative_repo_hint(source)
+                                    if community_tail_ref:
+                                        origin_kind = origin_kind or "community_source_repo"
+                                        origin_ref = origin_ref or community_tail_ref
+                                        origin_label = origin_label or community_tail_label or display_name
+                                        package_strategy = package_strategy or community_tail_strategy
+                                        confidence = confidence or "medium"
+                                    else:
+                                        derivative_base_name, derivative_strategy = _infer_local_skill_derivative(source)
+                                        if derivative_base_name:
+                                            origin_kind = origin_kind or "local_skill_derivative"
+                                            origin_ref = origin_ref or derivative_base_name
+                                            origin_label = origin_label or derivative_base_name
+                                            package_strategy = package_strategy or derivative_strategy
+                                            confidence = confidence or "medium"
 
     if not rule and package_name:
         rule = _match_curated_rule(
@@ -1655,6 +1831,17 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                     f"{repo_label} :: {repo_subpath}" if repo_subpath else repo_label
                 )
                 aggregation_strategy = provenance_package_strategy or "catalog_reference_hint"
+            elif provenance_origin_kind == "community_source_repo" and provenance_origin_ref:
+                repo_locator, repo_subpath = _split_locator_with_subpath(provenance_origin_ref)
+                repo_label = _repo_label_from_locator(repo_locator or provenance_origin_ref) or display_name
+                install_unit_id = f"repo:{provenance_origin_ref}"
+                install_unit_kind = "community_source_repo"
+                install_ref = provenance_origin_ref
+                install_manager = "manual"
+                install_unit_display_name = (
+                    f"{repo_label} :: {repo_subpath}" if repo_subpath else repo_label
+                )
+                aggregation_strategy = provenance_package_strategy or "community_reference_hint"
             elif provenance_origin_kind == "local_skill_derivative" and provenance_origin_ref:
                 install_unit_id = f"derived:{source_id}"
                 install_unit_kind = "local_skill_derivative"
@@ -1707,6 +1894,12 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                 "manual_git",
             )
         elif provenance_origin_kind == "catalog_source_repo" and provenance_origin_ref:
+            repo_locator, _ = _split_locator_with_subpath(provenance_origin_ref)
+            collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
+                repo_locator or provenance_origin_ref,
+                "manual_git",
+            )
+        elif provenance_origin_kind == "community_source_repo" and provenance_origin_ref:
             repo_locator, _ = _split_locator_with_subpath(provenance_origin_ref)
             collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
                 repo_locator or provenance_origin_ref,

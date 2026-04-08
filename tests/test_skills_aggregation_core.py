@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import skills_aggregation_core as skills_core
 from skills_aggregation_core import (
     build_collection_group_rows,
     build_install_unit_rows,
@@ -884,6 +885,279 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
         self.assertEqual("low", provenance["provenance_confidence"])
         self.assertEqual("synthetic_single:npx_global_javascript_pro", aggregation["install_unit_id"])
+
+    def test_npx_single_recovers_community_source_repo_from_curated_reference_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "javascript-mastery"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: javascript-mastery\n"
+                "description: Comprehensive JavaScript reference covering 33+ essential concepts every developer should know.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_javascript_mastery",
+                "display_name": "javascript-mastery",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["javascript-mastery"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("community_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual(
+            "https://github.com/sickn33/antigravity-awesome-skills.git#skills/javascript-mastery",
+            provenance["provenance_origin_ref"],
+        )
+        self.assertEqual("sickn33/antigravity-awesome-skills", provenance["provenance_origin_label"])
+        self.assertEqual("community_reference_hint", provenance["provenance_package_strategy"])
+        self.assertEqual("medium", provenance["provenance_confidence"])
+
+        self.assertEqual(
+            "repo:https://github.com/sickn33/antigravity-awesome-skills.git#skills/javascript-mastery",
+            aggregation["install_unit_id"],
+        )
+        self.assertEqual("community_source_repo", aggregation["install_unit_kind"])
+        self.assertEqual(
+            "sickn33/antigravity-awesome-skills :: skills/javascript-mastery",
+            aggregation["install_unit_display_name"],
+        )
+        self.assertEqual(
+            "collection:source_repo_sickn33_antigravity_awesome_skills",
+            aggregation["collection_group_id"],
+        )
+        self.assertEqual("source_repo", aggregation["collection_group_kind"])
+
+    def test_npx_single_recovers_second_community_source_repo_from_curated_reference_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "powershell-windows"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: powershell-windows\n"
+                "description: PowerShell Windows patterns. Critical pitfalls, operator syntax, error handling.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_powershell_windows",
+                "display_name": "powershell-windows",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["powershell-windows"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+
+        self.assertEqual("community_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual(
+            "https://github.com/sickn33/antigravity-awesome-skills.git#skills/powershell-windows",
+            provenance["provenance_origin_ref"],
+        )
+        self.assertEqual("community_reference_hint", provenance["provenance_package_strategy"])
+        self.assertEqual("medium", provenance["provenance_confidence"])
+
+    def test_npx_single_community_source_repo_hint_does_not_promote_unverified_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "database-migrations-sql-migrations"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: database-migrations-sql-migrations\n"
+                "description: SQL database migrations with zero-downtime strategies for PostgreSQL, MySQL, SQL Server\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_database_migrations_sql_migrations",
+                "display_name": "database-migrations-sql-migrations",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["database-migrations-sql-migrations"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("skills_root", provenance["provenance_origin_kind"])
+        self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
+        self.assertEqual("low", provenance["provenance_confidence"])
+        self.assertEqual(
+            "synthetic_single:npx_global_database_migrations_sql_migrations",
+            aggregation["install_unit_id"],
+        )
+
+    def test_npx_single_recovers_community_source_repo_from_exact_support_file_derivative_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "database-migrations-sql-migrations"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: database-migrations-sql-migrations\n"
+                "description: SQL database migrations with zero-downtime strategies for PostgreSQL, MySQL, SQL Server\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            support_text = (
+                "# Implementation Playbook\n\n"
+                "Exact upstream derivative evidence.\n"
+            )
+            support_file = source_skill / "resources" / "implementation-playbook.md"
+            support_file.parent.mkdir(parents=True, exist_ok=True)
+            support_file.write_text(support_text, encoding="utf-8")
+
+            previous_hints = dict(skills_core._COMMUNITY_DERIVATIVE_SKILL_REPO_HINTS)
+            skills_core._COMMUNITY_DERIVATIVE_SKILL_REPO_HINTS = {
+                "database-migrations-sql-migrations": {
+                    "origin_ref": "https://github.com/demo/community-skills.git#skills/database-migrations-sql-migrations",
+                    "required_support_file": "resources/implementation-playbook.md",
+                    "required_support_signature": skills_core._normalized_text_sha1(support_text),
+                }
+            }
+            self.addCleanup(
+                setattr,
+                skills_core,
+                "_COMMUNITY_DERIVATIVE_SKILL_REPO_HINTS",
+                previous_hints,
+            )
+
+            source_row = {
+                "source_id": "npx_global_database_migrations_sql_migrations",
+                "display_name": "database-migrations-sql-migrations",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["database-migrations-sql-migrations"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("community_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual(
+            "https://github.com/demo/community-skills.git#skills/database-migrations-sql-migrations",
+            provenance["provenance_origin_ref"],
+        )
+        self.assertEqual("demo/community-skills", provenance["provenance_origin_label"])
+        self.assertEqual("community_support_file_derivative", provenance["provenance_package_strategy"])
+        self.assertEqual("medium", provenance["provenance_confidence"])
+        self.assertEqual(
+            "repo:https://github.com/demo/community-skills.git#skills/database-migrations-sql-migrations",
+            aggregation["install_unit_id"],
+        )
+        self.assertEqual("community_source_repo", aggregation["install_unit_kind"])
+        self.assertEqual(
+            "demo/community-skills :: skills/database-migrations-sql-migrations",
+            aggregation["install_unit_display_name"],
+        )
+        self.assertEqual(
+            "collection:source_repo_demo_community_skills",
+            aggregation["collection_group_id"],
+        )
+
+    def test_npx_single_recovers_community_source_repo_from_exact_markdown_tail_derivative_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "javascript-pro"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            tail_text = (
+                "## Focus Areas\n\n"
+                "- Async patterns\n"
+                "- Node.js APIs\n\n"
+                "## Output\n\n"
+                "- Modern JavaScript\n"
+            )
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: javascript-pro\n"
+                "description: Master modern JavaScript with ES6+.\n"
+                "---\n\n"
+                "Host-adapted preamble.\n\n"
+                "## Use this skill when\n\n"
+                "- Building JavaScript tools\n\n"
+                f"{tail_text}",
+                encoding="utf-8",
+            )
+
+            previous_hints = dict(skills_core._COMMUNITY_MARKDOWN_TAIL_DERIVATIVE_SKILL_REPO_HINTS)
+            skills_core._COMMUNITY_MARKDOWN_TAIL_DERIVATIVE_SKILL_REPO_HINTS = {
+                "javascript-pro": {
+                    "origin_ref": "https://github.com/demo/js-skills.git#skills/javascript-pro",
+                    "required_tail_marker": "## Focus Areas",
+                    "required_tail_signature": skills_core._normalized_text_sha1(tail_text),
+                }
+            }
+            self.addCleanup(
+                setattr,
+                skills_core,
+                "_COMMUNITY_MARKDOWN_TAIL_DERIVATIVE_SKILL_REPO_HINTS",
+                previous_hints,
+            )
+
+            source_row = {
+                "source_id": "npx_global_javascript_pro",
+                "display_name": "javascript-pro",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["javascript-pro"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("community_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual(
+            "https://github.com/demo/js-skills.git#skills/javascript-pro",
+            provenance["provenance_origin_ref"],
+        )
+        self.assertEqual("demo/js-skills", provenance["provenance_origin_label"])
+        self.assertEqual("community_markdown_tail_derivative", provenance["provenance_package_strategy"])
+        self.assertEqual("medium", provenance["provenance_confidence"])
+        self.assertEqual(
+            "repo:https://github.com/demo/js-skills.git#skills/javascript-pro",
+            aggregation["install_unit_id"],
+        )
+        self.assertEqual("community_source_repo", aggregation["install_unit_kind"])
 
     def test_npx_single_recovers_local_derivative_group_from_embedded_base_skill_notice(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
