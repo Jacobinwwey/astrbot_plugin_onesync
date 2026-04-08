@@ -34,6 +34,21 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
         self.assertNotIn("position: sticky;", block)
         self.assertNotIn("top: 12px;", block)
 
+    def test_inventory_inspector_panel_expands_without_height_cap(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        shell_start = html.index("    .inventory-shell {\n")
+        shell_end = html.index("    .inventory-grid {\n", shell_start)
+        shell_block = html[shell_start:shell_end]
+        self.assertIn("align-items: stretch;", shell_block)
+        self.assertNotIn("align-items: start;", shell_block)
+
+        panel_start = html.index("    .inventory-inspector-panel {\n")
+        panel_end = html.index("    .inventory-inspector-card {\n", panel_start)
+        panel_block = html[panel_start:panel_end]
+        self.assertNotIn("max-height:", panel_block)
+        self.assertNotIn("overflow: auto;", panel_block)
+
     def test_inventory_panel_declares_compatible_sources_before_status_cards(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

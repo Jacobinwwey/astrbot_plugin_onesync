@@ -45,6 +45,7 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertIn("claude_code", ids)
         self.assertIn("codex", ids)
         self.assertIn("zeroclaw", ids)
+        self.assertIn("astrbot", ids)
         self.assertIn("cursor_agent", ids)
         self.assertIn("gemini_cli", ids)
         self.assertIn("qwen_code", ids)
@@ -63,6 +64,10 @@ class InventoryCoreTests(unittest.TestCase):
 
         self.assertEqual("cli", by_id["openhands"]["software_kind"])
         self.assertIn("openhands", by_id["openhands"]["detect_commands"])
+
+        self.assertEqual("claw", by_id["astrbot"]["software_kind"])
+        self.assertIn("astrbot", by_id["astrbot"]["detect_commands"])
+        self.assertTrue(any("data/skills" in path.replace('\\', '/') for path in by_id["astrbot"]["skill_roots"]))
 
         self.assertEqual("gui", by_id["windsurf"]["software_kind"])
         self.assertIn("windsurf", by_id["windsurf"]["detect_commands"])

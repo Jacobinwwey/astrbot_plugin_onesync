@@ -59,6 +59,10 @@ LEGACY_NPX_ROOT_BUNDLE_RULES = [
         "path_markers": ["/zeroclaw/.claude/skills/", "/zeroclaw/src/skills/"],
     },
     {
+        "legacy_source_id_prefix": "npx_bundle_astrbot_skill_pack_",
+        "path_markers": ["/astrbot/data/skills/", "/.astrbot/data/skills/"],
+    },
+    {
         "legacy_source_id_prefix": "npx_bundle_antigravity_skill_pack_",
         "path_markers": ["/antigravity/skills/"],
     },

@@ -114,6 +114,16 @@ SKILLS_ROOT_PROVENANCE_RULES: list[dict[str, str]] = [
         "label": "ZeroClaw Skills Root",
     },
     {
+        "marker": "/astrbot/data/skills",
+        "root_kind": "astrbot_data_skills",
+        "label": "AstrBot Skills Root",
+    },
+    {
+        "marker": "/.astrbot/data/skills",
+        "root_kind": "astrbot_data_skills",
+        "label": "AstrBot Skills Root",
+    },
+    {
         "marker": "/antigravity/skills",
         "root_kind": "antigravity_skills",
         "label": "Antigravity Skills Root",

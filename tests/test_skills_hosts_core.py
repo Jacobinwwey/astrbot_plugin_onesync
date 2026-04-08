@@ -21,8 +21,15 @@ class SkillsHostsCoreTests(unittest.TestCase):
         self.assertIn("claude_code", ids)
         self.assertIn("codex", ids)
         self.assertIn("zeroclaw", ids)
+        self.assertIn("astrbot", ids)
         self.assertIn("antigravity", ids)
         self.assertIn("windsurf", ids)
+
+    def test_default_software_catalog_declares_astrbot_as_claw_host(self) -> None:
+        astrbot = next(item for item in DEFAULT_SOFTWARE_CATALOG if item["id"] == "astrbot")
+
+        self.assertEqual("astrbot", astrbot["provider_key"])
+        self.assertTrue(astrbot["enabled"])
 
     def test_build_host_adapters_projects_target_paths_and_supported_source_kinds(self) -> None:
         software_rows = [

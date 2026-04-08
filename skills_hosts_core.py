@@ -28,6 +28,13 @@ PROVIDER_DEFAULTS: dict[str, dict[str, Any]] = {
         "detect_commands": ["zeroclaw"],
         "skill_roots": ["~/zeroclaw/.claude/skills", "~/zeroclaw/src/skills"],
     },
+    "astrbot": {
+        "display_name": "AstrBot",
+        "software_kind": "claw",
+        "detect_paths": ["~/astrbot", "~/.astrbot"],
+        "detect_commands": ["astrbot"],
+        "skill_roots": ["~/astrbot/data/skills", "~/.astrbot/data/skills"],
+    },
     "antigravity": {
         "display_name": "Antigravity",
         "software_kind": "gui",
@@ -132,6 +139,7 @@ DEFAULT_SOFTWARE_CATALOG: list[dict[str, Any]] = [
     {"id": "claude_code", "provider_key": "claude_code", "enabled": True},
     {"id": "codex", "provider_key": "codex", "enabled": True},
     {"id": "zeroclaw", "provider_key": "zeroclaw", "enabled": True, "linked_target_name": "zeroclaw"},
+    {"id": "astrbot", "provider_key": "astrbot", "enabled": True},
     {"id": "antigravity", "provider_key": "antigravity", "enabled": True},
     {"id": "cursor_agent", "provider_key": "cursor_agent", "enabled": True},
     {"id": "opencode", "provider_key": "opencode", "enabled": True},
