@@ -645,6 +645,160 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual("Build Web Apps", aggregation["install_unit_display_name"])
         self.assertEqual("plugin_bundle", aggregation["collection_group_kind"])
 
+    def test_npx_single_recovers_documented_source_repo_from_embedded_clone_url(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "humanizer"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: humanizer\n"
+                "description: Remove signs of AI-generated writing from text.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            (source_skill / "README.md").write_text(
+                "# Humanizer\n\n"
+                "Install with:\n\n"
+                "```bash\n"
+                "git clone https://github.com/blader/humanizer.git ~/.claude/skills/humanizer\n"
+                "```\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_humanizer",
+                "display_name": "humanizer",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["humanizer"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("documented_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual("https://github.com/blader/humanizer.git", provenance["provenance_origin_ref"])
+        self.assertEqual("blader/humanizer", provenance["provenance_origin_label"])
+        self.assertEqual("embedded_git_clone_url", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+
+        self.assertEqual("repo:https://github.com/blader/humanizer.git", aggregation["install_unit_id"])
+        self.assertEqual("documented_source_repo", aggregation["install_unit_kind"])
+        self.assertEqual("https://github.com/blader/humanizer.git", aggregation["install_ref"])
+        self.assertEqual("manual", aggregation["install_manager"])
+        self.assertEqual("blader/humanizer", aggregation["install_unit_display_name"])
+        self.assertEqual("collection:source_repo_blader_humanizer", aggregation["collection_group_id"])
+        self.assertEqual("source_repo", aggregation["collection_group_kind"])
+
+    def test_npx_single_documented_source_repo_prefers_install_repo_over_reference_links(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "humanizer-zh"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: humanizer-zh\n"
+                "description: 去除文本中的 AI 生成痕迹。\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            (source_skill / "README.md").write_text(
+                "# Humanizer-zh\n\n"
+                "灵感来源：https://github.com/blader/humanizer\n\n"
+                "安装：\n\n"
+                "```bash\n"
+                "npx skills add https://github.com/op7418/Humanizer-zh.git\n"
+                "```\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_humanizer_zh",
+                "display_name": "humanizer-zh",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["humanizer-zh"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+
+        self.assertEqual("documented_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual("https://github.com/op7418/Humanizer-zh.git", provenance["provenance_origin_ref"])
+        self.assertEqual("op7418/Humanizer-zh", provenance["provenance_origin_label"])
+        self.assertEqual("embedded_skills_add_url", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+
+    def test_npx_single_recovers_documented_source_repo_subpath_from_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "playwright"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            (source_skill / "SKILL.md").write_text(
+                "---\n"
+                "name: playwright\n"
+                "description: Browser automation from the terminal.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            (source_skill / "NOTICE.txt").write_text(
+                "This skill includes material derived from the Microsoft playwright-cli repository.\n\n"
+                "Source:\n"
+                "- Repository: microsoft/playwright-cli\n"
+                "- Path: skills/playwright-cli/SKILL.md\n",
+                encoding="utf-8",
+            )
+
+            source_row = {
+                "source_id": "npx_global_playwright",
+                "display_name": "playwright",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["playwright"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("documented_source_repo", provenance["provenance_origin_kind"])
+        self.assertEqual(
+            "https://github.com/microsoft/playwright-cli.git#skills/playwright-cli",
+            provenance["provenance_origin_ref"],
+        )
+        self.assertEqual("microsoft/playwright-cli", provenance["provenance_origin_label"])
+        self.assertEqual("embedded_notice_repository", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+
+        self.assertEqual(
+            "repo:https://github.com/microsoft/playwright-cli.git#skills/playwright-cli",
+            aggregation["install_unit_id"],
+        )
+        self.assertEqual("documented_source_repo", aggregation["install_unit_kind"])
+        self.assertEqual(
+            "microsoft/playwright-cli :: skills/playwright-cli",
+            aggregation["install_unit_display_name"],
+        )
+        self.assertEqual("collection:source_repo_microsoft_playwright_cli", aggregation["collection_group_id"])
+        self.assertEqual("source_repo", aggregation["collection_group_kind"])
+
     def test_npx_single_recovers_package_from_structured_cache_skill_variant(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

@@ -140,6 +140,11 @@ _CONTEXT_SECTION_HEADINGS = {
     "## Context",
     "### Context fallback",
 }
+_EMBEDDED_SOURCE_DOC_FILENAMES = (
+    "README.md",
+    "WARP.md",
+    "NOTICE.txt",
+)
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -315,6 +320,16 @@ def _join_locator_with_subpath(locator: Any, source_subpath: Any) -> str:
     return locator_text or subpath_text
 
 
+def _split_locator_with_subpath(ref_text: Any) -> tuple[str, str]:
+    text = str(ref_text or "").strip()
+    if not text:
+        return "", ""
+    locator, fragment = text, ""
+    if "#" in text:
+        locator, _, fragment = text.partition("#")
+    return locator.strip(), _normalize_subpath_text(fragment)
+
+
 def _manual_source_collection_group(locator: Any, source_kind: str) -> tuple[str, str, str]:
     locator_text = str(locator or "").strip()
     if str(source_kind or "").strip().lower() == "manual_git":
@@ -462,6 +477,20 @@ def _skill_markdown_path(path_text: Any) -> Path | None:
     except Exception:
         return None
     return None
+
+
+@lru_cache(maxsize=1024)
+def _skill_support_file_text(path_text: str, filename: str) -> str:
+    base = _safe_expand_path(path_text)
+    if not base:
+        return ""
+    target = (base if base.is_dir() else base.parent) / filename
+    try:
+        if target.exists() and target.is_file():
+            return target.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    return ""
 
 
 @lru_cache(maxsize=1024)
@@ -630,6 +659,88 @@ def _ignore_cache_candidate_for_provenance(path_text: Any) -> bool:
             "/__tests__/",
         )
     )
+
+
+def _repo_url_from_slug(repo_slug: str) -> str:
+    slug = str(repo_slug or "").strip().strip("/")
+    if not slug or "/" not in slug:
+        return ""
+    if slug.endswith(".git"):
+        slug = slug[:-4]
+    return f"https://github.com/{slug}.git"
+
+
+def _normalize_notice_source_subpath(path_text: Any) -> str:
+    normalized = _normalize_subpath_text(path_text)
+    if normalized.lower().endswith("/skill.md"):
+        normalized = normalized[:-len("/skill.md")]
+    elif normalized.lower() == "skill.md":
+        normalized = ""
+    return normalized
+
+
+def _embedded_source_repo_candidates(skill_path: str) -> tuple[tuple[str, str], ...]:
+    candidates: list[tuple[str, str]] = []
+    for filename in _EMBEDDED_SOURCE_DOC_FILENAMES:
+        text = _skill_support_file_text(skill_path, filename)
+        if not text:
+            continue
+
+        for match in re.finditer(r"git clone\s+(https://github\.com/[^\s]+)", text, re.IGNORECASE):
+            repo_ref = _join_locator_with_subpath(str(match.group(1) or "").strip(), "")
+            if repo_ref:
+                candidates.append((repo_ref, "embedded_git_clone_url"))
+
+        for match in re.finditer(r"npx\s+skills\s+add\s+(https://github\.com/[^\s]+)", text, re.IGNORECASE):
+            repo_ref = _join_locator_with_subpath(str(match.group(1) or "").strip(), "")
+            if repo_ref:
+                candidates.append((repo_ref, "embedded_skills_add_url"))
+
+        repo_match = re.search(r"Repository:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", text, re.IGNORECASE)
+        if repo_match:
+            repo_locator = _repo_url_from_slug(str(repo_match.group(1) or "").strip())
+            source_subpath = ""
+            path_match = re.search(r"Path:\s*([^\n]+)", text, re.IGNORECASE)
+            if path_match:
+                source_subpath = _normalize_notice_source_subpath(str(path_match.group(1) or "").strip())
+            repo_ref = _join_locator_with_subpath(repo_locator, source_subpath)
+            if repo_ref:
+                candidates.append((repo_ref, "embedded_notice_repository"))
+
+    deduped: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        deduped.append(candidate)
+    return tuple(deduped)
+
+
+def _infer_documented_source_repo(source: dict[str, Any]) -> tuple[str, str, str]:
+    source_path = str(source.get("source_path") or "").strip()
+    if not source_path:
+        return "", "", ""
+
+    candidates = _embedded_source_repo_candidates(source_path)
+    if not candidates:
+        return "", "", ""
+
+    unique_refs = {ref for ref, _ in candidates if ref}
+    if len(unique_refs) != 1:
+        return "", "", ""
+
+    origin_ref = next(iter(unique_refs))
+    strategies = {strategy for ref, strategy in candidates if ref == origin_ref}
+    locator, _ = _split_locator_with_subpath(origin_ref)
+    origin_label = _repo_label_from_locator(locator or origin_ref)
+    if "embedded_git_clone_url" in strategies:
+        return origin_ref, origin_label, "embedded_git_clone_url"
+    if "embedded_skills_add_url" in strategies:
+        return origin_ref, origin_label, "embedded_skills_add_url"
+    if "embedded_notice_repository" in strategies:
+        return origin_ref, origin_label, "embedded_notice_repository"
+    return "", "", ""
 
 
 @lru_cache(maxsize=512)
@@ -1032,6 +1143,14 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                     origin_label = origin_label or plugin_origin_label or display_name
                     package_strategy = package_strategy or plugin_strategy
                     confidence = confidence or "high"
+                else:
+                    documented_origin_ref, documented_origin_label, documented_strategy = _infer_documented_source_repo(source)
+                    if documented_origin_ref:
+                        origin_kind = origin_kind or "documented_source_repo"
+                        origin_ref = origin_ref or documented_origin_ref
+                        origin_label = origin_label or documented_origin_label or display_name
+                        package_strategy = package_strategy or documented_strategy
+                        confidence = confidence or "high"
 
     if not rule and package_name:
         rule = _match_curated_rule(
@@ -1396,6 +1515,17 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
                 install_manager = "plugin"
                 install_unit_display_name = provenance_origin_label or display_name
                 aggregation_strategy = provenance_package_strategy or "local_plugin_exact_mirror"
+            elif provenance_origin_kind == "documented_source_repo" and provenance_origin_ref:
+                repo_locator, repo_subpath = _split_locator_with_subpath(provenance_origin_ref)
+                repo_label = _repo_label_from_locator(repo_locator or provenance_origin_ref) or display_name
+                install_unit_id = f"repo:{provenance_origin_ref}"
+                install_unit_kind = "documented_source_repo"
+                install_ref = provenance_origin_ref
+                install_manager = "manual"
+                install_unit_display_name = (
+                    f"{repo_label} :: {repo_subpath}" if repo_subpath else repo_label
+                )
+                aggregation_strategy = provenance_package_strategy or "documented_source_repo"
             elif rule:
                 install_unit_id = str(rule.get("install_unit_id") or f"curated:{_slug(display_name, default='pack')}")
                 install_unit_kind = str(rule.get("install_unit_kind") or "curated_npx_pack")
@@ -1434,6 +1564,12 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             collection_group_id = f"collection:plugin_{_slug(provenance_origin_ref, default='plugin')}"
             collection_group_name = install_unit_display_name or provenance_origin_label or display_name
             collection_group_kind = "plugin_bundle"
+        elif provenance_origin_kind == "documented_source_repo" and provenance_origin_ref:
+            repo_locator, _ = _split_locator_with_subpath(provenance_origin_ref)
+            collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
+                repo_locator or provenance_origin_ref,
+                "manual_git",
+            )
         elif source_kind in {"manual_git", "manual_local"}:
             collection_group_id, collection_group_name, collection_group_kind = _manual_source_collection_group(
                 locator or source_id,
