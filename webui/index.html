@@ -7069,6 +7069,19 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const filteredInstalled = softwareRows.filter((item) => Boolean(item.installed)).length;
       const filteredManaged = softwareRows.filter((item) => Boolean(item.managed)).length;
       const hiddenUninstalledCandidates = Math.max(0, skillCapableRows.length - softwareRows.length);
+      const compatibleSources = inventoryCompatibleSelectionRows(overview, selectedSoftwareId);
+      state.inventoryVisibleCompatibleSkillIds = [...new Set(
+        compatibleSources.flatMap((item) => inventoryAggregateSourceIds(item)),
+      )];
+      state.inventoryVisibleDiscoveredSkillIds = [...new Set(
+        compatibleSources
+          .filter((item) => {
+            const status = String(item.status || "").trim().toLowerCase();
+            const freshness = String(item.freshness_status || "").trim().toLowerCase();
+            return status === "ready" || freshness === "fresh" || freshness === "aging";
+          })
+          .flatMap((item) => inventoryAggregateSourceIds(item)),
+      )];
       const statusCards = [
         {
           label: "当前宿主",
@@ -7158,20 +7171,6 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         || state.inventoryUpdatingInstallUnit
         || state.inventoryRepairingInstallUnit
         || state.inventoryDeployingInstallUnit;
-      const compatibleSources = inventoryCompatibleSelectionRows(overview, selectedSoftwareId);
-      state.inventoryVisibleCompatibleSkillIds = [...new Set(
-        compatibleSources.flatMap((item) => inventoryAggregateSourceIds(item)),
-      )];
-      state.inventoryVisibleDiscoveredSkillIds = [...new Set(
-        compatibleSources
-          .filter((item) => {
-            const status = String(item.status || "").trim().toLowerCase();
-            const freshness = String(item.freshness_status || "").trim().toLowerCase();
-            return status === "ready" || freshness === "fresh" || freshness === "aging";
-          })
-          .flatMap((item) => inventoryAggregateSourceIds(item)),
-      )];
-
       const compatibleSet = new Set(state.inventoryVisibleCompatibleSkillIds);
       state.inventoryDraftSkillIds = state.inventoryDraftSkillIds
         .map((item) => String(item || "").trim())

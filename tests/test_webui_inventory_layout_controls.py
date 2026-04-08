@@ -24,6 +24,14 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
         self.assertIn('id="inventoryDeployCardWidthSelect"', html)
         self.assertIn('id="inventoryDeployCardHeightSelect"', html)
 
+    def test_inventory_panel_declares_compatible_sources_before_status_cards(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        compatible_index = html.index("const compatibleSources = inventoryCompatibleSelectionRows(overview, selectedSoftwareId);")
+        status_cards_index = html.index("const statusCards = [")
+
+        self.assertLess(compatible_index, status_cards_index)
+
     def test_inventory_panel_scripts_persist_independent_layout_preferences(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
