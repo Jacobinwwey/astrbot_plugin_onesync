@@ -133,6 +133,13 @@ LEGACY_FAMILY_LABEL_OVERRIDES = {
 }
 
 _CACHE_SIMILARITY_MATCH_THRESHOLD = 0.97
+# Keep this just below observed host-adapted skill variants while relying on
+# same-name, same-description, and unique-candidate guards to avoid over-merging.
+_CACHE_STRUCTURED_SIMILARITY_MATCH_THRESHOLD = 0.83
+_CONTEXT_SECTION_HEADINGS = {
+    "## Context",
+    "### Context fallback",
+}
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -507,6 +514,112 @@ def _canonical_skill_markdown_text_for_path(path_text: str) -> str:
     return _canonical_skill_markdown_text(_skill_markdown_text(path_text))
 
 
+def _skill_markdown_identity_fields(text: Any) -> tuple[str, str]:
+    normalized = str(text or "").replace("\r\n", "\n").strip()
+    if not normalized.startswith("---\n"):
+        return "", ""
+    frontmatter_end = normalized.find("\n---\n", 4)
+    if frontmatter_end < 0:
+        return "", ""
+
+    name = ""
+    description = ""
+    for line in normalized[4:frontmatter_end].splitlines():
+        stripped = str(line or "").strip()
+        lowered = stripped.lower()
+        if lowered.startswith("name:"):
+            name = stripped[5:].strip().strip("\"'")
+        elif lowered.startswith("description:") and not description:
+            description = stripped[12:].strip().strip("\"'")
+    return name, description
+
+
+def _normalize_markdown_section_body(text: Any) -> str:
+    normalized = str(text or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return ""
+    lines: list[str] = []
+    for line in normalized.splitlines():
+        stripped = str(line or "").strip()
+        if not stripped:
+            continue
+        lines.append(re.sub(r"\s+", " ", stripped))
+    return "\n".join(lines).strip()
+
+
+def _markdown_section_map(text: Any) -> dict[str, str]:
+    normalized = str(text or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return {}
+
+    if normalized.startswith("---\n"):
+        frontmatter_end = normalized.find("\n---\n", 4)
+        if frontmatter_end >= 0:
+            normalized = normalized[frontmatter_end + len("\n---\n") :].strip()
+
+    sections: dict[str, list[str]] = {"<root>": []}
+    current_heading = "<root>"
+    for raw_line in normalized.splitlines():
+        line = str(raw_line or "")
+        stripped = line.strip()
+        if re.match(r"^#{1,3}\s+", stripped):
+            current_heading = stripped
+            sections.setdefault(current_heading, [])
+            continue
+        sections.setdefault(current_heading, []).append(line)
+
+    return {
+        heading: _normalize_markdown_section_body("\n".join(lines))
+        for heading, lines in sections.items()
+        if heading not in _CONTEXT_SECTION_HEADINGS and _normalize_markdown_section_body("\n".join(lines))
+    }
+
+
+def _structured_skill_markdown_similarity(left_text: Any, right_text: Any) -> float:
+    left_name, left_description = _skill_markdown_identity_fields(left_text)
+    right_name, right_description = _skill_markdown_identity_fields(right_text)
+    if not left_name or not right_name or left_name != right_name:
+        return 0.0
+    if left_description and right_description and left_description != right_description:
+        return 0.0
+
+    left_sections = _markdown_section_map(left_text)
+    right_sections = _markdown_section_map(right_text)
+    left_headings = {heading for heading in left_sections if heading != "<root>"}
+    right_headings = {heading for heading in right_sections if heading != "<root>"}
+    common_headings = left_headings.intersection(right_headings)
+    if not common_headings:
+        return 0.0
+
+    heading_ratio = len(common_headings) / max(len(left_headings), len(right_headings), 1)
+    exact_matches = 0
+    strong_matches = 0
+    section_scores: list[float] = []
+    for heading in common_headings:
+        ratio = SequenceMatcher(None, left_sections.get(heading, ""), right_sections.get(heading, "")).ratio()
+        section_scores.append(ratio)
+        if ratio >= 0.999:
+            exact_matches += 1
+        if ratio >= 0.72:
+            strong_matches += 1
+
+    root_ratio = SequenceMatcher(
+        None,
+        left_sections.get("<root>", ""),
+        right_sections.get("<root>", ""),
+    ).ratio()
+    section_ratio = sum(section_scores) / len(section_scores)
+    exact_ratio = exact_matches / len(common_headings)
+    strong_ratio = strong_matches / len(common_headings)
+    return (
+        (heading_ratio * 0.30)
+        + (section_ratio * 0.30)
+        + (strong_ratio * 0.20)
+        + (root_ratio * 0.10)
+        + (exact_ratio * 0.10)
+    )
+
+
 def _ignore_cache_candidate_for_provenance(path_text: Any) -> bool:
     normalized = _normalize_path_text(path_text).lower()
     return any(
@@ -706,6 +819,7 @@ def _infer_npx_package_from_cache_similarity(source: dict[str, Any]) -> tuple[st
     normalized_source_path = _normalize_path_text(source_path)
     package_scores: dict[str, float] = {}
     package_strategies: dict[str, set[str]] = {}
+    source_raw_text = _skill_markdown_text(source_path)
     for candidate in _candidate_package_cache_skill_documents(skill_dir_name, cache_roots):
         if _normalize_path_text(candidate) == normalized_source_path:
             continue
@@ -716,14 +830,30 @@ def _infer_npx_package_from_cache_similarity(source: dict[str, Any]) -> tuple[st
         if not candidate_text:
             continue
         ratio = SequenceMatcher(None, local_text, candidate_text).ratio()
-        if ratio < _CACHE_SIMILARITY_MATCH_THRESHOLD:
+        accepted_ratio = 0.0
+        accepted_strategy = ""
+        candidate_kind = "agent" if "/agents/" in _normalize_path_text(candidate).lower() else "skill"
+        if ratio >= _CACHE_SIMILARITY_MATCH_THRESHOLD:
+            accepted_ratio = ratio
+            accepted_strategy = "cache_agent_similarity_match" if candidate_kind == "agent" else "cache_similarity_match"
+        else:
+            structured_ratio = _structured_skill_markdown_similarity(
+                source_raw_text,
+                _skill_markdown_text(candidate),
+            )
+            if structured_ratio >= _CACHE_STRUCTURED_SIMILARITY_MATCH_THRESHOLD:
+                accepted_ratio = structured_ratio
+                accepted_strategy = (
+                    "cache_agent_structured_similarity_match"
+                    if candidate_kind == "agent"
+                    else "cache_structured_similarity_match"
+                )
+        if not accepted_strategy:
             continue
         previous = package_scores.get(package_name, 0.0)
-        if ratio > previous:
-            package_scores[package_name] = ratio
-        package_strategies.setdefault(package_name, set()).add(
-            "cache_agent_similarity_match" if "/agents/" in _normalize_path_text(candidate).lower() else "cache_similarity_match"
-        )
+        if accepted_ratio > previous:
+            package_scores[package_name] = accepted_ratio
+        package_strategies.setdefault(package_name, set()).add(accepted_strategy)
 
     if len(package_scores) != 1:
         return "", ""
@@ -733,6 +863,10 @@ def _infer_npx_package_from_cache_similarity(source: dict[str, Any]) -> tuple[st
         return package_name, "cache_similarity_match"
     if "cache_agent_similarity_match" in strategies:
         return package_name, "cache_agent_similarity_match"
+    if "cache_structured_similarity_match" in strategies:
+        return package_name, "cache_structured_similarity_match"
+    if "cache_agent_structured_similarity_match" in strategies:
+        return package_name, "cache_agent_structured_similarity_match"
     return package_name, "cache_similarity_match"
 
 
@@ -885,6 +1019,8 @@ def derive_source_provenance_fields(source: dict[str, Any]) -> dict[str, Any]:
                         "cache_path_heuristic",
                         "cache_similarity_match",
                         "cache_agent_similarity_match",
+                        "cache_structured_similarity_match",
+                        "cache_agent_structured_similarity_match",
                     }
                     else "medium"
                 )

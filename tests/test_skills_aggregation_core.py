@@ -645,6 +645,156 @@ class SkillsAggregationCoreTests(unittest.TestCase):
         self.assertEqual("Build Web Apps", aggregation["install_unit_display_name"])
         self.assertEqual("plugin_bundle", aggregation["collection_group_kind"])
 
+    def test_npx_single_recovers_package_from_structured_cache_skill_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "git-commit"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            local_content = (
+                "---\n"
+                "name: git-commit\n"
+                "description: Create a git commit with a clear, value-communicating message.\n"
+                "---\n\n"
+                "# Git Commit\n\n"
+                "Create a single, well-crafted git commit from the current working tree changes.\n\n"
+                "## Context\n\n"
+                "Use pre-populated git context when available.\n\n"
+                "## Workflow\n\n"
+                "### Step 1: Gather context\n\n"
+                "Use the context above instead of re-running commands.\n\n"
+                "### Step 2: Determine commit message convention\n\n"
+                "Follow repo conventions first.\n\n"
+                "### Step 3: Consider logical commits\n\n"
+                "Split only when file-level concerns are obvious.\n\n"
+                "### Step 4: Stage and commit\n\n"
+                "Prefer staging explicit files and commit in one call.\n\n"
+                "### Step 5: Confirm\n\n"
+                "Run git status after the commit.\n"
+            )
+            cache_content = (
+                "---\n"
+                "name: git-commit\n"
+                "description: Create a git commit with a clear, value-communicating message.\n"
+                "---\n\n"
+                "# Git Commit\n\n"
+                "Create a single, well-crafted git commit from the current working tree changes.\n\n"
+                "## Workflow\n\n"
+                "### Step 1: Gather context\n\n"
+                "Run these commands to understand the current state.\n\n"
+                "### Step 2: Determine commit message convention\n\n"
+                "Follow repo conventions first.\n\n"
+                "### Step 3: Consider logical commits\n\n"
+                "Split only when file-level concerns are obvious.\n\n"
+                "### Step 4: Stage and commit\n\n"
+                "Stage relevant files by name and commit.\n\n"
+                "### Step 5: Confirm\n\n"
+                "Run git status after the commit.\n"
+            )
+            (source_skill / "SKILL.md").write_text(local_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "cache123" / "node_modules" / "@demo" / "review-pack"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@demo/review-pack"}),
+                encoding="utf-8",
+            )
+            cache_skill = package_root / "skills" / "git-commit"
+            cache_skill.mkdir(parents=True, exist_ok=True)
+            (cache_skill / "SKILL.md").write_text(cache_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            source_row = {
+                "source_id": "npx_global_git_commit",
+                "display_name": "git-commit",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["git-commit"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("@demo/review-pack", provenance["provenance_package_name"])
+        self.assertEqual("cache_structured_similarity_match", provenance["provenance_package_strategy"])
+        self.assertEqual("high", provenance["provenance_confidence"])
+        self.assertEqual("npm:@demo/review-pack", aggregation["install_unit_id"])
+        self.assertEqual("package", aggregation["collection_group_kind"])
+
+    def test_npx_single_does_not_recover_package_from_structured_cache_when_sections_diverge(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / ".codex" / "skills"
+            source_skill = source_root / "git-commit"
+            source_skill.mkdir(parents=True, exist_ok=True)
+            local_content = (
+                "---\n"
+                "name: git-commit\n"
+                "description: Create a git commit with a clear, value-communicating message.\n"
+                "---\n\n"
+                "# Git Commit\n\n"
+                "Create a single, well-crafted git commit from the current working tree changes.\n\n"
+                "## Workflow\n\n"
+                "### Step 1: Gather context\n\n"
+                "Use pre-populated git context when available.\n\n"
+                "### Step 2: Determine commit message convention\n\n"
+                "Follow repo conventions first.\n"
+            )
+            cache_content = (
+                "---\n"
+                "name: git-commit\n"
+                "description: Create a git commit with a clear, value-communicating message.\n"
+                "---\n\n"
+                "# Git Commit\n\n"
+                "Different content focused on release automation.\n\n"
+                "## Usage\n\n"
+                "### Prepare release metadata\n\n"
+                "Generate a changelog and tag preview before continuing.\n\n"
+                "### Publish artifacts\n\n"
+                "Upload release assets to the package registry.\n"
+            )
+            (source_skill / "SKILL.md").write_text(local_content, encoding="utf-8")
+
+            cache_root = temp_root / ".npm" / "_npx"
+            package_root = cache_root / "cache123" / "node_modules" / "@demo" / "review-pack"
+            package_root.mkdir(parents=True, exist_ok=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": "@demo/review-pack"}),
+                encoding="utf-8",
+            )
+            cache_skill = package_root / "skills" / "git-commit"
+            cache_skill.mkdir(parents=True, exist_ok=True)
+            (cache_skill / "SKILL.md").write_text(cache_content, encoding="utf-8")
+
+            self._set_cache_roots(cache_root)
+
+            source_row = {
+                "source_id": "npx_global_git_commit",
+                "display_name": "git-commit",
+                "source_kind": "npx_single",
+                "source_scope": "global",
+                "source_path": str(source_skill),
+                "member_count": 1,
+                "member_skill_preview": ["git-commit"],
+                "compatible_software_ids": ["codex"],
+                "status": "ready",
+                "freshness_status": "fresh",
+            }
+
+            provenance = derive_source_provenance_fields(source_row)
+            aggregation = derive_source_aggregation_fields(source_row)
+
+        self.assertEqual("", provenance["provenance_package_name"])
+        self.assertEqual("fallback_root", provenance["provenance_package_strategy"])
+        self.assertEqual("synthetic_single:npx_global_git_commit", aggregation["install_unit_id"])
+
     def test_npx_single_cache_mirror_can_promote_curated_package_group(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
