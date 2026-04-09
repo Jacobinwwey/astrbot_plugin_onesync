@@ -5,6 +5,17 @@ from typing import Any
 
 VALID_HOST_KINDS = {"cli", "gui", "claw", "other"}
 SUPPORTED_SOURCE_KINDS = ["npx_bundle", "npx_single", "manual_local", "manual_git"]
+ASTRBOT_HOST_CAPABILITIES = [
+    "local_skill_scan",
+    "local_skill_toggle",
+    "local_skill_delete",
+    "local_zip_import",
+    "local_zip_export",
+    "sandbox_cache_read",
+    "sandbox_sync_trigger",
+    "neo_release_read",
+    "neo_release_sync",
+]
 
 PROVIDER_DEFAULTS: dict[str, dict[str, Any]] = {
     "claude_code": {
@@ -194,6 +205,20 @@ def _to_str_list(value: Any) -> list[str]:
     return [text] if text else []
 
 
+def _build_host_capabilities(host_id: str, provider_key: str) -> list[str]:
+    host_key = _slug(provider_key or host_id, default=_slug(host_id, default="generic"))
+    if host_key == "astrbot":
+        return list(ASTRBOT_HOST_CAPABILITIES)
+    return []
+
+
+def _runtime_state_backend(host_id: str, provider_key: str) -> str:
+    host_key = _slug(provider_key or host_id, default=_slug(host_id, default="generic"))
+    if host_key == "astrbot":
+        return "astrbot"
+    return ""
+
+
 def resolve_host_target_path(host: dict[str, Any], scope: str) -> str:
     scope_name = _slug(scope or "global", default="global")
     resolved_roots = _to_str_list(host.get("resolved_skill_roots", []))
@@ -234,6 +259,10 @@ def build_host_adapters(software_rows: list[dict[str, Any]]) -> list[dict[str, A
             "declared_skill_roots": _to_str_list(item.get("declared_skill_roots", [])),
             "resolved_skill_roots": _to_str_list(item.get("resolved_skill_roots", [])),
             "supports_source_kinds": list(SUPPORTED_SOURCE_KINDS),
+            "capabilities": _build_host_capabilities(host_id, str(item.get("provider_key") or family or "generic")),
+            "runtime_state_backend": _runtime_state_backend(host_id, str(item.get("provider_key") or family or "generic")),
+            "runtime_state_summary": {},
+            "runtime_state_warning_count": 0,
         }
         adapter["target_paths"] = {
             "global": resolve_host_target_path(adapter, "global"),

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from .skills_astrbot_state_core import build_astrbot_state_index
     from .skills_aggregation_core import (
         PROVENANCE_FIELD_KEYS,
         build_collection_group_rows,
@@ -24,6 +25,7 @@ try:
         build_install_unit_update_plan,
     )
 except ImportError:  # pragma: no cover - direct test imports
+    from skills_astrbot_state_core import build_astrbot_state_index
     from skills_aggregation_core import (
         PROVENANCE_FIELD_KEYS,
         build_collection_group_rows,
@@ -928,6 +930,12 @@ def _derive_host_rows_from_saved_lock(saved_lock: dict[str, Any]) -> list[dict[s
                 "declared_skill_roots": [],
                 "resolved_skill_roots": [],
                 "supports_source_kinds": ["npx_bundle", "npx_single", "manual_local", "manual_git"],
+                "capabilities": [],
+                "runtime_state_backend": "astrbot"
+                if str(target.get("provider_key") or "").strip() == "astrbot"
+                else "",
+                "runtime_state_summary": {},
+                "runtime_state_warning_count": 0,
                 "target_paths": {"global": "", "workspace": ""},
             },
         )
@@ -1239,8 +1247,25 @@ def build_skills_overview(
         for item in host_rows
         if isinstance(item, dict)
     ]
+    astrbot_state_index = build_astrbot_state_index(software_hosts)
+    astrbot_state_by_host = astrbot_state_index.get("by_host", {})
+    astrbot_state_rows = astrbot_state_index.get("rows", [])
+    astrbot_state_warnings = astrbot_state_index.get("warnings", [])
+    for host in software_hosts:
+        host_id = str(host.get("host_id") or host.get("id") or "").strip()
+        state = astrbot_state_by_host.get(host_id, {})
+        if not isinstance(state, dict) or not state:
+            continue
+        host["runtime_state_backend"] = str(
+            state.get("runtime_state_backend")
+            or host.get("runtime_state_backend")
+            or "",
+        )
+        host["runtime_state_summary"] = copy.deepcopy(state.get("summary", {}))
+        host["runtime_state_warning_count"] = len(_to_str_list(state.get("warnings", [])))
 
     warnings = list(inventory_snapshot.get("warnings", [])) if isinstance(inventory_snapshot.get("warnings", []), list) else []
+    warnings.extend(astrbot_state_warnings)
     for source in source_rows:
         if str(source.get("status", "")) == "missing":
             warnings.append(f"source[{source.get('source_id')}] is declared but not discovered")
@@ -1378,6 +1403,34 @@ def build_skills_overview(
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
             "host_total": len(software_hosts),
+            "astrbot_host_total": len(astrbot_state_by_host),
+            "astrbot_state_row_total": len(astrbot_state_rows),
+            "astrbot_local_skill_total": sum(
+                _to_int(item.get("summary", {}).get("local_skill_total", 0), 0, 0)
+                for item in astrbot_state_by_host.values()
+                if isinstance(item, dict)
+            ),
+            "astrbot_synced_total": sum(
+                _to_int(item.get("summary", {}).get("synced_total", 0), 0, 0)
+                for item in astrbot_state_by_host.values()
+                if isinstance(item, dict)
+            ),
+            "astrbot_sandbox_only_total": sum(
+                _to_int(item.get("summary", {}).get("sandbox_only_total", 0), 0, 0)
+                for item in astrbot_state_by_host.values()
+                if isinstance(item, dict)
+            ),
+            "astrbot_neo_managed_total": sum(
+                _to_int(item.get("summary", {}).get("neo_managed_total", 0), 0, 0)
+                for item in astrbot_state_by_host.values()
+                if isinstance(item, dict)
+            ),
+            "astrbot_drifted_total": sum(
+                _to_int(item.get("summary", {}).get("drifted_total", 0), 0, 0)
+                for item in astrbot_state_by_host.values()
+                if isinstance(item, dict)
+            ),
+            "astrbot_warning_total": len(astrbot_state_warnings),
             "deploy_target_total": len(deploy_rows),
             "deploy_ready_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "ready"),
             "deploy_idle_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "idle"),
@@ -1441,6 +1494,16 @@ def build_skills_overview(
             "stale": counts.get("deploy_stale_total", 0),
             "unavailable": counts.get("deploy_unavailable_total", 0),
         },
+        "astrbot_runtime_health": {
+            "host_total": counts.get("astrbot_host_total", 0),
+            "state_row_total": counts.get("astrbot_state_row_total", 0),
+            "local_skill_total": counts.get("astrbot_local_skill_total", 0),
+            "synced_total": counts.get("astrbot_synced_total", 0),
+            "sandbox_only_total": counts.get("astrbot_sandbox_only_total", 0),
+            "neo_managed_total": counts.get("astrbot_neo_managed_total", 0),
+            "drifted_total": counts.get("astrbot_drifted_total", 0),
+            "warning_count": counts.get("astrbot_warning_total", 0),
+        },
         "warnings": warnings,
     }
 
@@ -1452,6 +1515,8 @@ def build_skills_overview(
         "registry": registry,
         "host_rows": software_hosts,
         "software_hosts": software_hosts,
+        "astrbot_state_by_host": astrbot_state_by_host,
+        "astrbot_state_rows": astrbot_state_rows,
         "source_rows": source_rows,
         "install_unit_rows": install_unit_rows,
         "collection_group_rows": collection_group_rows,

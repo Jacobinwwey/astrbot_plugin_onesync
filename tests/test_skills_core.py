@@ -190,6 +190,56 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertFalse(overview["doctor"]["ok"])
         self.assertGreaterEqual(overview["doctor"]["warning_count"], 2)
 
+    def test_build_skills_overview_exposes_astrbot_runtime_state(self) -> None:
+        astrbot_root = Path(self._tempdir.name) / "astrbot-root"
+        skills_root = astrbot_root / "data" / "skills"
+        skills_root.mkdir(parents=True, exist_ok=True)
+        (skills_root / "local-demo").mkdir(parents=True, exist_ok=True)
+        (skills_root / "local-demo" / "SKILL.md").write_text(
+            "---\ndescription: local demo\n---\n# local-demo\n",
+            encoding="utf-8",
+        )
+        (astrbot_root / "data" / "skills.json").write_text(
+            json.dumps({"skills": {"local-demo": {"active": True}}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        snapshot = {
+            "ok": True,
+            "generated_at": "2026-04-09T10:00:00+00:00",
+            "software_rows": [
+                {
+                    "id": "astrbot",
+                    "display_name": "AstrBot",
+                    "software_kind": "claw",
+                    "software_family": "astrbot",
+                    "provider_key": "astrbot",
+                    "enabled": True,
+                    "installed": True,
+                    "managed": False,
+                    "linked_target_name": "",
+                    "declared_skill_roots": [str(skills_root)],
+                    "resolved_skill_roots": [str(skills_root)],
+                }
+            ],
+            "skill_rows": [],
+            "binding_rows": [],
+            "binding_map": {},
+            "binding_map_by_scope": {"global": {}, "workspace": {}},
+            "compatibility": {},
+            "counts": {},
+            "warnings": [],
+        }
+
+        overview = build_skills_overview(snapshot)
+
+        astrbot_host = next(item for item in overview["host_rows"] if item["host_id"] == "astrbot")
+        self.assertEqual("astrbot", astrbot_host["runtime_state_backend"])
+        self.assertEqual(1, astrbot_host["runtime_state_summary"]["local_skill_total"])
+        self.assertEqual(1, len(overview["astrbot_state_rows"]))
+        self.assertEqual(1, overview["counts"]["astrbot_host_total"])
+        self.assertEqual(1, overview["counts"]["astrbot_local_skill_total"])
+
     def test_build_skills_overview_exposes_provenance_summary_on_rows_and_doctor(self) -> None:
         overview = build_skills_overview(self.inventory_snapshot)
 

@@ -9,6 +9,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from skills_hosts_core import (
+    ASTRBOT_HOST_CAPABILITIES,
     DEFAULT_SOFTWARE_CATALOG,
     build_host_adapters,
     resolve_host_target_path,
@@ -72,6 +73,26 @@ class SkillsHostsCoreTests(unittest.TestCase):
         self.assertEqual("gui", antigravity["kind"])
         self.assertFalse(antigravity["installed"])
         self.assertEqual("/root/antigravity/skills", resolve_host_target_path(antigravity, "global"))
+
+    def test_build_host_adapters_exposes_astrbot_capabilities(self) -> None:
+        software_rows = [
+            {
+                "id": "astrbot",
+                "display_name": "AstrBot",
+                "software_kind": "claw",
+                "software_family": "astrbot",
+                "provider_key": "astrbot",
+                "installed": True,
+                "managed": False,
+                "linked_target_name": "",
+                "declared_skill_roots": ["/srv/astrbot/data/skills"],
+                "resolved_skill_roots": ["/srv/astrbot/data/skills"],
+            }
+        ]
+
+        adapter = build_host_adapters(software_rows)[0]
+        self.assertEqual("astrbot", adapter["runtime_state_backend"])
+        self.assertEqual(ASTRBOT_HOST_CAPABILITIES, adapter["capabilities"])
 
 
 if __name__ == "__main__":

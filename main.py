@@ -1102,6 +1102,7 @@ class OneSyncPlugin(Star):
             skills_snapshot["doctor"] = doctor
         doctor["state_health"] = runtime_health.get("state_health", {})
         doctor["projection_health"] = runtime_health.get("projection_health", {})
+        doctor["astrbot_runtime_health"] = runtime_health.get("astrbot_runtime_health", {})
 
         warnings = _dedupe_keep_order(
             [

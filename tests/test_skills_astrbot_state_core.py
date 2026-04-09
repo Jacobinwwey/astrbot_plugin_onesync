@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from skills_astrbot_state_core import (
+    build_astrbot_host_runtime_state,
+    build_astrbot_state_index,
+)
+
+
+class SkillsAstrBotStateCoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tempdir.cleanup)
+        self.root = Path(self._tempdir.name) / "astrbot-root"
+        self.skills_root = self.root / "data" / "skills"
+        self.skills_root.mkdir(parents=True, exist_ok=True)
+
+    def _write_skill(self, name: str, description: str = "") -> None:
+        skill_dir = self.skills_root / name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        frontmatter = ""
+        if description:
+            frontmatter = f"---\ndescription: {description}\n---\n"
+        (skill_dir / "SKILL.md").write_text(
+            f"{frontmatter}# {name}\n",
+            encoding="utf-8",
+        )
+
+    def _build_host(self) -> dict[str, object]:
+        return {
+            "host_id": "astrbot",
+            "provider_key": "astrbot",
+            "installed": True,
+            "target_paths": {"global": str(self.skills_root), "workspace": ""},
+            "resolved_skill_roots": [str(self.skills_root)],
+            "declared_skill_roots": [str(self.skills_root)],
+        }
+
+    def test_build_astrbot_host_runtime_state_merges_local_sandbox_and_neo(self) -> None:
+        self._write_skill("local-only", "local only")
+        self._write_skill("synced", "synced skill")
+        self._write_skill("neo-demo", "neo skill")
+
+        (self.root / "data" / "skills.json").write_text(
+            json.dumps(
+                {
+                    "skills": {
+                        "local-only": {"active": False},
+                        "synced": {"active": True},
+                        "neo-demo": {"active": True},
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "data" / "sandbox_skills_cache.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "updated_at": "2026-04-09T10:00:00+00:00",
+                    "skills": [
+                        {
+                            "name": "synced",
+                            "description": "synced cache",
+                            "path": "/workspace/skills/synced/SKILL.md",
+                        },
+                        {
+                            "name": "sandbox-only",
+                            "description": "sandbox only",
+                            "path": "/workspace/skills/sandbox-only/SKILL.md",
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (self.skills_root / "neo_skill_map.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "items": {
+                        "demo.skill": {
+                            "local_skill_name": "neo-demo",
+                            "latest_release_id": "rel-1",
+                            "latest_candidate_id": "cand-1",
+                            "latest_payload_ref": "blob:1",
+                            "updated_at": "2026-04-09T10:05:00+00:00",
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        state = build_astrbot_host_runtime_state(self._build_host())
+
+        self.assertEqual("astrbot", state["runtime_state_backend"])
+        self.assertTrue(state["summary"]["skills_config_exists"])
+        self.assertTrue(state["summary"]["sandbox_cache_exists"])
+        self.assertTrue(state["summary"]["neo_map_exists"])
+        self.assertEqual(3, state["summary"]["local_skill_total"])
+        self.assertEqual(1, state["summary"]["local_only_total"])
+        self.assertEqual(1, state["summary"]["synced_total"])
+        self.assertEqual(1, state["summary"]["sandbox_only_total"])
+        self.assertEqual(1, state["summary"]["neo_managed_total"])
+
+        rows = {item["skill_name"]: item for item in state["state_rows"]}
+        self.assertEqual("local_only", rows["local-only"]["state_classification"])
+        self.assertFalse(rows["local-only"]["active"])
+        self.assertEqual("synced", rows["synced"]["state_classification"])
+        self.assertEqual("sandbox_only", rows["sandbox-only"]["state_classification"])
+        self.assertEqual("neo_managed", rows["neo-demo"]["state_classification"])
+        self.assertEqual("demo.skill", rows["neo-demo"]["neo_skill_key"])
+
+        index = build_astrbot_state_index([self._build_host()])
+        self.assertIn("astrbot", index["by_host"])
+        self.assertEqual(4, len(index["rows"]))
+
+    def test_build_astrbot_host_runtime_state_reports_missing_files_and_neo_drift(self) -> None:
+        (self.skills_root / "neo_skill_map.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "items": {
+                        "demo.skill": {
+                            "local_skill_name": "missing-local",
+                            "latest_release_id": "rel-1",
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        state = build_astrbot_host_runtime_state(self._build_host())
+
+        self.assertFalse(state["summary"]["skills_config_exists"])
+        self.assertFalse(state["summary"]["sandbox_cache_exists"])
+        self.assertEqual(1, state["summary"]["drifted_total"])
+        rows = {item["skill_name"]: item for item in state["state_rows"]}
+        self.assertEqual("drifted", rows["missing-local"]["state_classification"])
+        self.assertIn("neo_missing_local_skill", rows["missing-local"]["drift_reasons"])
+        self.assertTrue(any("state drift for missing-local" in item for item in state["warnings"]))
+
+
+if __name__ == "__main__":
+    unittest.main()

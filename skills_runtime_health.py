@@ -101,6 +101,46 @@ def build_skills_runtime_health(
     )
     projection_ok = not missing_projection_bindings and not extra_projection_bindings
 
+    astrbot_state_by_host = (
+        snapshot.get("astrbot_state_by_host", {})
+        if isinstance(snapshot.get("astrbot_state_by_host", {}), dict)
+        else {}
+    )
+    astrbot_hosts = [
+        item
+        for item in astrbot_state_by_host.values()
+        if isinstance(item, dict)
+    ]
+    astrbot_missing_skills_config_total = sum(
+        1
+        for item in astrbot_hosts
+        if not bool(item.get("summary", {}).get("skills_config_exists", False))
+    )
+    astrbot_missing_sandbox_cache_total = sum(
+        1
+        for item in astrbot_hosts
+        if not bool(item.get("summary", {}).get("sandbox_cache_exists", False))
+    )
+    astrbot_sandbox_unready_total = sum(
+        1
+        for item in astrbot_hosts
+        if not bool(item.get("summary", {}).get("sandbox_cache_ready", False))
+    )
+    astrbot_drifted_total = sum(
+        int(item.get("summary", {}).get("drifted_total", 0) or 0)
+        for item in astrbot_hosts
+    )
+    astrbot_warning_total = sum(
+        len(item.get("warnings", []))
+        for item in astrbot_hosts
+        if isinstance(item.get("warnings", []), list)
+    )
+    astrbot_ok = (
+        astrbot_missing_skills_config_total == 0
+        and astrbot_missing_sandbox_cache_total == 0
+        and astrbot_drifted_total == 0
+    )
+
     warnings: list[str] = []
     if not manifest_present:
         warnings.append("skills state file missing: manifest.json")
@@ -136,6 +176,19 @@ def build_skills_runtime_health(
             "skills binding projection has unexpected rows: "
             + _summarize_ids(extra_projection_bindings),
         )
+    for host_id, item in astrbot_state_by_host.items():
+        if not isinstance(item, dict):
+            continue
+        summary = item.get("summary", {}) if isinstance(item.get("summary", {}), dict) else {}
+        if not summary.get("skills_config_exists", False):
+            warnings.append(f"astrbot[{host_id}] missing skills.json")
+        if not summary.get("sandbox_cache_exists", False):
+            warnings.append(f"astrbot[{host_id}] missing sandbox_skills_cache.json")
+        elif not summary.get("sandbox_cache_ready", False):
+            warnings.append(f"astrbot[{host_id}] sandbox cache exists but is empty")
+        drifted_total = int(summary.get("drifted_total", 0) or 0)
+        if drifted_total:
+            warnings.append(f"astrbot[{host_id}] has {drifted_total} drifted runtime skill rows")
 
     return {
         "state_health": {
@@ -164,6 +217,15 @@ def build_skills_runtime_health(
             "binding_rows_missing_ids": missing_projection_bindings,
             "binding_rows_extra_ids": extra_projection_bindings,
         },
+        "astrbot_runtime_health": {
+            "ok": astrbot_ok,
+            "host_total": len(astrbot_hosts),
+            "missing_skills_config_total": astrbot_missing_skills_config_total,
+            "missing_sandbox_cache_total": astrbot_missing_sandbox_cache_total,
+            "sandbox_cache_unready_total": astrbot_sandbox_unready_total,
+            "drifted_total": astrbot_drifted_total,
+            "warning_total": astrbot_warning_total,
+        },
         "counts": {
             "state_manifest_present": 1 if manifest_present else 0,
             "state_lock_present": 1 if lock_present else 0,
@@ -173,6 +235,7 @@ def build_skills_runtime_health(
             "state_generated_files_extra_total": len(extra_generated_files),
             "projection_binding_missing_total": len(missing_projection_bindings),
             "projection_binding_extra_total": len(extra_projection_bindings),
+            "astrbot_runtime_warning_total": astrbot_warning_total,
         },
         "warnings": warnings,
     }
