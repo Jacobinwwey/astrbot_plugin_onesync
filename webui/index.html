@@ -1957,6 +1957,44 @@
       line-height: 1.6;
     }
 
+    .inventory-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .inventory-panel-toggle {
+      min-width: 148px;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    .inventory-panel-collapse-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .inventory-toolbar {
+      margin-bottom: 12px;
+    }
+
+    .inventory-panel-body {
+      display: grid;
+      gap: 0;
+    }
+
+    .inventory-panel.inventory-panel-collapsed {
+      padding-bottom: 12px;
+    }
+
+    .inventory-panel.inventory-panel-collapsed .inventory-head {
+      margin-bottom: 0;
+    }
+
     .inventory-summary {
       margin-bottom: 12px;
     }
@@ -2352,19 +2390,24 @@
           <p class="job-body" id="jobInfo">暂无任务</p>
         </div>
 
-        <div class="inventory-panel" id="sectionInventory">
+        <div class="inventory-panel inventory-panel-collapsed" id="sectionInventory">
           <div class="inventory-head">
             <div class="inventory-head-copy">
               <p class="inventory-title" id="inventoryTitle">Skills管理</p>
               <p class="inventory-head-note" id="inventoryHeadNote">按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。</p>
+              <p class="inventory-panel-collapse-hint" id="inventoryPanelCollapseHint">默认收起，需要时再展开 Skills 运维台。</p>
             </div>
-            <div class="modal-actions">
+            <div class="inventory-head-actions">
+              <button id="inventoryToggleBtn" class="primary inventory-panel-toggle" type="button" aria-expanded="false">展开 Skills管理</button>
+            </div>
+          </div>
+          <div class="inventory-panel-body hidden" id="inventoryPanelBody">
+            <div class="modal-actions inventory-toolbar">
               <button id="inventoryRefreshBtn">刷新资产</button>
               <button id="inventoryImportSourceBtn" class="primary">导入 Source</button>
               <button id="inventorySyncAllBtn">同步全部 Source</button>
             </div>
-          </div>
-          <p class="inventory-summary" id="inventorySummary">正在加载资产信息...</p>
+            <p class="inventory-summary" id="inventorySummary">正在加载资产信息...</p>
           <div class="inventory-status-strip" id="inventoryStatusStrip">
             <div class="debug-empty" id="inventoryStatusStripEmpty">正在整理运维状态...</div>
           </div>
@@ -2667,6 +2710,7 @@
                 </div>
               </div>
             </aside>
+          </div>
           </div>
         </div>
 
@@ -3157,6 +3201,7 @@
       inventoryOverview: null,
       inventorySelectedSoftwareId: "",
       inventorySelectedScope: "global",
+      inventoryPanelExpanded: false,
       inventorySourceCardView: "double",
       inventorySourceCardFontSize: "md",
       inventorySourceCardWidth: "standard",
@@ -3413,6 +3458,9 @@
         guide_doc_ops: "操作与同步手册",
         inventory_title: "Skills管理",
         inventory_head_note: "按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。",
+        inventory_panel_collapse_hint: "默认收起，需要时再展开 Skills 运维台。",
+        inventory_toggle_expand: "展开 Skills管理",
+        inventory_toggle_collapse: "收起 Skills管理",
         inventory_refresh: "刷新资产",
         inventory_import_open: "导入 Source",
         inventory_import_title: "导入 Source",
@@ -3896,6 +3944,9 @@
         guide_doc_ops: "Operations and Sync Manual",
         inventory_title: "Skills Management",
         inventory_head_note: "Manage deployable skills as source packages, with unified host visibility, deployment selection, and drift repair.",
+        inventory_panel_collapse_hint: "Collapsed by default so software operators can expand the skills console only when needed.",
+        inventory_toggle_expand: "Expand Skills Management",
+        inventory_toggle_collapse: "Collapse Skills Management",
         inventory_refresh: "Refresh Inventory",
         inventory_import_open: "Import Source",
         inventory_import_title: "Import Source",
@@ -4424,6 +4475,9 @@
         if (typeof parsed.inventoryScope === "string") {
           state.inventorySelectedScope = normalizeInventoryScope(parsed.inventoryScope);
         }
+        if (typeof parsed.inventoryPanelExpanded === "boolean") {
+          state.inventoryPanelExpanded = parsed.inventoryPanelExpanded;
+        }
         const legacyCardView = typeof parsed.inventoryCardView === "string"
           ? normalizeInventoryCardView(parsed.inventoryCardView)
           : null;
@@ -4503,6 +4557,7 @@
         lang: state.lang,
         aiAutogenAfterLoad: Boolean(state.aiAutogenAfterLoad),
         inventoryScope: normalizeInventoryScope(state.inventorySelectedScope),
+        inventoryPanelExpanded: Boolean(state.inventoryPanelExpanded),
         inventorySourceCardView: normalizeInventoryCardView(state.inventorySourceCardView),
         inventorySourceCardFontSize: normalizeInventoryCardFontSize(state.inventorySourceCardFontSize),
         inventorySourceCardWidth: normalizeInventoryCardWidth(state.inventorySourceCardWidth),
@@ -4557,6 +4612,10 @@
       $("jobTitle").textContent = t("job_title");
       $("inventoryTitle").textContent = t("inventory_title");
       $("inventoryHeadNote").textContent = t("inventory_head_note");
+      $("inventoryPanelCollapseHint").textContent = t("inventory_panel_collapse_hint");
+      $("inventoryToggleBtn").textContent = state.inventoryPanelExpanded
+        ? t("inventory_toggle_collapse")
+        : t("inventory_toggle_expand");
       $("inventoryRefreshBtn").textContent = t("inventory_refresh");
       $("inventoryImportSourceBtn").textContent = t("inventory_import_open");
       $("inventorySyncAllBtn").textContent = state.inventorySyncAllRunning
@@ -6234,6 +6293,14 @@
     }
 
     function renderInventoryPanel() {
+      const inventoryPanelExpanded = Boolean(state.inventoryPanelExpanded);
+      $("sectionInventory").classList.toggle("inventory-panel-collapsed", !inventoryPanelExpanded);
+      $("inventoryPanelBody").classList.toggle("hidden", !inventoryPanelExpanded);
+      $("inventoryToggleBtn").setAttribute("aria-expanded", inventoryPanelExpanded ? "true" : "false");
+      $("inventoryToggleBtn").textContent = inventoryPanelExpanded
+        ? t("inventory_toggle_collapse")
+        : t("inventory_toggle_expand");
+
       const summaryEl = $("inventorySummary");
       const statusStripEl = $("inventoryStatusStrip");
       const selectEl = $("inventorySoftwareSelect");
@@ -9058,6 +9125,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       });
 
       $("opsNavInventory").addEventListener("click", () => {
+        state.inventoryPanelExpanded = true;
+        persistPreferences();
+        renderInventoryPanel();
         scrollToSection("sectionInventory", "opsNavInventory");
       });
 
@@ -9075,6 +9145,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         } catch (err) {
           alert(t("err_run_all", { msg: err.message }));
         }
+      });
+
+      $("inventoryToggleBtn").addEventListener("click", () => {
+        state.inventoryPanelExpanded = !state.inventoryPanelExpanded;
+        persistPreferences();
+        renderInventoryPanel();
       });
 
       $("inventoryRefreshBtn").addEventListener("click", async () => {

@@ -9,6 +9,29 @@ WEBUI_HTML = REPO_ROOT / "webui" / "index.html"
 
 
 class WebUIInventoryLayoutControlsTests(unittest.TestCase):
+    def test_inventory_panel_wraps_body_with_toggleable_header(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventoryToggleBtn"', html)
+        self.assertIn('id="inventoryPanelBody"', html)
+        self.assertIn('id="inventoryPanelCollapseHint"', html)
+
+    def test_inventory_panel_defaults_to_collapsed_and_persists_preference(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('inventoryPanelExpanded: false,', html)
+        self.assertIn('parsed.inventoryPanelExpanded', html)
+        self.assertIn('inventoryPanelExpanded: Boolean(state.inventoryPanelExpanded)', html)
+
+    def test_inventory_panel_toggle_updates_visibility_and_button_state(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('const inventoryPanelExpanded = Boolean(state.inventoryPanelExpanded);', html)
+        self.assertIn('$("sectionInventory").classList.toggle("inventory-panel-collapsed", !inventoryPanelExpanded);', html)
+        self.assertIn('$("inventoryPanelBody").classList.toggle("hidden", !inventoryPanelExpanded);', html)
+        self.assertIn('$("inventoryToggleBtn").setAttribute("aria-expanded", inventoryPanelExpanded ? "true" : "false");', html)
+        self.assertIn('$("inventoryToggleBtn").addEventListener("click"', html)
+
     def test_inventory_panel_exposes_independent_source_and_deploy_layout_controls(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
