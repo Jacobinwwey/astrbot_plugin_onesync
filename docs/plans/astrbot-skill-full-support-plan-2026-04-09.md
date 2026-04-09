@@ -158,6 +158,27 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
 3. 在 runtime health 中加入 AstrBot-specific 健康摘要
 4. 新增对应单测
 
+## Execution Log
+
+### 2026-04-09 / Step 1
+
+- `Phase 1` 已验证并并入 `main`
+- 主干提交：`789d7eb feat(skills): add astrbot runtime state model`
+- 已落地：
+  - AstrBot runtime state adapter
+  - host row runtime summary
+  - doctor 中的 AstrBot runtime health
+  - 对应后端单测
+
+### 2026-04-09 / Step 2
+
+- 从更新后的 `main` 新建干净工作树继续推进：
+  - branch: `feat/astrbot-webui-phase2`
+- 当前切片聚焦：
+  - 在 WebUI Inspector 中暴露 AstrBot runtime summary
+  - 在 Doctor 摘要中拼接 AstrBot-specific health
+  - 保持 action adapter 仍未开放，避免在读模型稳定前提前引入写路径
+
 ## 数据结构约定
 
 ### Host Row 扩展字段

@@ -133,6 +133,27 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("doctor.collection_group_health", html)
         self.assertIn("doctor.collection_group_sync", html)
 
+    def test_inventory_panel_exposes_astrbot_runtime_strings_and_slots(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("inventory_meta_runtime_backend", html)
+        self.assertIn("inventory_meta_host_capabilities", html)
+        self.assertIn("inventory_meta_runtime_state", html)
+        self.assertIn("inventory_meta_runtime_warnings", html)
+        self.assertIn("inventory_astrbot_runtime_title", html)
+        self.assertIn("inventory_astrbot_runtime_empty", html)
+        self.assertIn("inventory_doctor_astrbot", html)
+        self.assertIn('id="inventoryAstrbotRuntimeSummary"', html)
+
+    def test_inventory_panel_exposes_astrbot_runtime_rendering_helpers(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("function inventoryAstrbotRuntimeSummary(", html)
+        self.assertIn("function inventoryAstrbotDoctorSummary(", html)
+        self.assertIn("runtime_state_summary", html)
+        self.assertIn("runtime_state_warning_count", html)
+        self.assertIn("doctor.astrbot_runtime_health", html)
+
     def test_inventory_panel_supports_aggregate_selection_rows(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

@@ -2704,6 +2704,12 @@
                 </div>
                 <div class="skills-subpanel inventory-inspector-card">
                   <div class="skills-subhead">
+                    <p class="inventory-quick-title" id="inventoryAstrbotRuntimeTitle">AstrBot 运行态</p>
+                  </div>
+                  <div class="inventory-soft-meta" id="inventoryAstrbotRuntimeSummary">当前软件不是 AstrBot，或运行态尚不可用。</div>
+                </div>
+                <div class="skills-subpanel inventory-inspector-card">
+                  <div class="skills-subhead">
                     <p class="inventory-quick-title">当前软件元数据</p>
                   </div>
                   <div class="inventory-soft-meta" id="inventorySoftwareMeta">-</div>
@@ -3654,6 +3660,14 @@
         inventory_meta_host_paths: "目标路径",
         inventory_meta_source_supports: "支持 Source",
         inventory_meta_version_pair: "当前/最新",
+        inventory_meta_runtime_backend: "运行态后端",
+        inventory_meta_host_capabilities: "宿主能力",
+        inventory_meta_runtime_state: "运行态摘要",
+        inventory_meta_runtime_paths: "运行路径",
+        inventory_meta_runtime_warnings: "运行警告",
+        inventory_astrbot_runtime_title: "AstrBot 运行态",
+        inventory_astrbot_runtime_empty: "当前软件不是 AstrBot，或运行态尚不可用。",
+        inventory_doctor_astrbot: "AstrBot(hosts/missing_config/missing_cache/cache_unready/drift/warn)={hosts}/{missing_config}/{missing_cache}/{cache_unready}/{drift}/{warnings}",
         inventory_skill_meta_id: "ID",
         inventory_skill_meta_discovered: "已发现",
         inventory_skill_meta_source: "来源",
@@ -4140,6 +4154,14 @@
         inventory_meta_host_paths: "target_paths",
         inventory_meta_source_supports: "source_supports",
         inventory_meta_version_pair: "current/latest",
+        inventory_meta_runtime_backend: "runtime_backend",
+        inventory_meta_host_capabilities: "host_capabilities",
+        inventory_meta_runtime_state: "runtime_state",
+        inventory_meta_runtime_paths: "runtime_paths",
+        inventory_meta_runtime_warnings: "runtime_warnings",
+        inventory_astrbot_runtime_title: "AstrBot Runtime",
+        inventory_astrbot_runtime_empty: "Selected host is not AstrBot or runtime state is unavailable.",
+        inventory_doctor_astrbot: "AstrBot(hosts/missing_config/missing_cache/cache_unready/drift/warn)={hosts}/{missing_config}/{missing_cache}/{cache_unready}/{drift}/{warnings}",
         inventory_skill_meta_id: "id",
         inventory_skill_meta_discovered: "discovered",
         inventory_skill_meta_source: "source",
@@ -5979,6 +6001,115 @@
       ];
     }
 
+    function inventoryAstrbotDoctorSummary(doctor) {
+      const health = doctor && doctor.astrbot_runtime_health && typeof doctor.astrbot_runtime_health === "object"
+        ? doctor.astrbot_runtime_health
+        : {};
+      const hostTotal = Number(health.host_total) || 0;
+      const missingConfigTotal = Number(health.missing_skills_config_total) || 0;
+      const missingCacheTotal = Number(health.missing_sandbox_cache_total) || 0;
+      const cacheUnreadyTotal = Number(health.sandbox_cache_unready_total) || 0;
+      const driftedTotal = Number(health.drifted_total) || 0;
+      const warningTotal = Number(
+        health.warning_total != null
+          ? health.warning_total
+          : health.warning_count,
+      ) || 0;
+      if (!hostTotal && !missingConfigTotal && !missingCacheTotal && !cacheUnreadyTotal && !driftedTotal && !warningTotal) {
+        return "";
+      }
+      return t("inventory_doctor_astrbot", {
+        hosts: hostTotal,
+        missing_config: missingConfigTotal,
+        missing_cache: missingCacheTotal,
+        cache_unready: cacheUnreadyTotal,
+        drift: driftedTotal,
+        warnings: warningTotal,
+      });
+    }
+
+    function inventoryAstrbotRuntimeSummary(host, doctor) {
+      const hostRow = host && typeof host === "object" ? host : {};
+      const backend = String(hostRow.runtime_state_backend || "").trim().toLowerCase();
+      const summary = hostRow.runtime_state_summary && typeof hostRow.runtime_state_summary === "object"
+        ? hostRow.runtime_state_summary
+        : {};
+      const hasAstrbotState = backend === "astrbot" || Boolean(summary.state_available) || Boolean(summary.skills_root);
+      if (!hasAstrbotState) {
+        return "";
+      }
+      const capabilities = Array.isArray(hostRow.capabilities)
+        ? hostRow.capabilities.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const pathParts = [
+        String(summary.astrbot_root || "").trim() ? `root=${String(summary.astrbot_root || "").trim()}` : "",
+        String(summary.astrbot_data_dir || "").trim() ? `data=${String(summary.astrbot_data_dir || "").trim()}` : "",
+        String(summary.skills_root || "").trim() ? `skills=${String(summary.skills_root || "").trim()}` : "",
+      ].filter(Boolean);
+      const stateParts = [
+        `local=${Number(summary.local_skill_total) || 0}`,
+        `active=${Number(summary.active_skill_total) || 0}`,
+        `synced=${Number(summary.synced_total) || 0}`,
+        `sandbox_only=${Number(summary.sandbox_only_total) || 0}`,
+        `neo=${Number(summary.neo_managed_total) || 0}`,
+        `drift=${Number(summary.drifted_total) || 0}`,
+      ];
+      const lines = [
+        `${t("inventory_meta_runtime_backend")}: ${backend || "-"}`,
+        `${t("inventory_meta_host_capabilities")}: ${capabilities.length ? capabilities.join(", ") : "-"}`,
+        `${t("inventory_meta_runtime_state")}: ${stateParts.join(" | ")}`,
+        `${t("inventory_meta_runtime_paths")}: ${pathParts.length ? pathParts.join(" | ") : "-"}`,
+        `${t("inventory_meta_runtime_warnings")}: ${Number(hostRow.runtime_state_warning_count) || 0}`,
+      ];
+      const doctorSummary = inventoryAstrbotDoctorSummary(doctor);
+      if (doctorSummary) {
+        lines.push(doctorSummary);
+      }
+      return lines.join("\n");
+    }
+
+    function inventoryDoctorSummaryText(doctor) {
+      const baseSummary = t("inventory_doctor_summary", {
+        ready: doctor.source_health && doctor.source_health.ready || 0,
+        missing: doctor.source_health && doctor.source_health.missing || 0,
+        provenance_resolved: doctor.provenance_health && doctor.provenance_health.resolved || 0,
+        provenance_partial: doctor.provenance_health && doctor.provenance_health.partial || 0,
+        provenance_unresolved: doctor.provenance_health && doctor.provenance_health.unresolved || 0,
+        install_ready: doctor.install_unit_health && doctor.install_unit_health.ready || 0,
+        install_missing: doctor.install_unit_health && doctor.install_unit_health.missing || 0,
+        install_syncable: doctor.install_unit_sync && doctor.install_unit_sync.syncable || 0,
+        install_sync_ok: doctor.install_unit_sync && doctor.install_unit_sync.ok || 0,
+        install_sync_error: doctor.install_unit_sync && doctor.install_unit_sync.error || 0,
+        install_sync_pending: doctor.install_unit_sync && doctor.install_unit_sync.pending || 0,
+        group_ready: doctor.collection_group_health && doctor.collection_group_health.ready || 0,
+        group_missing: doctor.collection_group_health && doctor.collection_group_health.missing || 0,
+        group_syncable: doctor.collection_group_sync && doctor.collection_group_sync.syncable || 0,
+        group_sync_ok: doctor.collection_group_sync && doctor.collection_group_sync.ok || 0,
+        group_sync_error: doctor.collection_group_sync && doctor.collection_group_sync.error || 0,
+        group_sync_pending: doctor.collection_group_sync && doctor.collection_group_sync.pending || 0,
+        fresh: doctor.source_freshness && doctor.source_freshness.fresh || 0,
+        aging: doctor.source_freshness && doctor.source_freshness.aging || 0,
+        stale: doctor.source_freshness && doctor.source_freshness.stale || 0,
+        fresh_missing: doctor.source_freshness && doctor.source_freshness.missing || 0,
+        syncable: doctor.source_sync && doctor.source_sync.syncable || 0,
+        sync_ok: doctor.source_sync && doctor.source_sync.ok || 0,
+        sync_error: doctor.source_sync && doctor.source_sync.error || 0,
+        sync_pending: doctor.source_sync && doctor.source_sync.pending || 0,
+        deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
+        deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
+        deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
+        deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
+        state_manifest: doctor.state_health && doctor.state_health.manifest_present ? 1 : 0,
+        state_lock: doctor.state_health && doctor.state_health.lock_present ? 1 : 0,
+        state_source_missing: doctor.state_health && doctor.state_health.source_files_missing_total || 0,
+        state_generated_missing: doctor.state_health && doctor.state_health.generated_files_missing_total || 0,
+        projection_missing: doctor.projection_health && doctor.projection_health.binding_rows_missing_total || 0,
+        projection_extra: doctor.projection_health && doctor.projection_health.binding_rows_extra_total || 0,
+      });
+      const astrbotSummary = inventoryAstrbotDoctorSummary(doctor);
+      return [baseSummary, astrbotSummary].filter(Boolean).join(" | ");
+    }
+
     function inventoryCompatibleSourceRows(overview, softwareId) {
       const snapshot = overview && typeof overview === "object" ? overview : {};
       const normalizedSoftwareId = String(softwareId || "").trim();
@@ -6337,6 +6468,8 @@
       const sourceRowsEl = $("inventorySourceRows");
       const deployRowsEl = $("inventoryDeployRows");
       const doctorSummaryEl = $("inventoryDoctorSummary");
+      const astrbotRuntimeTitleEl = $("inventoryAstrbotRuntimeTitle");
+      const astrbotRuntimeSummaryEl = $("inventoryAstrbotRuntimeSummary");
       const targetHeroEl = $("inventoryTargetHero");
       const repairNoteEl = $("inventoryRepairNote");
       const repairActionsEl = $("inventoryRepairActions");
@@ -6988,43 +7121,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         }).join("")
         : `<div class="debug-empty">${t(deployRows.length ? "inventory_deploy_empty_filtered" : "inventory_deploy_empty")}</div>`;
 
-      doctorSummaryEl.textContent = t("inventory_doctor_summary", {
-        ready: doctor.source_health && doctor.source_health.ready || 0,
-        missing: doctor.source_health && doctor.source_health.missing || 0,
-        provenance_resolved: doctor.provenance_health && doctor.provenance_health.resolved || 0,
-        provenance_partial: doctor.provenance_health && doctor.provenance_health.partial || 0,
-        provenance_unresolved: doctor.provenance_health && doctor.provenance_health.unresolved || 0,
-        install_ready: doctor.install_unit_health && doctor.install_unit_health.ready || 0,
-        install_missing: doctor.install_unit_health && doctor.install_unit_health.missing || 0,
-        install_syncable: doctor.install_unit_sync && doctor.install_unit_sync.syncable || 0,
-        install_sync_ok: doctor.install_unit_sync && doctor.install_unit_sync.ok || 0,
-        install_sync_error: doctor.install_unit_sync && doctor.install_unit_sync.error || 0,
-        install_sync_pending: doctor.install_unit_sync && doctor.install_unit_sync.pending || 0,
-        group_ready: doctor.collection_group_health && doctor.collection_group_health.ready || 0,
-        group_missing: doctor.collection_group_health && doctor.collection_group_health.missing || 0,
-        group_syncable: doctor.collection_group_sync && doctor.collection_group_sync.syncable || 0,
-        group_sync_ok: doctor.collection_group_sync && doctor.collection_group_sync.ok || 0,
-        group_sync_error: doctor.collection_group_sync && doctor.collection_group_sync.error || 0,
-        group_sync_pending: doctor.collection_group_sync && doctor.collection_group_sync.pending || 0,
-        fresh: doctor.source_freshness && doctor.source_freshness.fresh || 0,
-        aging: doctor.source_freshness && doctor.source_freshness.aging || 0,
-        stale: doctor.source_freshness && doctor.source_freshness.stale || 0,
-        fresh_missing: doctor.source_freshness && doctor.source_freshness.missing || 0,
-        syncable: doctor.source_sync && doctor.source_sync.syncable || 0,
-        sync_ok: doctor.source_sync && doctor.source_sync.ok || 0,
-        sync_error: doctor.source_sync && doctor.source_sync.error || 0,
-        sync_pending: doctor.source_sync && doctor.source_sync.pending || 0,
-        deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
-        deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
-        deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
-        deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
-        state_manifest: doctor.state_health && doctor.state_health.manifest_present ? 1 : 0,
-        state_lock: doctor.state_health && doctor.state_health.lock_present ? 1 : 0,
-        state_source_missing: doctor.state_health && doctor.state_health.source_files_missing_total || 0,
-        state_generated_missing: doctor.state_health && doctor.state_health.generated_files_missing_total || 0,
-        projection_missing: doctor.projection_health && doctor.projection_health.binding_rows_missing_total || 0,
-        projection_extra: doctor.projection_health && doctor.projection_health.binding_rows_extra_total || 0,
-      });
+      doctorSummaryEl.textContent = inventoryDoctorSummaryText(doctor);
       installUnitTitleEl.textContent = t("inventory_install_unit_title");
       refreshInstallUnitBtn.textContent = state.inventoryRefreshingInstallUnit
         ? t("inventory_install_unit_refreshing")
@@ -7280,9 +7377,13 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           })
           .filter(Boolean)
         : [];
+      const hostCapabilities = Array.isArray(selectedHost.capabilities)
+        ? selectedHost.capabilities.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
       const supportedSourceKinds = Array.isArray(selectedHost.supports_source_kinds)
         ? selectedHost.supports_source_kinds.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
+      const astrbotRuntimeText = inventoryAstrbotRuntimeSummary(selectedHost, doctor);
       const softMetaLines = [
         `${t("inventory_meta_kind")}: ${selectedSoftware.software_kind || "-"}`,
         `${t("inventory_meta_provider")}: ${selectedSoftware.provider_key || "-"}`,
@@ -7293,8 +7394,13 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         `${t("inventory_meta_version_pair")}: ${selectedSoftware.current_version || "-"} / ${selectedSoftware.latest_version || "-"}`,
         `${t("inventory_meta_host_paths")}: ${hostTargetPaths.length ? hostTargetPaths.join(" | ") : "-"}`,
         `${t("inventory_meta_source_supports")}: ${supportedSourceKinds.length ? supportedSourceKinds.join(", ") : "-"}`,
+        `${t("inventory_meta_runtime_backend")}: ${selectedHost.runtime_state_backend || "-"}`,
+        `${t("inventory_meta_host_capabilities")}: ${hostCapabilities.length ? hostCapabilities.join(", ") : "-"}`,
+        `${t("inventory_meta_runtime_warnings")}: ${Number(selectedHost.runtime_state_warning_count) || 0}`,
       ];
       metaEl.textContent = softMetaLines.join("\n");
+      astrbotRuntimeTitleEl.textContent = t("inventory_astrbot_runtime_title");
+      astrbotRuntimeSummaryEl.textContent = astrbotRuntimeText || t("inventory_astrbot_runtime_empty");
 
       if (selectedDeployRow) {
         const selectedCount = Number(selectedDeployRow.selected_source_count ?? (Array.isArray(selectedDeployRow.selected_source_ids) ? selectedDeployRow.selected_source_ids.length : 0)) || 0;
@@ -7820,43 +7926,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const doctor = result.doctor || {};
       const warnings = Array.isArray(result.warnings) ? result.warnings : [];
       const message = [
-        t("inventory_doctor_summary", {
-          ready: doctor.source_health && doctor.source_health.ready || 0,
-          missing: doctor.source_health && doctor.source_health.missing || 0,
-          provenance_resolved: doctor.provenance_health && doctor.provenance_health.resolved || 0,
-          provenance_partial: doctor.provenance_health && doctor.provenance_health.partial || 0,
-          provenance_unresolved: doctor.provenance_health && doctor.provenance_health.unresolved || 0,
-          install_ready: doctor.install_unit_health && doctor.install_unit_health.ready || 0,
-          install_missing: doctor.install_unit_health && doctor.install_unit_health.missing || 0,
-          install_syncable: doctor.install_unit_sync && doctor.install_unit_sync.syncable || 0,
-          install_sync_ok: doctor.install_unit_sync && doctor.install_unit_sync.ok || 0,
-          install_sync_error: doctor.install_unit_sync && doctor.install_unit_sync.error || 0,
-          install_sync_pending: doctor.install_unit_sync && doctor.install_unit_sync.pending || 0,
-          group_ready: doctor.collection_group_health && doctor.collection_group_health.ready || 0,
-          group_missing: doctor.collection_group_health && doctor.collection_group_health.missing || 0,
-          group_syncable: doctor.collection_group_sync && doctor.collection_group_sync.syncable || 0,
-          group_sync_ok: doctor.collection_group_sync && doctor.collection_group_sync.ok || 0,
-          group_sync_error: doctor.collection_group_sync && doctor.collection_group_sync.error || 0,
-          group_sync_pending: doctor.collection_group_sync && doctor.collection_group_sync.pending || 0,
-          fresh: doctor.source_freshness && doctor.source_freshness.fresh || 0,
-          aging: doctor.source_freshness && doctor.source_freshness.aging || 0,
-          stale: doctor.source_freshness && doctor.source_freshness.stale || 0,
-          fresh_missing: doctor.source_freshness && doctor.source_freshness.missing || 0,
-          syncable: doctor.source_sync && doctor.source_sync.syncable || 0,
-          sync_ok: doctor.source_sync && doctor.source_sync.ok || 0,
-          sync_error: doctor.source_sync && doctor.source_sync.error || 0,
-          sync_pending: doctor.source_sync && doctor.source_sync.pending || 0,
-          deploy_ready: doctor.deploy_health && doctor.deploy_health.ready || 0,
-          deploy_idle: doctor.deploy_health && doctor.deploy_health.idle || 0,
-          deploy_stale: doctor.deploy_health && doctor.deploy_health.stale || 0,
-          deploy_unavailable: doctor.deploy_health && doctor.deploy_health.unavailable || 0,
-          state_manifest: doctor.state_health && doctor.state_health.manifest_present ? 1 : 0,
-          state_lock: doctor.state_health && doctor.state_health.lock_present ? 1 : 0,
-          state_source_missing: doctor.state_health && doctor.state_health.source_files_missing_total || 0,
-          state_generated_missing: doctor.state_health && doctor.state_health.generated_files_missing_total || 0,
-          projection_missing: doctor.projection_health && doctor.projection_health.binding_rows_missing_total || 0,
-          projection_extra: doctor.projection_health && doctor.projection_health.binding_rows_extra_total || 0,
-        }),
+        inventoryDoctorSummaryText(doctor),
         warnings.length ? warnings.join("\n") : "OK",
       ].join("\n");
       $("inventoryDoctorSummary").textContent = message;
