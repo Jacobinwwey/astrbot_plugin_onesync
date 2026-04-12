@@ -224,15 +224,13 @@ def _derive_astrbot_layout(skills_root: Path) -> tuple[Path, Path]:
     return root_dir, data_dir
 
 
-def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
-    host_id = str(host.get("host_id") or host.get("id") or "").strip()
-    provider_key = str(host.get("provider_key") or host_id).strip()
-    if _slug(provider_key or host_id, default="") != "astrbot":
-        return {}
+def resolve_astrbot_host_layout(host: dict[str, Any] | None) -> dict[str, Any]:
+    normalized_host = host if isinstance(host, dict) else {}
+    host_id = str(normalized_host.get("host_id") or normalized_host.get("id") or "").strip()
+    provider_key = str(normalized_host.get("provider_key") or host_id).strip()
+    is_astrbot = _slug(provider_key or host_id, default="") == "astrbot"
 
-    warnings: list[str] = []
-    installed = _to_bool(host.get("installed", False), False)
-    candidates = _skills_root_candidates(host)
+    candidates = _skills_root_candidates(normalized_host) if is_astrbot else []
     selected_skills_root = candidates[0] if candidates else Path()
     root_dir = Path()
     data_dir = Path()
@@ -243,6 +241,34 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
     skills_config_path = data_dir / "skills.json" if str(data_dir) else Path()
     sandbox_cache_path = data_dir / "sandbox_skills_cache.json" if str(data_dir) else Path()
     neo_map_path = skills_root / "neo_skill_map.json" if str(skills_root) else Path()
+
+    return {
+        "host_id": host_id,
+        "provider_key": provider_key,
+        "is_astrbot": is_astrbot,
+        "state_available": bool(candidates),
+        "skills_root": str(skills_root) if str(skills_root) else "",
+        "astrbot_root": str(root_dir) if str(root_dir) else "",
+        "astrbot_data_dir": str(data_dir) if str(data_dir) else "",
+        "skills_config_path": str(skills_config_path) if str(skills_config_path) else "",
+        "sandbox_cache_path": str(sandbox_cache_path) if str(sandbox_cache_path) else "",
+        "neo_map_path": str(neo_map_path) if str(neo_map_path) else "",
+    }
+
+
+def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
+    layout = resolve_astrbot_host_layout(host)
+    if not _to_bool(layout.get("is_astrbot"), False):
+        return {}
+    host_id = str(layout.get("host_id") or "").strip()
+    provider_key = str(layout.get("provider_key") or host_id).strip()
+
+    warnings: list[str] = []
+    installed = _to_bool(host.get("installed", False), False)
+    skills_root = Path(str(layout.get("skills_root") or "").strip()).expanduser()
+    skills_config_path = Path(str(layout.get("skills_config_path") or "").strip()).expanduser()
+    sandbox_cache_path = Path(str(layout.get("sandbox_cache_path") or "").strip()).expanduser()
+    neo_map_path = Path(str(layout.get("neo_map_path") or "").strip()).expanduser()
 
     local_skills = _collect_local_skills(skills_root, warnings) if str(skills_root) else {}
     active_flags = _collect_active_flags(skills_config_path, warnings) if str(skills_config_path) else {}
@@ -304,10 +330,10 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
 
     summary = {
         "host_installed": installed,
-        "state_available": bool(candidates),
+        "state_available": _to_bool(layout.get("state_available"), False),
         "skills_root": str(skills_root) if str(skills_root) else "",
-        "astrbot_root": str(root_dir) if str(root_dir) else "",
-        "astrbot_data_dir": str(data_dir) if str(data_dir) else "",
+        "astrbot_root": str(layout.get("astrbot_root") or "").strip(),
+        "astrbot_data_dir": str(layout.get("astrbot_data_dir") or "").strip(),
         "skills_config_exists": bool(skills_config_path) and skills_config_path.exists(),
         "sandbox_cache_exists": bool(sandbox_cache_path) and sandbox_cache_path.exists(),
         "sandbox_cache_ready": bool(sandbox_cache),
@@ -328,7 +354,7 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
         "host_id": host_id,
         "provider_key": provider_key,
         "runtime_state_backend": "astrbot",
-        "available": bool(candidates),
+        "available": _to_bool(layout.get("state_available"), False),
         "summary": summary,
         "state_rows": state_rows,
         "warnings": warnings,

@@ -2,7 +2,7 @@
 
 > Language / 语言: [English](./SKILLS_UPDATE_STATUS_en.md) | [中文](./SKILLS_UPDATE_STATUS_zh.md)
 
-Audit date: `2026-04-08`  
+Audit date: `2026-04-12`  
 Scope: current `main` branch, source-first Skills management model
 
 ## 1. What Is Actually Complete Today
@@ -37,11 +37,17 @@ This refreshes saved source metadata from an upstream source.
 
 Current reality:
 
-- Supported only for npm-backed sources with both:
+- Supports two sync adapters today: npm-backed and git-backed sources.
+- npm-backed still requires both:
   - `registry_package_name`
   - `registry_package_manager == "npm"`
-- The implementation currently fetches npm registry metadata only.
-- GitHub/community/catalog/documented repo references are not metadata-syncable yet.
+- git-backed is considered syncable when any of these paths applies:
+  - manager is `git/github` with `source_path` or a git locator
+  - `source_kind == "manual_git"` with `source_path` or a git locator
+  - `update_policy == "source_sync"` with `source_path` or a git locator
+- npm sync uses registry metadata; git sync uses remote/head plus local checkout metadata.
+- Repo-reference sources (`repo:` / `documented:` / `catalog:` / `community:`) can now sync repository metadata for GitHub, GitLab, and Bitbucket locators.
+- Self-hosted GitHub/GitLab/Bitbucket instances are now syncable through `sync_api_base + sync_auth_header/sync_auth_token`; unknown providers still require dedicated adapters.
 
 ### 2.3 `Update Install Unit` / `Update Collection`
 
@@ -50,7 +56,22 @@ This executes a real update command derived from the install unit.
 Current reality:
 
 - Registry-backed install units can be updated through `bunx`, `npx`, `pnpm dlx`, or `npm install -g`.
-- Git-backed install units can be updated with `git -C <source_path> pull --ff-only` when a local checkout path exists.
+- Git-backed install units now support managed checkout bootstrap:
+  - If the original `source_path` is already a git worktree, OneSync reuses it directly.
+  - If the leaf skill directory is not a git repository but locator/provenance still resolve to an upstream git repo, OneSync now materializes a managed checkout under `plugin_data/.../skills/git_repos/`.
+  - Sync and update now prefer `git_checkout_path` over the leaf skill directory.
+- Git-backed install units can be updated with `git -C <checkout_path> pull --ff-only` when a usable checkout path exists, and now run prechecks first:
+  - `git -C <source_path> rev-parse --is-inside-work-tree`
+  - `test -z "$(git -C <source_path> status --porcelain)"`
+- Git-backed update execution now includes before/after revision capture with changed/no-change/unknown summaries.
+- Git-backed update execution now includes rollback preview candidates (preview only, not auto-executed).
+- Executable rollback APIs are now available (install unit / collection group) with explicit confirmation requirements:
+  - `payload.execute = true`
+  - `payload.confirm = "ROLLBACK_ACCEPT_RISK"`
+- WebUI now includes a baseline rollback flow:
+  - cache before-revision snapshots from the latest update response
+  - run aggregate-level rollback confirmation and call rollback APIs
+  - display restored/not-restored/failed summary after rollback
 - Manual/local custom/repo-reference-only aggregates are still unsupported unless OneSync can derive a concrete executable update command.
 
 ## 3. Current Support Matrix
@@ -58,8 +79,8 @@ Current reality:
 | Install/source shape | Example | `Sync Source` | `Update Install Unit` | Notes |
 | --- | --- | --- | --- | --- |
 | npm package-backed bundle/single | `npm:@every-env/compound-plugin` | Yes | Yes | Sync reads npm registry metadata. Update uses `management_hint` first, otherwise a registry command is built. |
-| Git-backed local checkout / skill-lock entry | `skill_lock:https://github.com/vercel-labs/skills.git#skills/find-skills` | No | Yes, if local `source_path` exists | Update becomes `git -C <path> pull --ff-only`. This is update support, not source-sync support. |
-| Documented/catalog/community repo reference without executable manager | `repo:https://github.com/...#skills/foo` | No | Usually no | These rows improve provenance and grouping, but they are not automatically updateable yet. |
+| Git-backed local checkout / skill-lock entry | `skill_lock:https://github.com/vercel-labs/skills.git#skills/find-skills` | Yes (git remote/head, managed checkout, or local checkout metadata) | Yes | If the original skill path is not a git worktree, OneSync now bootstraps a managed checkout under `plugin_data/.../skills/git_repos/` and executes `git pull --ff-only` from there. |
+| Documented/catalog/community repo reference without executable manager | `repo:https://github.com/...#skills/foo` | Partial (repo metadata only) | Usually no | Source Sync can refresh metadata from GitHub/GitLab/Bitbucket (for example pushed/updated timestamp), but update execution is still unsupported. |
 | Manual local path / self-authored local custom skill | `local_custom:/path/to/skill` | No | No | OneSync can inventory, classify, and deploy them, but cannot infer a safe update command. |
 | Manual git source registered without a usable local checkout | `manual_git` remote | No | No | A remote locator alone is not enough; a resolvable local checkout path is required for git update execution. |
 
@@ -75,6 +96,7 @@ The authoritative fields are:
 - `registry_package_name`
 - `registry_package_manager`
 - `sync_status`
+- `sync_local_revision` / `sync_remote_revision` / `sync_resolved_revision`
 
 Important nuance:
 
@@ -86,18 +108,19 @@ This matters for local custom skills such as `doc`: they can be discovered from 
 
 ## 5. Current Verdict
 
-If the question is "is the current skill update function complete?", the answer is:
+If the question is "is the current skill update function complete?", the answer now needs to be refined to:
 
 - Discovery/import/provenance: largely complete for the current v1 scope.
-- Install-unit update execution: partially complete.
-- Source metadata sync: not complete yet.
+- Install-unit / collection-group update execution: core paths are now usable.
+- Source metadata sync: core paths are now usable, while provider breadth and remote stability still need work.
 
 More specifically:
 
-- Complete enough today for package-backed npm updates and git-backed local checkouts.
-- Not complete for repo-derived sources that only carry provenance/reference information.
+- Complete enough today for package-backed npm updates and git-backed `skill_lock` sources.
+- Partially complete for repo-derived sources: GitHub/GitLab/Bitbucket locators support metadata sync; update execution remains unsupported.
 - Not complete for local custom/manual skills.
-- Not complete for non-npm upstream metadata refresh.
+- Git-backed metadata refresh (remote/head + local checkout) is supported; repo-reference metadata sync is supported for GitHub/GitLab/Bitbucket (including self-hosted instances with auth/api-base overrides); unknown providers remain incomplete.
+- `synthetic_single` / `derived` aggregates without a real package boundary are now explicitly downgraded to `manual_only` instead of pretending to be updateable.
 
 ## 6. Maintainer Verification Procedure
 
@@ -113,15 +136,99 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 What to confirm:
 
 - `counts.source_provenance_unresolved_total == 0` for the current runtime snapshot.
-- `counts.source_syncable_total` only counts npm-backed sources today.
+- `counts.source_syncable_total` now counts npm-backed, git-backed, and repo-metadata-backed sources (GitHub/GitLab/Bitbucket).
 - Supported install units expose non-empty `update_plan.commands`.
+- Git-backed install units expose `update_plan.precheck_commands`.
+- Git-backed `skill_lock` install units expose `git_checkout_path` on source rows after the first sync/update bootstrap.
+- Git-backed update responses expose `revision_capture` (before/after/delta).
+- When revisions changed, update responses also expose `rollback_preview.candidates`.
+- Rollback API responses expose structured restore metrics (`restored_source_total`, `not_restored_source_total`, `failed_sources`).
 - Local custom skills expose `update_plan.supported = false`.
+- Git-backed source sync emits structured revision fields (`sync_*revision`).
+- Overview counts expose `source_sync_dirty_total` and `source_sync_revision_drift_total`.
 
 ## 7. Recommended Next Steps
 
 To call the feature "complete", the next implementation steps should be:
 
-1. Add repo-aware source sync adapters for git/GitHub-style sources.
-2. Surface unsupported reasons more explicitly in the UI.
-3. Separate "provenance origin" from "update mechanism" more clearly in panel copy.
-4. Add more end-to-end tests around install-unit detail payloads and live sync/update behavior.
+1. Add adapters for unknown/non-GitHub/GitLab/Bitbucket providers and unify auth strategy across adapters.
+2. Harden the UI rollback workflow on top of the current rollback API (candidate selection, retry handling, visible audit trails, and rollback history).
+3. Surface unsupported/precheck-failure reasons more explicitly in the UI.
+4. Separate "provenance origin" from "update mechanism" more clearly in panel copy.
+5. Add more end-to-end tests around install-unit detail payloads and live sync/update behavior.
+
+## 8. Recent Implementation Progress (2026-04-12)
+
+- Batch aggregate update is now wired in both backend and WebUI:
+  - `POST /api/skills/aggregates/update-all`
+  - Frontend action: `Update All Aggregates`
+  - Response now returns executed/skipped/source-sync/deduplicated breakdown instead of a generic aggregate success/failure shell.
+- Managed git checkout bootstrap is now live:
+  - `find-skills` and `frontend-design` now bootstrap managed checkouts in the live 8099 environment and update successfully instead of failing with `git_source_unresolved`.
+  - Current managed checkout directories include:
+    - `/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-55d42a13a220`
+    - `/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-7d7c7a8d88f1`
+- Sync metadata writeback is now authoritative:
+  - `saved_registry` is treated as the authority for sync fields, so successful sync/update no longer leaves stale error codes behind.
+- `synthetic_single:*` no-package-boundary aggregates are now stabilized as `manual_only`:
+  - bogus commands like `npx npx_global_*` are no longer generated
+  - the stable skipped set now includes:
+    - `synthetic_single:npx_global_awesome_design_md`
+    - `synthetic_single:npx_global_clone_website`
+    - `synthetic_single:npx_global_impeccable`
+    - `synthetic_single:npx_global_terminal_dialog_style`
+    - `local_custom:/root/.codex/skills/doc`
+    - `derived:npx_global_playwright_interactive`
+- Latest live 8099 verification for `POST /api/skills/aggregates/update-all`:
+  - `candidate_install_unit_total = 20`
+  - `executed_install_unit_total = 14`
+  - `command_install_unit_total = 3`
+  - `source_sync_install_unit_total = 11`
+  - `skipped_install_unit_total = 6`
+  - `success_count = 8`
+  - `failure_count = 2`
+  - `precheck_failure_count = 0`
+- Full regression result is now:
+  - `pytest -q` -> `164 passed`
+
+- WebUI now renders a rollback audit trail panel backed by `/api/skills/audit?action=rollback`, with automatic switching between current-aggregate scope and global recent records.
+- Rollback flow now supports selective rollback by `source_id`, so operators can scope blast radius instead of always rolling back the full aggregate.
+- Rollback flow now supports a retry pass: unresolved sources from the first rollback response are extracted and retried as a targeted second run.
+- After rollback execution, the panel refreshes rollback audit records and aggregate details to keep recovery state observable.
+- Operation-plan preview now surfaces precheck commands and blocked-unit reasons, so unsupported updates are actionable instead of generic.
+- Source Sync now includes a repo-metadata adapter for `repo:`/`documented:`-style GitHub locators, so provenance-only sources can still refresh upstream metadata.
+- Source Sync repo-metadata adapter now also supports GitLab and Bitbucket locators.
+- Source Sync now supports authenticated repo-metadata sync with `sync_auth_token` / `sync_auth_header` / `sync_api_base` flowing through registry -> overview -> sync adapter.
+- Repo-metadata errors are now layered (`auth_failed`, `rate_limited`, `provider_unreachable`, `auth_config_invalid`, `api_base_invalid`) for actionable diagnostics.
+- WebUI source panels now expose structured sync errors (`sync_error_code`) with label + remediation hints.
+- WebUI `/api/skills/*` responses now redact auth-sensitive sync fields: `sync_auth_token` is always blanked and paired with `sync_auth_token_configured`; `sync_auth_header` is masked as `Header: <redacted>` when provided in `Header: value` form (header strategy remains visible, secret value is hidden).
+- Inventory routes that can carry embedded `skills` snapshots (`/api/inventory/bindings`, `/api/inventory/scan`) now use the same redaction boundary to prevent non-skills route bypass.
+- Redaction is applied on both success and error response paths, and route-level regression tests were added; current regression result: `python3 -m pytest tests -q` -> `151 passed`.
+- `/api/config` no longer returns plaintext `web_admin.password`; config reads now return an empty password plus `password_configured` (also surfaced via `meta.web_admin_password_configured`).
+- Config updates now support `web_admin.password_mode` (`keep`/`set`/`clear`), and the frontend now emits explicit mode semantics to prevent accidental password clearing on blank input.
+- The config panel password field is now `type=password`, no longer prefilled with secrets, and includes explicit clear-password controls with dynamic hints.
+- Skills update execution is now hardened:
+  - Registry-backed updates now include runner prechecks (`bunx`/`npx`/`pnpm`/`npm`) so missing runtime tools surface before update execution.
+  - When the primary registry command fails with `command not found`, OneSync now auto-tries fallback manager commands for the same install_ref.
+  - When `update_plan.supported=false` but all sources remain syncable, update now auto-degrades to source sync (`fallback_mode=source_sync`) instead of hard unsupported.
+- Aggregate update preview and frontend action gating are now aligned on one executable model:
+  - Detail-level `update_plan` now exposes `update_mode` (`command`/`source_sync`/`manual_only`) and `actionable`.
+  - The frontend update button no longer depends only on `command_count`; it uses `actionable` first and still supports `source_sync` fallback.
+  - Operation-plan cards now render an explicit execution mode so `manual_only` units are not mistaken for auto-updateable units.
+- Latest runtime verification on `8099`:
+  - Total install units: `18`
+  - Actionable preview: `16` (`command=5`, `source_sync=11`)
+  - `manual_only=2`: `local_custom:/root/.codex/skills/doc`, `derived:npx_global_playwright_interactive`
+- Current regression result is now: `python3 -m pytest tests -q` -> `153 passed`.
+- AstrBot Phase 3 minimal action adapter is now wired:
+  - New API surface: `/api/skills/hosts/{host_id}/astrbot`, `/skills/toggle`, `/skills/delete`, `/sandbox/sync`.
+  - Local skill toggle now writes `skills.json`; delete now removes local skill directory and cleans both `skills.json` and `sandbox_skills_cache.json`.
+  - `sandbox_only` skills are now explicitly guarded against local toggle/delete to avoid runtime preset corruption.
+- AstrBot Phase 4 read-model baseline is now wired:
+  - Added stable Neo source ids in the form `astrneo:{host_id}:{skill_key}`.
+  - Added read-only API routes: `GET /api/skills/astrbot-neo-sources` and `GET /api/skills/astrbot-neo-sources/{source_id}`.
+  - Neo source rows now expose release/candidate/payload references for upcoming promote/sync/rollback write paths.
+- Added AstrBot action adapter regression coverage in `tests/test_skills_astrbot_actions_core.py`; full suite is now `160 passed`.
+- AstrBot Phase 4 Neo write path is now wired: added `POST /api/skills/astrbot-neo-sources/{source_id}/sync` with Neo release sync execution and audit trail writeback (`astrbot_neo_source_sync`).
+- Full regression is now: `python3 -m pytest tests -q` -> `161 passed`.
+- WebUI Source / Bundle now surfaces and operates `astrneo:*` rows: Neo standalone sources are visible, detail loading auto-routes to `/api/skills/astrbot-neo-sources/{source_id}`, and the sync button auto-switches to the Neo sync API.

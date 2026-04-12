@@ -182,6 +182,30 @@ class SkillsSourcesCoreTests(unittest.TestCase):
         self.assertEqual("https://github.com/demo/skills.git", source["locator"])
         self.assertEqual("packages/codex", source["source_subpath"])
 
+    def test_register_manual_git_source_preserves_sync_auth_fields(self) -> None:
+        registry = normalize_skills_registry({})
+
+        created = register_registry_source(
+            registry,
+            {
+                "display_name": "Private GitLab Skills",
+                "source_kind": "manual_git",
+                "locator": "repo:https://gitlab.internal/group/skills-pack#skills",
+                "source_scope": "global",
+                "managed_by": "gitlab",
+                "sync_api_base": "https://gitlab.internal/api/v4",
+                "sync_auth_header": "PRIVATE-TOKEN",
+                "sync_auth_token": "token-abc",
+            },
+            generated_at="2026-04-11T11:05:00+00:00",
+        )
+
+        self.assertEqual(1, len(created["sources"]))
+        source = created["sources"][0]
+        self.assertEqual("https://gitlab.internal/api/v4", source["sync_api_base"])
+        self.assertEqual("PRIVATE-TOKEN", source["sync_auth_header"])
+        self.assertEqual("token-abc", source["sync_auth_token"])
+
     def test_build_skills_registry_preserves_explicit_aggregation_fields_from_discovered_rows(self) -> None:
         discovered_rows = [
             {

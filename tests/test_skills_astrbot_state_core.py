@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 from skills_astrbot_state_core import (
     build_astrbot_host_runtime_state,
     build_astrbot_state_index,
+    resolve_astrbot_host_layout,
 )
 
 
@@ -154,6 +155,20 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
         self.assertEqual("drifted", rows["missing-local"]["state_classification"])
         self.assertIn("neo_missing_local_skill", rows["missing-local"]["drift_reasons"])
         self.assertTrue(any("state drift for missing-local" in item for item in state["warnings"]))
+
+    def test_resolve_astrbot_host_layout_returns_expected_paths(self) -> None:
+        layout = resolve_astrbot_host_layout(self._build_host())
+
+        self.assertTrue(layout["is_astrbot"])
+        self.assertTrue(layout["state_available"])
+        self.assertEqual(str(self.skills_root), layout["skills_root"])
+        self.assertEqual(str(self.root / "data"), layout["astrbot_data_dir"])
+        self.assertEqual(str(self.root / "data" / "skills.json"), layout["skills_config_path"])
+        self.assertEqual(
+            str(self.root / "data" / "sandbox_skills_cache.json"),
+            layout["sandbox_cache_path"],
+        )
+        self.assertEqual(str(self.skills_root / "neo_skill_map.json"), layout["neo_map_path"])
 
 
 if __name__ == "__main__":

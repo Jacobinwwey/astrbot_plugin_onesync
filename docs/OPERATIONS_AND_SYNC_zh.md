@@ -108,6 +108,21 @@ git push origin main --tags
 - Python 文件是否通过语法检查
 - WebUI 路由是否可用（至少校验 `/api/health` 与 `/api/config`）
 
+### 5.4 文档同步建议
+
+当本轮改动既影响实现又影响运维认知时，不要只改一份状态文档。
+
+建议至少同步这些入口：
+
+- `README.md` / `README_en.md`
+- `docs/SKILLS_UPDATE_STATUS_zh.md` / `docs/SKILLS_UPDATE_STATUS_en.md`
+- 相关 `docs/plans/*` 与 `docs/brainstorms/*`
+
+如果本机 live 插件目录与开发仓库并行存在，还要额外确认：
+
+- `/root/astrbot/data/plugins/astrbot_plugin_onesync/docs/*` 是否需要同步到当前运行实例
+- 文档引用的 API 路径、统计口径和运行态验证结果是否与 8099 当前服务一致
+
 ## 6. Skills 更新维护说明
 
 在维护 Skills 管理链路时，需要明确区分以下几类动作：
@@ -118,9 +133,29 @@ git push origin main --tags
 
 当前实现状态：
 
-- Source sync 目前仅支持 npm registry。
-- Install unit update 取决于是否能推导出可执行命令。
-- git-backed install unit 只有在存在本地 checkout 路径时才支持更新。
-- local custom / manual skills 可以被发现和部署，但仍不支持自动更新。
+- Source sync 现已支持：
+  - npm registry metadata
+  - git remote/head 或本地 checkout 元数据
+  - GitHub / GitLab / Bitbucket repo metadata
+- install unit update 取决于 `update_plan` 的真实执行能力，而不是 `source_kind` 名称。
+- git-backed `skill_lock` / repo 来源现在支持“受管 checkout 自动补齐”：
+  - 若叶子 skill 目录不是 git 仓库，OneSync 会在 `plugin_data/.../skills/git_repos/` 下自动物化受管 checkout。
+  - 后续 `sync/update` 均优先走该 checkout。
+- `synthetic_single`、`derived`、`local_custom` 这类没有真实包边界的 install unit 现已明确归为 `manual_only`，不再伪造错误更新命令。
+- WebUI 现已支持：
+  - `POST /api/skills/aggregates/update-all`
+  - 前端 “更新全部聚合” 按钮
+  - executed / skipped / source-sync 分层反馈
 
 如果要排查“为什么不能更新”，应优先查看 install unit 详情接口中的 `update_plan`，并以它作为最终真相源。
+
+当前 8099 live 运行态最近一次 `update-all` 验证结果：
+
+- `candidate_install_unit_total = 20`
+- `executed_install_unit_total = 14`
+- `command_install_unit_total = 3`
+- `source_sync_install_unit_total = 11`
+- `skipped_install_unit_total = 6`
+- `success_count = 8`
+- `failure_count = 2`
+- `precheck_failure_count = 0`

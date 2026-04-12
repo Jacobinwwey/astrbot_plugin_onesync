@@ -179,6 +179,104 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - 在 Doctor 摘要中拼接 AstrBot-specific health
   - 保持 action adapter 仍未开放，避免在读模型稳定前提前引入写路径
 
+### 2026-04-11 / Step 3
+
+- 已完成 Phase 3 的最小可用动作适配器（后端 + API）：
+  - 新增 `skills_astrbot_actions_core.py`：
+    - `set_astrbot_skill_active`：本地 skill 启停写入 `skills.json`
+    - `delete_astrbot_local_skill`：本地 skill 删除并同步清理 `skills.json` 与 `sandbox_skills_cache.json`
+    - `sandbox_only` 风险防护：对仅 sandbox 存在的 skill 阻断本地启停/删除
+    - 输入与状态错误统一 reason code（`invalid_skill_name` / `sandbox_only_skill` / `invalid_skills_config` 等）
+  - `skills_astrbot_state_core.py` 抽出公共布局解析：
+    - `resolve_astrbot_host_layout`，供 read-model 与 action adapter 共享路径真相
+- 已完成 OneSync 主流程接线：
+  - `main.py` 新增 AstrBot host action context 解析
+  - 新增 API 语义方法：
+    - `webui_get_astrbot_host_payload`
+    - `webui_set_astrbot_skill_active`
+    - `webui_delete_astrbot_skill`
+    - `webui_sync_astrbot_sandbox`
+  - sandbox 同步触发通过运行时适配：
+    - 动态导入 `sync_skills_to_active_sandboxes`
+    - 不可用/失败场景返回结构化 reason code（`sandbox_sync_unavailable` / `sandbox_sync_failed`）
+  - 动作已纳入既有审计链路（audit + debug log）
+- `webui_server.py` 新增路由：
+  - `GET /api/skills/hosts/{host_id}/astrbot`
+  - `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
+  - `POST /api/skills/hosts/{host_id}/astrbot/skills/delete`
+  - `POST /api/skills/hosts/{host_id}/astrbot/sandbox/sync`
+- 回归验证：
+  - `pytest -q` → `160 passed`
+  - `python3 -m py_compile main.py webui_server.py skills_astrbot_state_core.py skills_astrbot_actions_core.py`
+
+### 2026-04-11 / Step 4
+
+- 已完成 Phase 4 的读模型基线（Neo lifecycle data surface）：
+  - `skills_core.py` 新增 `build_astrbot_neo_source_rows(...)`
+  - 基于 AstrBot runtime state 生成稳定 `astrneo:{host_id}:{skill_key}` source id
+  - 每条 Neo source 暴露：
+    - `astrneo_skill_key`
+    - `astrneo_skill_name`
+    - `astrneo_release_id`
+    - `astrneo_candidate_id`
+    - `astrneo_payload_ref`
+    - `astrneo_updated_at`
+  - 不影响现有 install-unit/update 主链路（先并行为独立读面，避免对既有聚合执行语义引入回归）
+- OneSync API 已新增 Neo source 只读接口：
+  - `GET /api/skills/astrbot-neo-sources`
+  - `GET /api/skills/astrbot-neo-sources/{source_id}`
+- 概览统计已新增 Neo source 指标：
+  - `counts.astrbot_neo_source_total`
+  - `counts.astrbot_neo_source_ready_total`
+  - `counts.astrbot_neo_source_missing_total`
+- 回归验证：
+  - `pytest -q tests/test_skills_core.py tests/test_webui_server.py` → `40 passed`
+
+
+### 2026-04-11 / Step 5
+
+- 已完成 Phase 4 的 Neo 写路径最小闭环（sync action + API）：
+  - `main.py` 新增 `webui_sync_astrbot_neo_source(source_id, payload)`：
+    - 解析 `astrneo:{host_id}:{skill_key}` source
+    - 读取 `provider_settings.sandbox.shipyard_neo_endpoint/access_token`
+    - 动态导入 `shipyard_neo.BayClient` 与 `NeoSkillSyncManager`
+    - 调用 `sync_release(release_id|skill_key)` 执行同步
+    - 成功后刷新 snapshot，并写入审计事件 `astrbot_neo_source_sync`
+  - `webui_server.py` 新增路由：
+    - `POST /api/skills/astrbot-neo-sources/{source_id}/sync`
+    - 错误码约定：`not found -> 404`，其他失败 `-> 400`
+- 回归测试已覆盖 Neo sync 路由：
+  - 成功路径（200）
+  - 同步失败路径（400）
+  - source 缺失路径（404）
+- 回归验证：
+  - `pytest -q tests/test_webui_server.py tests/test_skills_core.py` -> `40 passed`
+  - `pytest -q` -> `161 passed`
+
+
+### 2026-04-11 / Step 6
+
+- 已完成 Neo source 在 WebUI 的可见与可操作接入（前端）：
+  - Source / Bundle 面板现在会合并展示 `astrbot_neo_source_rows`（以 standalone source 形态附加，不覆盖 install-unit 主链路）。
+  - 选中 `astrneo:*` 行时，详情加载会自动走：
+    - `GET /api/skills/astrbot-neo-sources/{source_id}`
+  - Source Sync 按钮已支持 Neo 模式分流：
+    - 普通 source -> `POST /api/skills/sources/{source_id}/sync`
+    - Neo source -> `POST /api/skills/astrbot-neo-sources/{source_id}/sync`
+- 前端语法核验：
+  - 提取 `webui/index.html` 内联脚本并执行 `node --check`，通过。
+
+### 2026-04-12 / Cross-Cutting Runtime Follow-up
+
+- 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：
+  - git-backed skills 来源现在支持“受管 checkout 自动补齐”
+  - 对应 checkout 会被物化到 `plugin_data/.../skills/git_repos/`
+  - sync/update 路径不再依赖叶子 skill 目录本身就是 git worktree
+- 这项能力虽然最先用于 `skill_lock` / repo-backed skills 管理，但它同时为 AstrBot 后续引入更多 git/source 型 skill 生命周期动作提供了更稳的基础设施。
+- 当前判断：
+  - AstrBot Neo / local skill 主链路已基本成形
+  - 下一步 AstrBot 方向更适合继续推进“runtime action 完整度”和“Neo promote/rollback 可观测性”，而不是重复实现一套独立的 git checkout 逻辑
+
 ## 数据结构约定
 
 ### Host Row 扩展字段

@@ -184,6 +184,9 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertIn("skill_rows", overview)
         self.assertIn("install_unit_rows", overview)
         self.assertIn("collection_group_rows", overview)
+        self.assertIn("install_atom_registry", overview)
+        self.assertIn("install_atom_total", overview["counts"])
+        self.assertIn("install_atom_health", overview["doctor"])
         self.assertEqual(2, overview["counts"]["source_total"])
         self.assertEqual(4, overview["counts"]["deploy_target_total"])
         self.assertEqual(1, overview["counts"]["deploy_unavailable_total"])
@@ -240,6 +243,77 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["counts"]["astrbot_host_total"])
         self.assertEqual(1, overview["counts"]["astrbot_local_skill_total"])
 
+    def test_build_skills_overview_exposes_astrbot_neo_source_rows(self) -> None:
+        astrbot_root = Path(self._tempdir.name) / "astrbot-neo-root"
+        skills_root = astrbot_root / "data" / "skills"
+        skills_root.mkdir(parents=True, exist_ok=True)
+        (skills_root / "neo-demo").mkdir(parents=True, exist_ok=True)
+        (skills_root / "neo-demo" / "SKILL.md").write_text(
+            "---\ndescription: neo demo\n---\n# neo-demo\n",
+            encoding="utf-8",
+        )
+        (astrbot_root / "data" / "skills.json").write_text(
+            json.dumps({"skills": {"neo-demo": {"active": True}}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (skills_root / "neo_skill_map.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "items": {
+                        "demo.skill": {
+                            "local_skill_name": "neo-demo",
+                            "latest_release_id": "rel-1",
+                            "latest_candidate_id": "cand-1",
+                            "latest_payload_ref": "blob:1",
+                            "updated_at": "2026-04-11T10:00:00+00:00",
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        snapshot = {
+            "ok": True,
+            "generated_at": "2026-04-11T10:00:00+00:00",
+            "software_rows": [
+                {
+                    "id": "astrbot",
+                    "display_name": "AstrBot",
+                    "software_kind": "claw",
+                    "software_family": "astrbot",
+                    "provider_key": "astrbot",
+                    "enabled": True,
+                    "installed": True,
+                    "managed": False,
+                    "linked_target_name": "",
+                    "declared_skill_roots": [str(skills_root)],
+                    "resolved_skill_roots": [str(skills_root)],
+                }
+            ],
+            "skill_rows": [],
+            "binding_rows": [],
+            "binding_map": {},
+            "binding_map_by_scope": {"global": {}, "workspace": {}},
+            "compatibility": {},
+            "counts": {},
+            "warnings": [],
+        }
+
+        overview = build_skills_overview(snapshot)
+        neo_rows = overview.get("astrbot_neo_source_rows", [])
+        self.assertEqual(1, len(neo_rows))
+        neo_row = neo_rows[0]
+        self.assertEqual("astrneo:astrbot:demo.skill", neo_row["source_id"])
+        self.assertEqual("astrneo_release", neo_row["source_kind"])
+        self.assertEqual("neo-demo", neo_row["astrneo_skill_name"])
+        self.assertEqual("demo.skill", neo_row["astrneo_skill_key"])
+        self.assertEqual("rel-1", neo_row["astrneo_release_id"])
+        self.assertEqual(1, overview["counts"]["astrbot_neo_source_total"])
+        self.assertEqual(1, overview["doctor"]["astrbot_runtime_health"]["neo_source_total"])
+
     def test_build_skills_overview_exposes_provenance_summary_on_rows_and_doctor(self) -> None:
         overview = build_skills_overview(self.inventory_snapshot)
 
@@ -272,6 +346,19 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["doctor"]["provenance_health"]["resolved"])
         self.assertEqual(0, overview["doctor"]["provenance_health"]["partial"])
         self.assertEqual(1, overview["doctor"]["provenance_health"]["unresolved"])
+
+        install_atom_registry = overview.get("install_atom_registry", {})
+        install_atoms = {
+            item["install_unit_id"]: item
+            for item in install_atom_registry.get("install_atoms", [])
+            if isinstance(item, dict) and item.get("install_unit_id")
+        }
+        self.assertEqual("explicit", install_atoms["npm:@every-env/compound-plugin"]["evidence_level"])
+        self.assertEqual("resolved", install_atoms["npm:@every-env/compound-plugin"]["resolution_status"])
+        self.assertEqual(
+            "unresolved",
+            install_atoms["synthetic_single:npx_global_find_skills"]["resolution_status"],
+        )
 
     def test_build_skills_overview_propagates_source_freshness_metadata(self) -> None:
         snapshot = copy.deepcopy(self.inventory_snapshot)
@@ -489,8 +576,13 @@ class SkillsCoreTests(unittest.TestCase):
                     "display_name": "Compound Engineering",
                     "source_kind": "npx_bundle",
                     "locator": "@every-env/compound-plugin",
+                    "sync_api_base": "https://gitlab.internal/api/v4",
+                    "sync_auth_header": "PRIVATE-TOKEN",
+                    "sync_auth_token": "token-abc",
                     "sync_status": "ok",
                     "sync_checked_at": "2026-04-06T08:05:00+00:00",
+                    "sync_remote_revision": "2.62.1",
+                    "sync_resolved_revision": "2.62.1",
                     "sync_message": "fetched npm registry metadata for @every-env/compound-plugin",
                     "registry_latest_version": "2.62.1",
                     "registry_published_at": "2026-04-01T11:58:00.000Z",
@@ -510,6 +602,52 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("2.62.1", compound["registry_latest_version"])
         self.assertEqual("2026-04-06T08:05:00+00:00", compound["sync_checked_at"])
         self.assertEqual("https://github.com/every-env/compound-plugin", compound["registry_homepage"])
+        self.assertEqual("2.62.1", compound["sync_remote_revision"])
+        self.assertEqual("2.62.1", compound["sync_resolved_revision"])
+        self.assertEqual("https://gitlab.internal/api/v4", compound["sync_api_base"])
+        self.assertEqual("PRIVATE-TOKEN", compound["sync_auth_header"])
+        self.assertEqual("token-abc", compound["sync_auth_token"])
+
+    def test_build_skills_overview_allows_sync_overlay_to_clear_stale_error_fields(self) -> None:
+        inventory_snapshot = copy.deepcopy(self.inventory_snapshot)
+        target_row = next(
+            item
+            for item in inventory_snapshot["skill_rows"]
+            if item["id"] == "npx_bundle_compound_engineering_global"
+        )
+        target_row["sync_status"] = "error"
+        target_row["sync_error_code"] = "git_source_unresolved"
+        target_row["sync_message"] = "git source unresolved"
+
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_bundle_compound_engineering_global",
+                    "display_name": "Compound Engineering",
+                    "source_kind": "npx_bundle",
+                    "locator": "@every-env/compound-plugin",
+                    "sync_status": "ok",
+                    "sync_checked_at": "2026-04-06T08:05:00+00:00",
+                    "sync_error_code": "",
+                    "sync_message": "",
+                    "git_checkout_path": "/tmp/managed-checkout",
+                    "git_checkout_error": "",
+                },
+            ],
+        }
+
+        overview = build_skills_overview(inventory_snapshot, saved_registry=saved_registry)
+        compound = next(
+            item
+            for item in overview["source_rows"]
+            if item["source_id"] == "npx_bundle_compound_engineering_global"
+        )
+        self.assertEqual("ok", compound["sync_status"])
+        self.assertEqual("", compound["sync_error_code"])
+        self.assertEqual("", compound["sync_message"])
+        self.assertEqual("/tmp/managed-checkout", compound["git_checkout_path"])
 
     def test_build_skills_overview_summarizes_source_sync_health(self) -> None:
         saved_registry = {
@@ -561,6 +699,119 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, overview["doctor"]["collection_group_sync"]["ok"])
         self.assertEqual(1, overview["doctor"]["collection_group_sync"]["error"])
         self.assertIn("registry timeout", "\n".join(overview["warnings"]))
+
+    def test_build_skills_overview_counts_git_sources_as_syncable(self) -> None:
+        baseline = build_skills_overview(self.inventory_snapshot)
+        baseline_syncable = int(baseline["counts"]["source_syncable_total"])
+
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:10:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_vercel_skills",
+                    "display_name": "vercel-labs/skills",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/vercel-labs/skills.git",
+                    "managed_by": "github",
+                    "update_policy": "source_sync",
+                    "sync_status": "ok",
+                    "sync_kind": "git_remote",
+                    "sync_remote_revision": "0123456789abcdef0123456789abcdef01234567",
+                    "sync_resolved_revision": "0123456789abcdef0123456789abcdef01234567",
+                    "registry_latest_version": "0123456789abcdef0123456789abcdef01234567",
+                    "sync_checked_at": "2026-04-06T08:09:00+00:00",
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
+        self.assertEqual(
+            baseline_syncable + 1,
+            int(overview["counts"]["source_syncable_total"]),
+        )
+        git_source = next(
+            item
+            for item in overview["source_rows"]
+            if item["source_id"] == "manual_git_vercel_skills"
+        )
+        self.assertEqual("manual_git", git_source["source_kind"])
+        self.assertEqual("ok", git_source["sync_status"])
+        self.assertEqual("git_remote", git_source["sync_kind"])
+        self.assertEqual(
+            "0123456789abcdef0123456789abcdef01234567",
+            git_source["sync_remote_revision"],
+        )
+
+    def test_build_skills_overview_counts_repo_metadata_sources_as_syncable(self) -> None:
+        baseline = build_skills_overview(self.inventory_snapshot)
+        baseline_syncable = int(baseline["counts"]["source_syncable_total"])
+
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:10:00+00:00",
+            "sources": [
+                {
+                    "source_id": "documented_vercel_skills_repo",
+                    "display_name": "vercel-labs/skills documented",
+                    "source_kind": "manual_git",
+                    "locator": "repo:https://github.com/vercel-labs/skills#skills/find-skills",
+                    "managed_by": "manual",
+                    "update_policy": "manual",
+                    "sync_status": "ok",
+                    "sync_kind": "repo_metadata_github",
+                    "sync_remote_revision": "2026-04-10T12:34:56Z",
+                    "sync_resolved_revision": "2026-04-10T12:34:56Z",
+                    "registry_latest_version": "2026-04-10T12:34:56Z",
+                    "sync_checked_at": "2026-04-06T08:09:00+00:00",
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
+        self.assertEqual(
+            baseline_syncable + 1,
+            int(overview["counts"]["source_syncable_total"]),
+        )
+        repo_source = next(
+            item
+            for item in overview["source_rows"]
+            if item["source_id"] == "documented_vercel_skills_repo"
+        )
+        self.assertEqual("manual_git", repo_source["source_kind"])
+        self.assertEqual("ok", repo_source["sync_status"])
+        self.assertEqual("repo_metadata_github", repo_source["sync_kind"])
+        self.assertEqual("2026-04-10T12:34:56Z", repo_source["sync_remote_revision"])
+
+    def test_build_skills_overview_tracks_sync_dirty_and_revision_drift(self) -> None:
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:10:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_vercel_skills",
+                    "display_name": "vercel-labs/skills",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/vercel-labs/skills.git",
+                    "managed_by": "github",
+                    "update_policy": "source_sync",
+                    "sync_status": "ok",
+                    "sync_kind": "git_checkout",
+                    "sync_local_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sync_remote_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "sync_resolved_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "sync_branch": "main",
+                    "sync_dirty": True,
+                    "sync_checked_at": "2026-04-06T08:09:00+00:00",
+                },
+            ],
+        }
+
+        overview = build_skills_overview(self.inventory_snapshot, saved_registry=saved_registry)
+        self.assertEqual(1, int(overview["counts"]["source_sync_dirty_total"]))
+        self.assertEqual(1, int(overview["counts"]["source_sync_revision_drift_total"]))
+        self.assertEqual(1, int(overview["doctor"]["source_sync"]["dirty"]))
+        self.assertEqual(1, int(overview["doctor"]["source_sync"]["revision_drift"]))
 
     def test_build_skills_overview_summarizes_aggregate_health(self) -> None:
         overview = build_skills_overview(self.inventory_snapshot)
@@ -1084,6 +1335,65 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual(1, detail["update_plan"]["supported_install_unit_total"])
         self.assertEqual(0, detail["update_plan"]["unsupported_install_unit_total"])
         self.assertEqual(["bunx @every-env/compound-plugin"], detail["update_plan"]["commands"])
+
+    def test_build_collection_group_detail_payload_exposes_block_reason_codes(self) -> None:
+        overview = {
+            "generated_at": "2026-04-11T00:00:00+00:00",
+            "warnings": [],
+            "collection_group_rows": [
+                {
+                    "collection_group_id": "collection:mixed",
+                    "display_name": "Mixed Group",
+                    "install_unit_ids": [
+                        "npm:@every-env/compound-plugin",
+                        "filesystem:/tmp/manual-demo",
+                    ],
+                    "source_ids": [
+                        "npx_bundle_compound_engineering_global",
+                        "manual_demo",
+                    ],
+                },
+            ],
+            "install_unit_rows": [
+                {
+                    "install_unit_id": "npm:@every-env/compound-plugin",
+                    "display_name": "Compound Engineering",
+                    "install_ref": "@every-env/compound-plugin",
+                    "install_manager": "bunx",
+                    "management_hint": "bunx @every-env/compound-plugin",
+                    "update_policy": "registry",
+                    "source_ids": ["npx_bundle_compound_engineering_global"],
+                },
+                {
+                    "install_unit_id": "filesystem:/tmp/manual-demo",
+                    "display_name": "Manual Demo",
+                    "install_manager": "filesystem",
+                    "update_policy": "manual",
+                    "source_ids": ["manual_demo"],
+                },
+            ],
+            "source_rows": [
+                {
+                    "source_id": "npx_bundle_compound_engineering_global",
+                    "install_unit_id": "npm:@every-env/compound-plugin",
+                    "source_path": "/tmp/compound",
+                },
+                {
+                    "source_id": "manual_demo",
+                    "install_unit_id": "filesystem:/tmp/manual-demo",
+                    "source_path": "/tmp/manual-demo",
+                },
+            ],
+            "deploy_rows": [],
+        }
+
+        detail = build_collection_group_detail_payload(overview, "collection:mixed")
+
+        self.assertTrue(detail["ok"])
+        self.assertEqual(1, detail["update_plan"]["supported_install_unit_total"])
+        self.assertEqual(1, detail["update_plan"]["unsupported_install_unit_total"])
+        self.assertEqual("manual_managed", detail["update_plan"]["unsupported_install_units"][0]["reason_code"])
+        self.assertEqual("manual_managed", detail["update_plan"]["blocked_reasons"][0]["reason_code"])
 
     def test_build_skills_overview_preserves_registry_source_subpath(self) -> None:
         saved_registry = {

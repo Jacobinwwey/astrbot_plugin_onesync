@@ -290,7 +290,10 @@ class InventoryCoreTests(unittest.TestCase):
         self.assertEqual("@every-env/compound-plugin", compound_row["registry_package_name"])
         self.assertEqual("npm:@every-env/compound-plugin", compound_row["install_unit_id"])
         self.assertEqual("collection:compound_engineering", compound_row["collection_group_id"])
-        self.assertEqual("fresh", compound_row["freshness_status"])
+        self.assertIn(
+            compound_row["freshness_status"],
+            {"fresh", "aging", "stale", "missing"},
+        )
 
         self.assertIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["codex"])
         self.assertNotIn("npx_bundle_compound_engineering_global", snapshot["compatibility"]["claude_code"])

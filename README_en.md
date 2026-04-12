@@ -15,6 +15,9 @@ OneSync is an extensible software update manager plugin for AstrBot.
 - WebUI config center can now read/write plugin config and sync Human/Developer target models.
 - Native `system_package` strategy for `apt_get/yum/dnf/pacman/zypper/choco/winget/brew`.
 - v1 adds a `Skills Management` panel with npx-based skill discovery, auto CLI asset discovery, compatibility filtering, and skill binding updates.
+- Skills management is now install-unit / collection-group first instead of flattening all leaf skills as primary operations.
+- The WebUI now includes `Update All Aggregates`, which runs all actionable aggregate plans and skips `manual_only` boundaries explicitly.
+- Git-backed skill sources now support managed checkout bootstrap: when a leaf skill path is not itself a git worktree, OneSync materializes a managed repo checkout under plugin data and executes git updates from there.
 
 ## Configuration Modes
 
@@ -75,6 +78,7 @@ WebUI/API endpoints:
 - `POST /api/skills/install-units/{install_unit_id}/update`: execute the real update command for one install unit.
 - `POST /api/skills/collections/{collection_group_id}/sync`: sync upstream metadata for all sources in one collection group.
 - `POST /api/skills/collections/{collection_group_id}/update`: execute updates for all supported install units in one collection group.
+- `POST /api/skills/aggregates/update-all`: batch-run all currently actionable aggregate update plans and return executed/skipped/source-sync breakdown.
 - `POST /api/skills/sources/sync-all`: batch-sync all currently syncable sources.
 
 Notes:
@@ -84,9 +88,29 @@ Notes:
 - In `npx` mode, the UI prefers package-level bundles over raw skill explosion. For example, `ce:*` is grouped as `Compound Engineering` with one maintenance command.
 - In `filesystem/hybrid` mode, skill discovery can still scan `SKILL.md` under configured `skill_roots` and merge with manual `skill_catalog`.
 - Provenance resolution now distinguishes `registry_package / skill_lock_source / documented_source_repo / catalog_source_repo / community_source_repo / local_custom_skill`; for example, a self-authored `doc` skill can be modeled as `local_custom_skill`.
-- `Sync Source` and `Update Install Unit` are different capabilities: source sync is currently npm-registry-only, while install-unit update depends on the effective `update_plan`.
-- The current update capability is only partially complete: npm packages and git-backed local checkouts are updateable, but repo-reference-only sources and local custom/manual skills are not yet auto-updateable.
+- `Sync Source` and `Update Install Unit` are different capabilities: source sync refreshes upstream metadata, while install-unit / collection-group update executes the effective update plan.
+- Git-backed `skill_lock` and repo-derived sources no longer require users to pre-create a local git checkout manually. When the leaf skill path is not a git worktree, OneSync now bootstraps a managed checkout under `plugin_data/.../skills/git_repos/` and routes sync/update through that checkout.
+- Update support is now on a more honest boundary:
+  - npm / registry-backed aggregates are updateable
+  - git-backed `skill_lock` aggregates are updateable after managed checkout bootstrap
+  - repo-metadata-backed aggregates can run source-sync fallback
+  - `local_custom`, `synthetic_single`, and similar no-package-boundary sources are explicitly treated as `manual_only`
 - Maintainers should use [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) and [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) for the full support matrix and audit notes.
+
+### Latest Progress (2026-04-12)
+
+- The live 8099 operations console now includes the deployed `Update All Aggregates` action.
+- `find-skills` and `frontend-design`, which previously failed because their leaf directories were not git repositories, can now bootstrap managed checkouts automatically and update successfully.
+- `synthetic_single:*` npx leaf aggregates without a real package boundary no longer pretend to be updateable; they now fall back to stable `manual_only`.
+- Latest live verification for `POST /api/skills/aggregates/update-all`:
+  - `candidate_install_unit_total = 20`
+  - `executed_install_unit_total = 14`
+  - `command_install_unit_total = 3`
+  - `source_sync_install_unit_total = 11`
+  - `skipped_install_unit_total = 6`
+  - `success_count = 8`
+  - `failure_count = 2`
+  - `precheck_failure_count = 0`
 
 ### Stitch MCP Baseline Runner (UI Calibration)
 

@@ -107,6 +107,21 @@ Before pushing, verify:
 - WebUI JavaScript has no syntax errors
 - WebUI routes are reachable (`/api/health` and `/api/config`)
 
+### 5.4 Documentation sync guidance
+
+When a change affects both implementation and operator understanding, do not update only one status file.
+
+At minimum, keep these entry documents aligned:
+
+- `README.md` / `README_en.md`
+- `docs/SKILLS_UPDATE_STATUS_zh.md` / `docs/SKILLS_UPDATE_STATUS_en.md`
+- relevant `docs/plans/*` and `docs/brainstorms/*`
+
+If a live plugin checkout exists beside the development repository, also verify:
+
+- whether `/root/astrbot/data/plugins/astrbot_plugin_onesync/docs/*` should be synced to the running instance
+- whether API paths, counters, and runtime validation notes still match the current 8099 service
+
 ## 6. Skills Update Maintenance Notes
 
 When reviewing the Skills management stack, separate these operations clearly:
@@ -117,9 +132,29 @@ When reviewing the Skills management stack, separate these operations clearly:
 
 Current implementation status:
 
-- Source sync is npm-registry-only.
-- Install-unit update is command-capability-based.
-- Git-backed install units are updateable only when a local checkout path is available.
-- Local custom/manual skills are discoverable and deployable, but not auto-updateable.
+- Source sync now supports:
+  - npm registry metadata
+  - git remote/head or local checkout metadata
+  - GitHub / GitLab / Bitbucket repo metadata
+- Install-unit update is governed by the effective `update_plan`, not by `source_kind` labels alone.
+- Git-backed `skill_lock` / repo-derived sources now support managed checkout bootstrap:
+  - if the leaf skill directory is not a git worktree, OneSync materializes a managed checkout under `plugin_data/.../skills/git_repos/`
+  - later `sync/update` paths prefer that checkout
+- `synthetic_single`, `derived`, and `local_custom` install units without a real package boundary are now explicitly treated as `manual_only` instead of generating bogus update commands.
+- WebUI now exposes:
+  - `POST /api/skills/aggregates/update-all`
+  - `Update All Aggregates`
+  - executed / skipped / source-sync breakdown in the result path
 
 When diagnosing an update complaint, check the install-unit detail payload first and treat `update_plan` as the source of truth.
+
+Latest live 8099 `update-all` verification:
+
+- `candidate_install_unit_total = 20`
+- `executed_install_unit_total = 14`
+- `command_install_unit_total = 3`
+- `source_sync_install_unit_total = 11`
+- `skipped_install_unit_total = 6`
+- `success_count = 8`
+- `failure_count = 2`
+- `precheck_failure_count = 0`

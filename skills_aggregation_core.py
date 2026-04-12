@@ -1915,8 +1915,10 @@ def derive_source_aggregation_fields(source: dict[str, Any]) -> dict[str, Any]:
             else:
                 install_unit_id = f"synthetic_single:{source_id}"
                 install_unit_kind = "synthetic_single"
-                install_ref = source_id or display_name
-                install_manager = _infer_manager_from_hint(management_hint, "npx")
+                # Fallback single rows without a resolved package boundary should not fabricate a registry command.
+                # Only keep a runnable manager when a concrete management hint exists.
+                install_ref = ""
+                install_manager = _infer_manager_from_hint(management_hint, "manual")
                 install_unit_display_name = display_name
                 aggregation_strategy = "fallback_single"
         else:

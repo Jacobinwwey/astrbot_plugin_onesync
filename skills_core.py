@@ -18,12 +18,18 @@ try:
         derive_source_provenance_fields,
         enrich_source_aggregation,
     )
+    from .skills_install_atoms_core import (
+        apply_install_atom_registry,
+        build_install_atom_registry,
+        normalize_install_atom_registry,
+    )
     from .skills_hosts_core import build_host_adapters, resolve_host_target_path
     from .skills_sources_core import build_skills_registry, normalize_skills_registry
     from .skills_update_core import (
         build_collection_group_update_plan,
         build_install_unit_update_plan,
     )
+    from .source_sync_core import is_source_syncable
 except ImportError:  # pragma: no cover - direct test imports
     from skills_astrbot_state_core import build_astrbot_state_index
     from skills_aggregation_core import (
@@ -34,12 +40,18 @@ except ImportError:  # pragma: no cover - direct test imports
         derive_source_provenance_fields,
         enrich_source_aggregation,
     )
+    from skills_install_atoms_core import (
+        apply_install_atom_registry,
+        build_install_atom_registry,
+        normalize_install_atom_registry,
+    )
     from skills_hosts_core import build_host_adapters, resolve_host_target_path
     from skills_sources_core import build_skills_registry, normalize_skills_registry
     from skills_update_core import (
         build_collection_group_update_plan,
         build_install_unit_update_plan,
     )
+    from source_sync_core import is_source_syncable
 
 VALID_DEPLOY_SCOPES = ("global", "workspace")
 
@@ -150,12 +162,91 @@ def _count_rows_by_field(rows: list[dict[str, Any]], field: str, expected: str) 
 
 
 def _count_syncable_rows(rows: list[dict[str, Any]]) -> int:
+    return sum(1 for item in rows if is_source_syncable(item))
+
+
+def _count_sync_dirty_rows(rows: list[dict[str, Any]]) -> int:
     return sum(
         1
         for item in rows
-        if str(item.get("registry_package_name", "")).strip()
-        and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+        if is_source_syncable(item)
+        and _to_bool(item.get("sync_dirty", False), False)
     )
+
+
+def _count_sync_revision_drift_rows(rows: list[dict[str, Any]]) -> int:
+    total = 0
+    for item in rows:
+        if not is_source_syncable(item):
+            continue
+        local_revision = str(item.get("sync_local_revision") or "").strip()
+        remote_revision = str(item.get("sync_remote_revision") or "").strip()
+        if local_revision and remote_revision and local_revision != remote_revision:
+            total += 1
+    return total
+
+
+def _normalize_astrneo_source_id(host_id: Any, skill_key: Any) -> str:
+    normalized_host_id = _slug(host_id, default="")
+    normalized_skill_key = str(skill_key or "").strip()
+    if not normalized_host_id or not normalized_skill_key:
+        return ""
+    return f"astrneo:{normalized_host_id}:{normalized_skill_key}"
+
+
+def build_astrbot_neo_source_rows(astrbot_state_rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (astrbot_state_rows or []):
+        if not isinstance(item, dict):
+            continue
+        neo_skill_key = str(item.get("neo_skill_key") or "").strip()
+        host_id = str(item.get("host_id") or "").strip()
+        skill_name = str(item.get("skill_name") or "").strip()
+        source_id = _normalize_astrneo_source_id(host_id, neo_skill_key)
+        if not source_id:
+            continue
+        local_exists = _to_bool(item.get("local_exists"), False)
+        source_row = {
+            "source_id": source_id,
+            "display_name": skill_name or neo_skill_key,
+            "source_kind": "astrneo_release",
+            "provider_key": "astrbot",
+            "source_scope": "global",
+            "managed_by": "astrneo",
+            "update_policy": "manual",
+            "locator": f"astrneo:{neo_skill_key}",
+            "source_path": str(item.get("local_path") or ""),
+            "source_exists": local_exists,
+            "status": "ready" if local_exists else "missing",
+            "freshness_status": "fresh" if local_exists else "missing",
+            "last_seen_at": str(item.get("neo_updated_at") or ""),
+            "last_refresh_at": str(item.get("neo_updated_at") or ""),
+            "member_count": 1,
+            "member_skill_preview": [skill_name or neo_skill_key],
+            "member_skill_overflow": 0,
+            "compatible_software_ids": [host_id] if host_id else [],
+            "compatible_software_families": ["astrbot"],
+            "tags": ["astrneo-managed", "astrbot-runtime"],
+            "astrneo_host_id": host_id,
+            "astrneo_skill_name": skill_name,
+            "astrneo_skill_key": neo_skill_key,
+            "astrneo_release_id": str(item.get("neo_release_id") or ""),
+            "astrneo_candidate_id": str(item.get("neo_candidate_id") or ""),
+            "astrneo_payload_ref": str(item.get("neo_payload_ref") or ""),
+            "astrneo_updated_at": str(item.get("neo_updated_at") or ""),
+            "state_classification": str(item.get("state_classification") or ""),
+            "drift_reasons": _to_str_list(item.get("drift_reasons", [])),
+            "active": _to_bool(item.get("active"), True),
+        }
+        rows.append(source_row)
+
+    rows.sort(
+        key=lambda item: (
+            str(item.get("display_name") or "").lower(),
+            str(item.get("source_id") or "").lower(),
+        ),
+    )
+    return rows
 
 
 def _is_meaningful_collection_group_row(row: dict[str, Any]) -> bool:
@@ -338,10 +429,19 @@ def normalize_saved_skills_lock(raw: Any) -> dict[str, Any]:
             "freshness_status": str(item.get("freshness_status") or "missing"),
             "registry_package_name": str(item.get("registry_package_name") or ""),
             "registry_package_manager": str(item.get("registry_package_manager") or ""),
+            "sync_auth_token": str(item.get("sync_auth_token") or ""),
+            "sync_auth_header": str(item.get("sync_auth_header") or ""),
+            "sync_api_base": str(item.get("sync_api_base") or ""),
             "sync_status": str(item.get("sync_status") or ""),
             "sync_checked_at": str(item.get("sync_checked_at") or ""),
             "sync_kind": str(item.get("sync_kind") or ""),
             "sync_message": str(item.get("sync_message") or ""),
+            "sync_local_revision": str(item.get("sync_local_revision") or ""),
+            "sync_remote_revision": str(item.get("sync_remote_revision") or ""),
+            "sync_resolved_revision": str(item.get("sync_resolved_revision") or ""),
+            "sync_branch": str(item.get("sync_branch") or ""),
+            "sync_dirty": _to_bool(item.get("sync_dirty", False), False),
+            "sync_error_code": str(item.get("sync_error_code") or ""),
             "registry_latest_version": str(item.get("registry_latest_version") or ""),
             "registry_published_at": str(item.get("registry_published_at") or ""),
             "registry_homepage": str(item.get("registry_homepage") or ""),
@@ -634,10 +734,19 @@ def build_skills_manifest(
                 "freshness_status": str(item.get("freshness_status") or saved_source.get("freshness_status") or "missing"),
                 "registry_package_name": str(item.get("registry_package_name") or saved_source.get("registry_package_name") or ""),
                 "registry_package_manager": str(item.get("registry_package_manager") or saved_source.get("registry_package_manager") or ""),
+                "sync_auth_token": str(item.get("sync_auth_token") or saved_source.get("sync_auth_token") or ""),
+                "sync_auth_header": str(item.get("sync_auth_header") or saved_source.get("sync_auth_header") or ""),
+                "sync_api_base": str(item.get("sync_api_base") or saved_source.get("sync_api_base") or ""),
                 "sync_status": str(item.get("sync_status") or saved_source.get("sync_status") or ""),
                 "sync_checked_at": str(item.get("sync_checked_at") or saved_source.get("sync_checked_at") or ""),
                 "sync_kind": str(item.get("sync_kind") or saved_source.get("sync_kind") or ""),
                 "sync_message": str(item.get("sync_message") or saved_source.get("sync_message") or ""),
+                "sync_local_revision": str(item.get("sync_local_revision") or saved_source.get("sync_local_revision") or ""),
+                "sync_remote_revision": str(item.get("sync_remote_revision") or saved_source.get("sync_remote_revision") or ""),
+                "sync_resolved_revision": str(item.get("sync_resolved_revision") or saved_source.get("sync_resolved_revision") or ""),
+                "sync_branch": str(item.get("sync_branch") or saved_source.get("sync_branch") or ""),
+                "sync_dirty": _to_bool(item.get("sync_dirty", saved_source.get("sync_dirty", False)), False),
+                "sync_error_code": str(item.get("sync_error_code") or saved_source.get("sync_error_code") or ""),
                 "registry_latest_version": str(item.get("registry_latest_version") or saved_source.get("registry_latest_version") or ""),
                 "registry_published_at": str(item.get("registry_published_at") or saved_source.get("registry_published_at") or ""),
                 "registry_homepage": str(item.get("registry_homepage") or saved_source.get("registry_homepage") or ""),
@@ -682,10 +791,19 @@ def build_skills_manifest(
                 "freshness_status": str(saved_source.get("freshness_status") or "missing"),
                 "registry_package_name": str(saved_source.get("registry_package_name") or ""),
                 "registry_package_manager": str(saved_source.get("registry_package_manager") or ""),
+                "sync_auth_token": str(saved_source.get("sync_auth_token") or ""),
+                "sync_auth_header": str(saved_source.get("sync_auth_header") or ""),
+                "sync_api_base": str(saved_source.get("sync_api_base") or ""),
                 "sync_status": str(saved_source.get("sync_status") or ""),
                 "sync_checked_at": str(saved_source.get("sync_checked_at") or ""),
                 "sync_kind": str(saved_source.get("sync_kind") or ""),
                 "sync_message": str(saved_source.get("sync_message") or ""),
+                "sync_local_revision": str(saved_source.get("sync_local_revision") or ""),
+                "sync_remote_revision": str(saved_source.get("sync_remote_revision") or ""),
+                "sync_resolved_revision": str(saved_source.get("sync_resolved_revision") or ""),
+                "sync_branch": str(saved_source.get("sync_branch") or ""),
+                "sync_dirty": _to_bool(saved_source.get("sync_dirty", False), False),
+                "sync_error_code": str(saved_source.get("sync_error_code") or ""),
                 "registry_latest_version": str(saved_source.get("registry_latest_version") or ""),
                 "registry_published_at": str(saved_source.get("registry_published_at") or ""),
                 "registry_homepage": str(saved_source.get("registry_homepage") or ""),
@@ -886,6 +1004,20 @@ def build_skills_lock(
 
 
 def _merge_overlay_row(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    clearable_empty_string_keys = {
+        "sync_error_code",
+        "sync_message",
+        "sync_local_revision",
+        "sync_remote_revision",
+        "sync_resolved_revision",
+        "sync_branch",
+        "registry_latest_version",
+        "registry_published_at",
+        "registry_homepage",
+        "registry_description",
+        "git_checkout_path",
+        "git_checkout_error",
+    }
     merged = copy.deepcopy(base)
     for key, value in overlay.items():
         if key not in merged:
@@ -897,6 +1029,8 @@ def _merge_overlay_row(base: dict[str, Any], overlay: dict[str, Any]) -> dict[st
         if value is None:
             continue
         if isinstance(value, str) and not value.strip():
+            if key in clearable_empty_string_keys:
+                merged[key] = ""
             continue
         if isinstance(value, list) and not value:
             continue
@@ -1186,11 +1320,13 @@ def build_skills_overview(
     saved_manifest: dict[str, Any] | None = None,
     saved_registry: dict[str, Any] | None = None,
     saved_lock: dict[str, Any] | None = None,
+    saved_install_atom_registry: dict[str, Any] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
     normalized_saved_manifest = normalize_saved_skills_manifest(saved_manifest or {})
     normalized_saved_lock = normalize_saved_skills_lock(saved_lock or {})
+    normalized_saved_install_atom_registry = normalize_install_atom_registry(saved_install_atom_registry or {})
     software_rows = [
         copy.deepcopy(item)
         for item in inventory_snapshot.get("software_rows", [])
@@ -1251,6 +1387,7 @@ def build_skills_overview(
     astrbot_state_by_host = astrbot_state_index.get("by_host", {})
     astrbot_state_rows = astrbot_state_index.get("rows", [])
     astrbot_state_warnings = astrbot_state_index.get("warnings", [])
+    astrbot_neo_source_rows = build_astrbot_neo_source_rows(astrbot_state_rows)
     for host in software_hosts:
         host_id = str(host.get("host_id") or host.get("id") or "").strip()
         state = astrbot_state_by_host.get(host_id, {})
@@ -1319,6 +1456,13 @@ def build_skills_overview(
         ]
 
     install_unit_rows = build_install_unit_rows(source_rows, deploy_rows)
+    install_atom_registry = build_install_atom_registry(
+        install_unit_rows,
+        source_rows,
+        saved_registry=normalized_saved_install_atom_registry,
+        generated_at=ts,
+    )
+    install_unit_rows = apply_install_atom_registry(install_unit_rows, install_atom_registry)
     collection_group_rows = build_collection_group_rows(install_unit_rows)
     meaningful_collection_group_rows = build_meaningful_collection_group_rows(collection_group_rows)
     compatible_install_unit_rows_by_software = build_compatible_aggregate_rows_by_software(
@@ -1351,11 +1495,12 @@ def build_skills_overview(
             "source_syncable_total": _count_syncable_rows(source_rows),
             "source_synced_total": _count_rows_by_field(source_rows, "sync_status", "ok"),
             "source_sync_error_total": _count_rows_by_field(source_rows, "sync_status", "error"),
+            "source_sync_dirty_total": _count_sync_dirty_rows(source_rows),
+            "source_sync_revision_drift_total": _count_sync_revision_drift_rows(source_rows),
             "source_sync_pending_total": sum(
                 1
                 for item in source_rows
-                if str(item.get("registry_package_name", "")).strip()
-                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+                if is_source_syncable(item)
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
             "source_provenance_resolved_total": sum(
@@ -1369,6 +1514,13 @@ def build_skills_overview(
                 if str(item.get("provenance_confidence", "")).strip().lower() not in {"high", "medium"}
             ),
             "registry_total": len(registry.get("sources", [])),
+            "install_atom_total": int(install_atom_registry.get("counts", {}).get("install_atom_total", len(install_unit_rows)) or len(install_unit_rows)),
+            "install_atom_resolved_total": int(install_atom_registry.get("counts", {}).get("resolved_total", 0) or 0),
+            "install_atom_partial_total": int(install_atom_registry.get("counts", {}).get("partial_total", 0) or 0),
+            "install_atom_unresolved_total": int(install_atom_registry.get("counts", {}).get("unresolved_total", 0) or 0),
+            "install_atom_explicit_total": int(install_atom_registry.get("counts", {}).get("explicit_total", 0) or 0),
+            "install_atom_strong_total": int(install_atom_registry.get("counts", {}).get("strong_total", 0) or 0),
+            "install_atom_heuristic_total": int(install_atom_registry.get("counts", {}).get("heuristic_total", 0) or 0),
             "install_unit_total": len(install_unit_rows),
             "install_unit_ready_total": _count_rows_by_field(install_unit_rows, "status", "ready"),
             "install_unit_missing_total": _count_rows_by_field(install_unit_rows, "status", "missing"),
@@ -1381,8 +1533,7 @@ def build_skills_overview(
             "install_unit_sync_pending_total": sum(
                 1
                 for item in install_unit_rows
-                if str(item.get("registry_package_name", "")).strip()
-                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+                if is_source_syncable(item)
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
             "collection_group_total": len(collection_group_rows),
@@ -1398,8 +1549,7 @@ def build_skills_overview(
             "collection_group_sync_pending_total": sum(
                 1
                 for item in collection_group_rows
-                if str(item.get("registry_package_name", "")).strip()
-                and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+                if is_source_syncable(item)
                 and str(item.get("sync_status", "")).strip() not in {"ok", "error"}
             ),
             "host_total": len(software_hosts),
@@ -1431,6 +1581,17 @@ def build_skills_overview(
                 if isinstance(item, dict)
             ),
             "astrbot_warning_total": len(astrbot_state_warnings),
+            "astrbot_neo_source_total": len(astrbot_neo_source_rows),
+            "astrbot_neo_source_ready_total": sum(
+                1
+                for item in astrbot_neo_source_rows
+                if str(item.get("status", "")).strip().lower() == "ready"
+            ),
+            "astrbot_neo_source_missing_total": sum(
+                1
+                for item in astrbot_neo_source_rows
+                if str(item.get("status", "")).strip().lower() == "missing"
+            ),
             "deploy_target_total": len(deploy_rows),
             "deploy_ready_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "ready"),
             "deploy_idle_total": sum(1 for item in deploy_rows if str(item.get("status", "")) == "idle"),
@@ -1457,6 +1618,8 @@ def build_skills_overview(
             "syncable": counts.get("source_syncable_total", 0),
             "ok": counts.get("source_synced_total", 0),
             "error": counts.get("source_sync_error_total", 0),
+            "dirty": counts.get("source_sync_dirty_total", 0),
+            "revision_drift": counts.get("source_sync_revision_drift_total", 0),
             "pending": counts.get("source_sync_pending_total", 0),
         },
         "provenance_health": {
@@ -1477,6 +1640,15 @@ def build_skills_overview(
             "ok": counts.get("install_unit_synced_total", 0),
             "error": counts.get("install_unit_sync_error_total", 0),
             "pending": counts.get("install_unit_sync_pending_total", 0),
+        },
+        "install_atom_health": {
+            "total": counts.get("install_atom_total", 0),
+            "resolved": counts.get("install_atom_resolved_total", 0),
+            "partial": counts.get("install_atom_partial_total", 0),
+            "unresolved": counts.get("install_atom_unresolved_total", 0),
+            "explicit": counts.get("install_atom_explicit_total", 0),
+            "strong": counts.get("install_atom_strong_total", 0),
+            "heuristic": counts.get("install_atom_heuristic_total", 0),
         },
         "collection_group_health": {
             "ready": counts.get("collection_group_ready_total", 0),
@@ -1503,6 +1675,9 @@ def build_skills_overview(
             "neo_managed_total": counts.get("astrbot_neo_managed_total", 0),
             "drifted_total": counts.get("astrbot_drifted_total", 0),
             "warning_count": counts.get("astrbot_warning_total", 0),
+            "neo_source_total": counts.get("astrbot_neo_source_total", 0),
+            "neo_source_ready_total": counts.get("astrbot_neo_source_ready_total", 0),
+            "neo_source_missing_total": counts.get("astrbot_neo_source_missing_total", 0),
         },
         "warnings": warnings,
     }
@@ -1513,10 +1688,12 @@ def build_skills_overview(
         "manifest": manifest,
         "lock": lock,
         "registry": registry,
+        "install_atom_registry": install_atom_registry,
         "host_rows": software_hosts,
         "software_hosts": software_hosts,
         "astrbot_state_by_host": astrbot_state_by_host,
         "astrbot_state_rows": astrbot_state_rows,
+        "astrbot_neo_source_rows": astrbot_neo_source_rows,
         "source_rows": source_rows,
         "install_unit_rows": install_unit_rows,
         "collection_group_rows": collection_group_rows,

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+import hashlib
 import json
 import re
 import secrets
 import shlex
+import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,8 +32,10 @@ from .skills_projection_core import (
 )
 from .skills_runtime_health import build_skills_runtime_health
 from .skills_update_core import (
+    build_git_rollback_preview,
     build_collection_group_update_plan,
     build_install_unit_update_plan,
+    summarize_revision_capture_delta,
 )
 from .skills_core import (
     build_collection_group_detail_payload,
@@ -45,7 +51,13 @@ from .skills_sources_core import (
     register_registry_source,
     remove_registry_source,
 )
-from .source_sync_core import build_source_sync_record
+from .skills_install_atoms_core import normalize_install_atom_registry
+from .skills_astrbot_actions_core import (
+    delete_astrbot_local_skill,
+    set_astrbot_skill_active,
+)
+from .skills_astrbot_state_core import resolve_astrbot_host_layout
+from .source_sync_core import build_source_sync_record, is_source_syncable
 from .updater_core import (
     CheckResult,
     CommandRunner,
@@ -55,6 +67,7 @@ from .updater_core import (
 from .webui_server import OneSyncWebUIServer
 
 PLUGIN_NAME = "astrbot_plugin_onesync"
+SKILLS_ROLLBACK_CONFIRM_TOKEN = "ROLLBACK_ACCEPT_RISK"
 
 DEFAULT_GITHUB_MIRROR_PREFIXES = [
     "",
@@ -251,6 +264,92 @@ def _normalize_inventory_id(value: Any, default: str = "") -> str:
     return text or default
 
 
+def _normalize_update_manager(value: Any) -> str:
+    manager = str(value or "").strip().lower()
+    if manager in {"pnpm dlx"}:
+        return "pnpm"
+    if manager in {"github"}:
+        return "git"
+    return manager
+
+
+def _shell_quote(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return shlex.quote(text)
+
+
+def _build_registry_update_command(manager: str, install_ref: str) -> str:
+    normalized_manager = _normalize_update_manager(manager)
+    install_ref_text = str(install_ref or "").strip()
+    if not install_ref_text:
+        return ""
+    install_ref_token = _shell_quote(install_ref_text)
+    if normalized_manager == "bunx":
+        return f"bunx {install_ref_token}"
+    if normalized_manager == "npx":
+        return f"npx {install_ref_token}"
+    if normalized_manager == "pnpm":
+        return f"pnpm dlx {install_ref_token}"
+    if normalized_manager == "npm":
+        return f"npm install -g {_shell_quote(f'{install_ref_text}@latest')}"
+    return ""
+
+
+def _registry_manager_from_command(command: str) -> str:
+    lowered = str(command or "").strip().lower()
+    if lowered.startswith("bunx "):
+        return "bunx"
+    if lowered.startswith("npx "):
+        return "npx"
+    if lowered.startswith("pnpm dlx "):
+        return "pnpm"
+    if lowered.startswith("npm "):
+        return "npm"
+    return ""
+
+
+def _build_registry_fallback_commands(plan: dict[str, Any], attempted_command: str) -> list[str]:
+    if not isinstance(plan, dict):
+        return []
+    install_ref = str(plan.get("install_ref") or "").strip()
+    if not install_ref:
+        return []
+    attempted_manager = _registry_manager_from_command(attempted_command)
+    preferred_manager = _normalize_update_manager(plan.get("manager"))
+    manager_candidates = _dedupe_keep_order(
+        [
+            preferred_manager,
+            "bunx",
+            "npx",
+            "pnpm",
+            "npm",
+        ],
+    )
+    commands: list[str] = []
+    for candidate in manager_candidates:
+        if candidate == attempted_manager:
+            continue
+        command = _build_registry_update_command(candidate, install_ref)
+        if command and command != str(attempted_command or "").strip():
+            commands.append(command)
+    return _dedupe_keep_order(commands)
+
+
+def _looks_like_command_not_found(result_payload: dict[str, Any]) -> bool:
+    if not isinstance(result_payload, dict):
+        return False
+    if int(result_payload.get("exit_code") or 0) == 127:
+        return True
+    stderr = str(result_payload.get("stderr") or "").strip().lower()
+    if "command not found" in stderr:
+        return True
+    if "not found" in stderr and "git repository" not in stderr:
+        return True
+    return False
+
+
 def _is_env_assignment_token(token: str) -> bool:
     return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*=.*$", str(token or "")))
 
@@ -303,9 +402,11 @@ class OneSyncPlugin(Star):
         self.skills_manifest_path = self.skills_state_dir / "manifest.json"
         self.skills_lock_path = self.skills_state_dir / "lock.json"
         self.skills_registry_path = self.skills_state_dir / "registry.json"
+        self.skills_install_atom_registry_path = self.skills_state_dir / "install_atom_registry.json"
         self.skills_audit_path = self.skills_state_dir / "audit.log.jsonl"
         self.skills_sources_dir = self.skills_state_dir / "sources"
         self.skills_generated_dir = self.skills_state_dir / "generated"
+        self.skills_git_repos_dir = self.skills_state_dir / "git_repos"
 
         self.state: dict[str, Any] = {"targets": {}, "env": {}, "inventory": {}, "skills": {}}
         self._run_lock = asyncio.Lock()
@@ -932,6 +1033,7 @@ class OneSyncPlugin(Star):
         saved_manifest: dict[str, Any] | None = None,
         saved_registry: dict[str, Any] | None = None,
         saved_lock: dict[str, Any] | None = None,
+        saved_install_atom_registry: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         snapshot = inventory_snapshot if isinstance(inventory_snapshot, dict) else self._build_inventory_snapshot()
         return build_skills_overview(
@@ -939,6 +1041,7 @@ class OneSyncPlugin(Star):
             saved_manifest=saved_manifest,
             saved_registry=saved_registry,
             saved_lock=saved_lock,
+            saved_install_atom_registry=saved_install_atom_registry,
         )
 
     def _read_json_file(self, path: Path) -> Any:
@@ -980,6 +1083,16 @@ class OneSyncPlugin(Star):
             skills_state["saved_lock"] = lock
         return lock
 
+    def _load_saved_install_atom_registry(self) -> dict[str, Any]:
+        skills_state = self._skills_state()
+        cached = skills_state.get("saved_install_atom_registry")
+        if isinstance(cached, dict) and cached:
+            return normalize_install_atom_registry(cached)
+        registry = normalize_install_atom_registry(self._read_json_file(self.skills_install_atom_registry_path))
+        if registry:
+            skills_state["saved_install_atom_registry"] = registry
+        return registry
+
     def _save_skills_manifest(self, manifest: dict[str, Any]) -> dict[str, Any]:
         normalized = normalize_saved_skills_manifest(manifest)
         skills_state = self._skills_state()
@@ -1002,6 +1115,14 @@ class OneSyncPlugin(Star):
         skills_state["saved_lock"] = normalized
         self.skills_state_dir.mkdir(parents=True, exist_ok=True)
         self._write_json_file(self.skills_lock_path, normalized)
+        return normalized
+
+    def _save_install_atom_registry(self, registry: dict[str, Any]) -> dict[str, Any]:
+        normalized = normalize_install_atom_registry(registry)
+        skills_state = self._skills_state()
+        skills_state["saved_install_atom_registry"] = normalized
+        self.skills_state_dir.mkdir(parents=True, exist_ok=True)
+        self._write_json_file(self.skills_install_atom_registry_path, normalized)
         return normalized
 
     def _append_skills_audit_event(
@@ -1042,10 +1163,258 @@ class OneSyncPlugin(Star):
         )
         tmp.replace(path)
 
+    @staticmethod
+    def _looks_like_git_locator_text(value: Any) -> bool:
+        locator = str(value or "").strip().lower()
+        if not locator:
+            return False
+        return (
+            locator.startswith("git@")
+            or locator.startswith("ssh://")
+            or locator.endswith(".git")
+            or "github.com/" in locator
+            or "gitlab.com/" in locator
+            or "bitbucket.org/" in locator
+        )
+
+    @staticmethod
+    def _strip_repo_locator_prefix(value: Any) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        lowered = text.lower()
+        for prefix in ("repo:", "documented:", "catalog:", "community:", "source:"):
+            if lowered.startswith(prefix):
+                return text[len(prefix):].strip()
+        return text
+
+    @classmethod
+    def _split_git_locator_subpath(cls, value: Any) -> tuple[str, str]:
+        raw = cls._strip_repo_locator_prefix(value)
+        if not raw:
+            return "", ""
+        locator, _, subpath = raw.partition("#")
+        return locator.strip(), subpath.strip().strip("/")
+
+    def _run_git_probe(
+        self,
+        args: list[str],
+        *,
+        cwd: str | Path | None = None,
+        timeout_s: int = 30,
+    ) -> tuple[bool, str]:
+        try:
+            completed = subprocess.run(
+                ["git", *args],
+                cwd=str(cwd) if cwd else None,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                check=False,
+            )
+        except FileNotFoundError:
+            return False, "git command is not available"
+        except Exception as exc:  # pragma: no cover - defensive branch
+            return False, f"git command execution failed: {exc}"
+        if completed.returncode != 0:
+            output = (completed.stderr or completed.stdout or "").strip()
+            return False, output or f"git command failed with exit code {completed.returncode}"
+        return True, (completed.stdout or "").strip()
+
+    def _path_is_git_worktree(self, path: str | Path) -> bool:
+        candidate = Path(path)
+        if not candidate.exists():
+            return False
+        ok, _ = self._run_git_probe(
+            ["rev-parse", "--is-inside-work-tree"],
+            cwd=candidate,
+            timeout_s=10,
+        )
+        return ok
+
+    def _resolve_source_git_checkout_spec(self, source_row: dict[str, Any] | None) -> dict[str, Any]:
+        row = source_row if isinstance(source_row, dict) else {}
+        candidates = [
+            row.get("locator"),
+            row.get("provenance_origin_ref"),
+            row.get("install_ref"),
+        ]
+        source_subpath = str(row.get("source_subpath") or "").strip().strip("/")
+        for candidate in candidates:
+            locator, subpath = self._split_git_locator_subpath(candidate)
+            if not locator or not self._looks_like_git_locator_text(locator):
+                continue
+            return {
+                "locator": locator,
+                "subpath": subpath or source_subpath,
+            }
+        return {"locator": "", "subpath": source_subpath}
+
+    def _managed_git_checkout_dir_for_locator(self, locator: str) -> Path:
+        normalized_locator = str(locator or "").strip()
+        repo_basename = normalized_locator.rstrip("/").split("/")[-1].strip()
+        if repo_basename.endswith(".git"):
+            repo_basename = repo_basename[:-4]
+        slug = _normalize_inventory_id(repo_basename, default="repo")
+        digest = hashlib.sha1(normalized_locator.encode("utf-8")).hexdigest()[:12]
+        return self.skills_git_repos_dir / f"{slug}-{digest}"
+
+    def _candidate_git_clone_locators(self, locator: str) -> list[str]:
+        normalized_locator = str(locator or "").strip()
+        if not normalized_locator:
+            return []
+        candidates: list[str] = []
+        if normalized_locator.startswith("https://github.com/"):
+            ordered_prefixes = [
+                prefix
+                for prefix in DEFAULT_GITHUB_MIRROR_PREFIXES
+                if prefix
+            ] + [""]
+            for prefix in ordered_prefixes:
+                candidate = f"{prefix}{normalized_locator}" if prefix else normalized_locator
+                if candidate not in candidates:
+                    candidates.append(candidate)
+            return candidates
+        return [normalized_locator]
+
+    def _ensure_source_git_checkout(
+        self,
+        source_row: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        row = source_row if isinstance(source_row, dict) else {}
+        source_path = str(row.get("source_path") or "").strip()
+        if source_path and self._path_is_git_worktree(source_path):
+            return {
+                "ok": True,
+                "checkout_path": source_path,
+                "managed": False,
+                "message": "using existing git checkout from source_path",
+            }
+
+        spec = self._resolve_source_git_checkout_spec(row)
+        locator = str(spec.get("locator") or "").strip()
+        if not locator:
+            return {
+                "ok": False,
+                "checkout_path": "",
+                "managed": False,
+                "message": "git repo locator is unavailable",
+                "error_code": "git_repo_locator_missing",
+            }
+
+        checkout_dir = self._managed_git_checkout_dir_for_locator(locator)
+        self.skills_git_repos_dir.mkdir(parents=True, exist_ok=True)
+        if checkout_dir.exists() and not self._path_is_git_worktree(checkout_dir):
+            shutil.rmtree(checkout_dir, ignore_errors=True)
+
+        if not checkout_dir.exists():
+            clone_errors: list[str] = []
+            clone_candidates = self._candidate_git_clone_locators(locator)
+            ok_clone = False
+            clone_output = ""
+            for clone_locator in clone_candidates:
+                ok_clone, clone_output = self._run_git_probe(
+                    [
+                        "clone",
+                        "--depth",
+                        "1",
+                        "--filter=blob:none",
+                        "--single-branch",
+                        clone_locator,
+                        str(checkout_dir),
+                    ],
+                    timeout_s=60,
+                )
+                if ok_clone:
+                    break
+                clone_errors.append(f"{clone_locator}: {clone_output}")
+                if checkout_dir.exists() and not self._path_is_git_worktree(checkout_dir):
+                    shutil.rmtree(checkout_dir, ignore_errors=True)
+            if not ok_clone:
+                return {
+                    "ok": False,
+                    "checkout_path": "",
+                    "managed": True,
+                    "message": f"git checkout bootstrap failed for {locator}: {' | '.join(clone_errors)}",
+                    "error_code": "git_checkout_clone_failed",
+                }
+        elif not self._path_is_git_worktree(checkout_dir):
+            return {
+                "ok": False,
+                "checkout_path": "",
+                "managed": True,
+                "message": f"managed checkout path is not a git worktree: {checkout_dir}",
+                "error_code": "git_checkout_invalid",
+            }
+
+        preferred_locator = next(iter(self._candidate_git_clone_locators(locator)), locator)
+        if preferred_locator:
+            self._run_git_probe(
+                ["remote", "set-url", "origin", preferred_locator],
+                cwd=checkout_dir,
+                timeout_s=20,
+            )
+
+        return {
+            "ok": True,
+            "checkout_path": str(checkout_dir),
+            "managed": True,
+            "message": f"managed git checkout ready: {checkout_dir}",
+        }
+
+    def _augment_source_row_with_git_checkout(
+        self,
+        source_row: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        row = dict(source_row) if isinstance(source_row, dict) else {}
+        if not row:
+            return {}
+
+        existing_checkout_path = str(row.get("git_checkout_path") or "").strip()
+        if existing_checkout_path and self._path_is_git_worktree(existing_checkout_path):
+            row["git_checkout_path"] = existing_checkout_path
+            row["git_checkout_managed"] = _to_bool(row.get("git_checkout_managed", False), False)
+            row["git_checkout_error"] = ""
+            return row
+
+        spec = self._resolve_source_git_checkout_spec(row)
+        locator = str(spec.get("locator") or "").strip()
+        manager = str(
+            row.get("install_manager")
+            or row.get("managed_by")
+            or row.get("registry_package_manager")
+            or ""
+        ).strip().lower()
+        if not locator or manager not in {"git", "github"}:
+            return row
+
+        ensure_result = self._ensure_source_git_checkout(row)
+        if ensure_result.get("ok"):
+            row["git_checkout_path"] = str(ensure_result.get("checkout_path") or "").strip()
+            row["git_checkout_managed"] = _to_bool(ensure_result.get("managed", False), False)
+            row["git_checkout_error"] = ""
+        else:
+            row["git_checkout_path"] = ""
+            row["git_checkout_managed"] = True
+            row["git_checkout_error"] = str(ensure_result.get("message") or "").strip()
+        return row
+
+    def _augment_source_rows_with_git_checkouts(
+        self,
+        source_rows: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        return [
+            self._augment_source_row_with_git_checkout(item)
+            for item in (source_rows or [])
+            if isinstance(item, dict)
+        ]
+
     def _persist_skills_state_files(self, skills_snapshot: dict[str, Any]) -> None:
         registry = self._save_skills_registry(skills_snapshot.get("registry", {}))
+        install_atom_registry = self._save_install_atom_registry(skills_snapshot.get("install_atom_registry", {}))
         manifest = self._save_skills_manifest(skills_snapshot.get("manifest", {}))
         lock = self._save_skills_lock(skills_snapshot.get("lock", {}))
+        _ = install_atom_registry
         self.skills_state_dir.mkdir(parents=True, exist_ok=True)
         self.skills_sources_dir.mkdir(parents=True, exist_ok=True)
         self.skills_generated_dir.mkdir(parents=True, exist_ok=True)
@@ -1104,10 +1473,27 @@ class OneSyncPlugin(Star):
         doctor["projection_health"] = runtime_health.get("projection_health", {})
         doctor["astrbot_runtime_health"] = runtime_health.get("astrbot_runtime_health", {})
 
+        plan_health = self._compute_collection_group_plan_contract_health(skills_snapshot)
+        counts["collection_group_plan_checked_total"] = int(plan_health.get("checked_total", 0))
+        counts["collection_group_plan_contract_drift_total"] = int(plan_health.get("drift_total", 0))
+        doctor["plan_contract_health"] = {
+            "checked_total": int(plan_health.get("checked_total", 0)),
+            "drift_total": int(plan_health.get("drift_total", 0)),
+        }
+        skills_snapshot["collection_group_plan_contract_rows"] = [
+            item
+            for item in plan_health.get("drift_rows", [])
+            if isinstance(item, dict)
+        ]
+
         warnings = _dedupe_keep_order(
             [
                 str(item or "").strip()
-                for item in list(skills_snapshot.get("warnings", [])) + list(runtime_health.get("warnings", []))
+                for item in (
+                    list(skills_snapshot.get("warnings", []))
+                    + list(runtime_health.get("warnings", []))
+                    + list(plan_health.get("warnings", []))
+                )
                 if str(item or "").strip()
             ],
         )
@@ -1117,6 +1503,105 @@ class OneSyncPlugin(Star):
         doctor["ok"] = not warnings
         return skills_snapshot
 
+    def _collection_group_plan_contract_issues(self, plan: dict[str, Any] | None) -> list[str]:
+        payload = plan if isinstance(plan, dict) else {}
+        mode = str(payload.get("update_mode") or "").strip().lower()
+        actionable = _to_bool(payload.get("actionable", False), False)
+        supported_install_unit_total = _to_int(payload.get("supported_install_unit_total", 0), 0, 0)
+        unsupported_install_unit_total = _to_int(payload.get("unsupported_install_unit_total", 0), 0, 0)
+        command_install_unit_total = _to_int(payload.get("command_install_unit_total", 0), 0, 0)
+        source_sync_install_unit_total = _to_int(payload.get("source_sync_install_unit_total", 0), 0, 0)
+        actionable_install_unit_ids = _to_str_list(payload.get("actionable_install_unit_ids", []))
+        skipped_install_unit_ids = _to_str_list(payload.get("skipped_install_unit_ids", []))
+        issues: list[str] = []
+
+        valid_modes = {"command", "source_sync", "partial", "manual_only"}
+        if mode not in valid_modes:
+            issues.append(f"invalid_update_mode:{mode or 'empty'}")
+
+        if mode == "manual_only":
+            if actionable:
+                issues.append("manual_only_must_not_be_actionable")
+            if supported_install_unit_total > 0:
+                issues.append("manual_only_must_have_zero_supported_units")
+        elif mode in {"command", "source_sync", "partial"}:
+            if not actionable:
+                issues.append("non_manual_mode_must_be_actionable")
+
+        if mode == "partial" and (
+            supported_install_unit_total <= 0 or unsupported_install_unit_total <= 0
+        ):
+            issues.append("partial_mode_requires_supported_and_unsupported_units")
+        if mode == "command" and command_install_unit_total <= 0:
+            issues.append("command_mode_requires_command_install_units")
+        if mode == "source_sync":
+            if source_sync_install_unit_total <= 0:
+                issues.append("source_sync_mode_requires_source_sync_install_units")
+            if command_install_unit_total > 0:
+                issues.append("source_sync_mode_must_not_include_command_install_units")
+
+        if supported_install_unit_total != len(actionable_install_unit_ids):
+            issues.append("supported_install_unit_total_mismatch_actionable_install_unit_ids")
+        if unsupported_install_unit_total != len(skipped_install_unit_ids):
+            issues.append("unsupported_install_unit_total_mismatch_skipped_install_unit_ids")
+        return issues
+
+    def _compute_collection_group_plan_contract_health(self, skills_snapshot: dict[str, Any]) -> dict[str, Any]:
+        snapshot = skills_snapshot if isinstance(skills_snapshot, dict) else {}
+        collection_group_rows = [
+            item
+            for item in snapshot.get("collection_group_rows", [])
+            if isinstance(item, dict)
+        ]
+        drift_rows: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        checked_total = 0
+
+        for collection_group in collection_group_rows:
+            collection_group_id = str(collection_group.get("collection_group_id") or "").strip()
+            if not collection_group_id:
+                continue
+            checked_total += 1
+
+            detail = build_collection_group_detail_payload(snapshot, collection_group_id)
+            if not detail.get("ok"):
+                drift_rows.append(
+                    {
+                        "collection_group_id": collection_group_id,
+                        "issues": ["detail_payload_unavailable"],
+                    },
+                )
+                warnings.append(
+                    f"plan/execute contract drift: {collection_group_id} (detail_payload_unavailable)",
+                )
+                continue
+
+            effective_plan = self._build_effective_collection_group_update_plan(
+                collection_group=detail.get("collection_group", {}),
+                install_unit_rows=detail.get("install_unit_rows", []),
+                source_rows=detail.get("source_rows", []),
+            )
+            issues = self._collection_group_plan_contract_issues(effective_plan)
+            if not issues:
+                continue
+            drift_rows.append(
+                {
+                    "collection_group_id": collection_group_id,
+                    "update_mode": str(effective_plan.get("update_mode") or "").strip(),
+                    "issues": issues,
+                },
+            )
+            warnings.append(
+                f"plan/execute contract drift: {collection_group_id} ({issues[0]})",
+            )
+
+        return {
+            "checked_total": checked_total,
+            "drift_total": len(drift_rows),
+            "drift_rows": drift_rows,
+            "warnings": warnings,
+        }
+
     def _refresh_skills_snapshot(
         self,
         inventory_snapshot: dict[str, Any] | None = None,
@@ -1124,6 +1609,7 @@ class OneSyncPlugin(Star):
         saved_manifest: dict[str, Any] | None = None,
         saved_registry: dict[str, Any] | None = None,
         saved_lock: dict[str, Any] | None = None,
+        saved_install_atom_registry: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
             skills_snapshot = self._build_skills_snapshot(
@@ -1131,6 +1617,7 @@ class OneSyncPlugin(Star):
                 saved_manifest=saved_manifest,
                 saved_registry=saved_registry,
                 saved_lock=saved_lock,
+                saved_install_atom_registry=saved_install_atom_registry,
             )
         except Exception as exc:
             logger.error("[onesync] skills snapshot build failed: %s", exc)
@@ -1138,6 +1625,7 @@ class OneSyncPlugin(Star):
                 "ok": False,
                 "generated_at": _now_iso(),
                 "registry": {},
+                "install_atom_registry": {},
                 "manifest": {},
                 "lock": {},
                 "host_rows": [],
@@ -1171,6 +1659,7 @@ class OneSyncPlugin(Star):
         saved_manifest = self._load_saved_skills_manifest()
         saved_registry = self._load_saved_skills_registry()
         saved_lock = self._load_saved_skills_lock()
+        saved_install_atom_registry = self._load_saved_install_atom_registry()
         try:
             snapshot = self._build_inventory_snapshot()
         except Exception as exc:
@@ -1196,12 +1685,16 @@ class OneSyncPlugin(Star):
                 saved_manifest=saved_manifest,
                 saved_registry=saved_registry,
                 saved_lock=saved_lock,
+                saved_install_atom_registry=saved_install_atom_registry,
             )
             manifest = skills_snapshot.get("manifest", {})
             registry = skills_snapshot.get("registry", {})
             lock = skills_snapshot.get("lock", {})
+            install_atom_registry = skills_snapshot.get("install_atom_registry", {})
             if isinstance(registry, dict):
                 self._save_skills_registry(registry)
+            if isinstance(install_atom_registry, dict):
+                self._save_install_atom_registry(install_atom_registry)
             if isinstance(manifest, dict) and manifest:
                 self._save_skills_manifest(manifest)
             if isinstance(lock, dict):
@@ -1219,6 +1712,7 @@ class OneSyncPlugin(Star):
                         saved_manifest=manifest,
                         saved_registry=registry,
                         saved_lock=lock,
+                        saved_install_atom_registry=install_atom_registry if isinstance(install_atom_registry, dict) else {},
                     )
             last_overview = self._skills_state().get("last_overview", {})
             if isinstance(last_overview, dict) and last_overview:
@@ -1243,18 +1737,139 @@ class OneSyncPlugin(Star):
             skills_state["last_overview"] = snapshot
         return snapshot if isinstance(snapshot, dict) else {}
 
+    @staticmethod
+    def _redact_sync_auth_header(value: Any) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        if ":" not in raw:
+            return raw
+        header_name = raw.split(":", 1)[0].strip()
+        if not header_name:
+            return "<redacted>"
+        return f"{header_name}: <redacted>"
+
+    def webui_redact_sensitive_payload(self, payload: Any) -> Any:
+        def _walk(value: Any) -> Any:
+            if isinstance(value, list):
+                return [_walk(item) for item in value]
+            if isinstance(value, tuple):
+                return [_walk(item) for item in value]
+            if isinstance(value, dict):
+                redacted: dict[str, Any] = {}
+                for key, item in value.items():
+                    normalized_key = str(key or "").strip()
+                    if normalized_key == "sync_auth_token":
+                        token_text = str(item or "").strip()
+                        redacted[normalized_key] = ""
+                        redacted["sync_auth_token_configured"] = bool(token_text)
+                        continue
+                    if normalized_key == "sync_auth_header":
+                        header_text = str(item or "").strip()
+                        redacted[normalized_key] = self._redact_sync_auth_header(header_text)
+                        redacted["sync_auth_header_configured"] = bool(header_text)
+                        continue
+                    redacted[normalized_key] = _walk(item)
+                return redacted
+            return value
+
+        return _walk(payload)
+
     def webui_get_skills_registry_payload(self) -> dict[str, Any]:
         snapshot = self.webui_get_skills_payload()
         registry = snapshot.get("registry", {})
+        install_atom_registry = snapshot.get("install_atom_registry", {})
         items = registry.get("sources", []) if isinstance(registry, dict) else []
+        install_atoms = (
+            install_atom_registry.get("install_atoms", [])
+            if isinstance(install_atom_registry, dict)
+            else []
+        )
         return {
             "ok": bool(snapshot.get("ok", True)),
             "generated_at": snapshot.get("generated_at"),
             "counts": {
                 "registry_total": len(items),
+                "install_atom_total": len(install_atoms) if isinstance(install_atoms, list) else 0,
             },
             "items": items,
             "warnings": snapshot.get("warnings", []),
+        }
+
+    def webui_get_install_atom_registry_payload(self) -> dict[str, Any]:
+        snapshot = self.webui_get_skills_payload()
+        install_atom_registry = snapshot.get("install_atom_registry", {})
+        if not isinstance(install_atom_registry, dict):
+            install_atom_registry = {}
+        items = install_atom_registry.get("install_atoms", [])
+        counts = install_atom_registry.get("counts", {})
+        return {
+            "ok": bool(snapshot.get("ok", True)),
+            "generated_at": snapshot.get("generated_at"),
+            "counts": counts if isinstance(counts, dict) else {},
+            "items": items if isinstance(items, list) else [],
+            "warnings": snapshot.get("warnings", []),
+        }
+
+    def webui_get_skills_audit_payload(
+        self,
+        *,
+        limit: int = 50,
+        action: str = "",
+        source_id: str = "",
+    ) -> dict[str, Any]:
+        normalized_limit = _to_int(limit, 50, 1)
+        if normalized_limit > 500:
+            normalized_limit = 500
+        action_keyword = str(action or "").strip().lower()
+        normalized_source_id = _normalize_inventory_id(source_id, default="")
+        events: deque[dict[str, Any]] = deque(maxlen=normalized_limit)
+        warnings: list[str] = []
+
+        if self.skills_audit_path.exists():
+            try:
+                with self.skills_audit_path.open("r", encoding="utf-8") as f:
+                    for raw_line in f:
+                        line = str(raw_line or "").strip()
+                        if not line:
+                            continue
+                        try:
+                            parsed = json.loads(line)
+                        except Exception:
+                            continue
+                        if not isinstance(parsed, dict):
+                            continue
+                        event_action = str(parsed.get("action") or "").strip()
+                        event_source_id = str(parsed.get("source_id") or "").strip()
+                        if action_keyword and action_keyword not in event_action.lower():
+                            continue
+                        if normalized_source_id and event_source_id != normalized_source_id:
+                            continue
+                        payload = parsed.get("payload", {})
+                        if not isinstance(payload, dict):
+                            payload = {}
+                        events.append(
+                            {
+                                "timestamp": str(parsed.get("timestamp") or "").strip(),
+                                "action": event_action,
+                                "source_id": event_source_id,
+                                "payload": payload,
+                            },
+                        )
+            except Exception as exc:
+                logger.error("[onesync] read skills audit failed: %s", exc)
+                warnings.append(f"failed to read skills audit: {exc}")
+
+        items = list(events)
+        items.reverse()
+        return {
+            "ok": True,
+            "generated_at": _now_iso(),
+            "counts": {
+                "total": len(items),
+            },
+            "items": items,
+            "warnings": warnings,
         }
 
     def webui_get_skills_hosts_payload(self) -> dict[str, Any]:
@@ -1269,6 +1884,487 @@ class OneSyncPlugin(Star):
             "items": items if isinstance(items, list) else [],
             "warnings": snapshot.get("warnings", []),
         }
+
+    def webui_get_astrbot_neo_sources_payload(self) -> dict[str, Any]:
+        snapshot = self.webui_get_skills_payload()
+        items = [
+            item
+            for item in snapshot.get("astrbot_neo_source_rows", [])
+            if isinstance(item, dict)
+        ]
+        ready_total = sum(1 for item in items if str(item.get("status", "")).strip().lower() == "ready")
+        missing_total = sum(1 for item in items if str(item.get("status", "")).strip().lower() == "missing")
+        return {
+            "ok": bool(snapshot.get("ok", True)),
+            "generated_at": snapshot.get("generated_at"),
+            "counts": {
+                "source_total": len(items),
+                "ready_total": ready_total,
+                "missing_total": missing_total,
+            },
+            "items": items,
+            "warnings": snapshot.get("warnings", []),
+        }
+
+    def webui_get_astrbot_neo_source_payload(self, source_id: str) -> dict[str, Any]:
+        normalized_source_id = str(source_id or "").strip()
+        if not normalized_source_id:
+            return {"ok": False, "message": "source_id is required"}
+        snapshot = self.webui_get_skills_payload()
+        rows = [
+            item
+            for item in snapshot.get("astrbot_neo_source_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_row = next(
+            (
+                item
+                for item in rows
+                if str(item.get("source_id") or "").strip() == normalized_source_id
+            ),
+            None,
+        )
+        if not source_row:
+            return {"ok": False, "message": f"astrbot neo source not found: {normalized_source_id}"}
+        return {
+            "ok": True,
+            "generated_at": snapshot.get("generated_at"),
+            "source": source_row,
+            "warnings": snapshot.get("warnings", []),
+        }
+
+
+    async def webui_sync_astrbot_neo_source(
+        self,
+        source_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_source_id = str(source_id or "").strip()
+        if not normalized_source_id:
+            return {"ok": False, "message": "source_id is required"}
+        action_payload = payload if isinstance(payload, dict) else {}
+        detail = self.webui_get_astrbot_neo_source_payload(normalized_source_id)
+        if not detail.get("ok"):
+            return detail
+
+        source_row = detail.get("source", {}) if isinstance(detail.get("source"), dict) else {}
+        host_id = str(source_row.get("astrneo_host_id") or "").strip()
+        skill_key = str(source_row.get("astrneo_skill_key") or "").strip()
+        release_id = str(action_payload.get("release_id") or "").strip()
+        require_stable = _to_bool(action_payload.get("require_stable"), True)
+        if not skill_key:
+            return {
+                "ok": False,
+                "message": f"astrbot neo source missing skill key: {normalized_source_id}",
+                "reason_code": "invalid_neo_source",
+            }
+
+        provider_settings = self.config.get("provider_settings", {}) if hasattr(self.config, "get") else {}
+        if not isinstance(provider_settings, dict):
+            provider_settings = {}
+        sandbox_cfg = provider_settings.get("sandbox", {})
+        if not isinstance(sandbox_cfg, dict):
+            sandbox_cfg = {}
+        neo_endpoint = str(sandbox_cfg.get("shipyard_neo_endpoint") or "").strip()
+        neo_access_token = str(sandbox_cfg.get("shipyard_neo_access_token") or "").strip()
+        if not neo_endpoint or not neo_access_token:
+            return {
+                "ok": False,
+                "message": (
+                    "astrbot neo endpoint/access token not configured "
+                    "(provider_settings.sandbox.shipyard_neo_endpoint / shipyard_neo_access_token)"
+                ),
+                "reason_code": "neo_client_not_configured",
+            }
+
+        try:
+            from shipyard_neo import BayClient
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot neo client unavailable: {exc}",
+                "reason_code": "neo_client_unavailable",
+            }
+        try:
+            from astrbot.core.skills.neo_skill_sync import NeoSkillSyncManager
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot neo sync manager unavailable: {exc}",
+                "reason_code": "neo_sync_manager_unavailable",
+            }
+
+        sync_manager_kwargs: dict[str, Any] = {}
+        if host_id:
+            host_context = self._resolve_astrbot_host_action_context(host_id)
+            if host_context.get("ok"):
+                layout = host_context.get("layout", {}) if isinstance(host_context.get("layout"), dict) else {}
+                skills_root = str(layout.get("skills_root") or "").strip()
+                neo_map_path = str(layout.get("neo_map_path") or "").strip()
+                if skills_root:
+                    sync_manager_kwargs["skills_root"] = skills_root
+                if neo_map_path:
+                    sync_manager_kwargs["map_path"] = neo_map_path
+
+        try:
+            sync_manager = NeoSkillSyncManager(**sync_manager_kwargs)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot neo sync manager init failed: {exc}",
+                "reason_code": "neo_sync_manager_init_failed",
+            }
+
+        try:
+            async with BayClient(
+                endpoint_url=neo_endpoint,
+                access_token=neo_access_token,
+            ) as client:
+                sync_result = await sync_manager.sync_release(
+                    client,
+                    release_id=release_id or None,
+                    skill_key=skill_key or None,
+                    require_stable=require_stable,
+                )
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot neo source sync failed: {exc}",
+                "reason_code": "neo_sync_failed",
+            }
+
+        sync_payload: dict[str, Any] = {}
+        try:
+            if hasattr(NeoSkillSyncManager, "sync_result_to_dict"):
+                converted = NeoSkillSyncManager.sync_result_to_dict(sync_result)
+                if isinstance(converted, dict):
+                    sync_payload = converted
+        except Exception:
+            sync_payload = {}
+        if not sync_payload:
+            sync_payload = {
+                "skill_key": str(getattr(sync_result, "skill_key", "") or skill_key),
+                "local_skill_name": str(getattr(sync_result, "local_skill_name", "") or ""),
+                "release_id": str(getattr(sync_result, "release_id", "") or release_id),
+                "candidate_id": str(getattr(sync_result, "candidate_id", "") or ""),
+                "payload_ref": str(getattr(sync_result, "payload_ref", "") or ""),
+                "map_path": str(getattr(sync_result, "map_path", "") or ""),
+                "synced_at": str(getattr(sync_result, "synced_at", "") or _now_iso()),
+            }
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        refreshed_detail = self.webui_get_astrbot_neo_source_payload(normalized_source_id)
+        refreshed_source = (
+            refreshed_detail.get("source", source_row)
+            if isinstance(refreshed_detail, dict)
+            else source_row
+        )
+        self._append_skills_audit_event(
+            "astrbot_neo_source_sync",
+            source_id=normalized_source_id,
+            payload={
+                "host_id": host_id,
+                "skill_key": str(sync_payload.get("skill_key") or skill_key),
+                "release_id": str(sync_payload.get("release_id") or release_id),
+                "local_skill_name": str(sync_payload.get("local_skill_name") or ""),
+                "candidate_id": str(sync_payload.get("candidate_id") or ""),
+                "payload_ref": str(sync_payload.get("payload_ref") or ""),
+                "map_path": str(sync_payload.get("map_path") or ""),
+                "require_stable": require_stable,
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot neo source synced: "
+                f"source={normalized_source_id} "
+                f"skill_key={str(sync_payload.get('skill_key') or skill_key)} "
+                f"release_id={str(sync_payload.get('release_id') or release_id)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "generated_at": (
+                refreshed_detail.get("generated_at", skills_snapshot.get("generated_at"))
+                if isinstance(refreshed_detail, dict)
+                else skills_snapshot.get("generated_at")
+            ),
+            "source": refreshed_source,
+            "warnings": (
+                refreshed_detail.get("warnings", [])
+                if isinstance(refreshed_detail, dict)
+                else detail.get("warnings", [])
+            ),
+            "sync": sync_payload,
+            "action": "neo_source_sync",
+            "skills": skills_snapshot,
+            "inventory": inventory_snapshot,
+        }
+
+    def _resolve_astrbot_host_action_context(self, host_id: str) -> dict[str, Any]:
+        normalized_host_id = str(host_id or "").strip()
+        if not normalized_host_id:
+            return {"ok": False, "message": "host_id is required"}
+
+        snapshot = self.webui_get_skills_payload()
+        host_rows = [
+            item
+            for item in snapshot.get("host_rows", [])
+            if isinstance(item, dict)
+        ]
+        host = next(
+            (
+                item
+                for item in host_rows
+                if str(item.get("host_id") or item.get("id") or "").strip() == normalized_host_id
+            ),
+            None,
+        )
+        if not host:
+            return {"ok": False, "message": f"host_id not found: {normalized_host_id}"}
+
+        runtime_state_backend = _normalize_inventory_id(host.get("runtime_state_backend"), default="")
+        provider_key = _normalize_inventory_id(host.get("provider_key"), default="")
+        if runtime_state_backend != "astrbot" and provider_key != "astrbot":
+            return {
+                "ok": False,
+                "message": f"host is not astrbot-capable: {normalized_host_id}",
+            }
+
+        layout = resolve_astrbot_host_layout(host)
+        if not _to_bool(layout.get("is_astrbot"), False):
+            return {
+                "ok": False,
+                "message": f"host is not astrbot-capable: {normalized_host_id}",
+            }
+        if not _to_bool(layout.get("state_available"), False):
+            return {
+                "ok": False,
+                "message": f"astrbot skills root unavailable for host: {normalized_host_id}",
+            }
+
+        state_by_host = (
+            snapshot.get("astrbot_state_by_host", {})
+            if isinstance(snapshot.get("astrbot_state_by_host", {}), dict)
+            else {}
+        )
+        runtime_state = (
+            state_by_host.get(normalized_host_id, {})
+            if isinstance(state_by_host.get(normalized_host_id, {}), dict)
+            else {}
+        )
+        return {
+            "ok": True,
+            "host_id": normalized_host_id,
+            "host": host,
+            "layout": layout,
+            "runtime_state": runtime_state,
+            "snapshot": snapshot,
+        }
+
+    def webui_get_astrbot_host_payload(self, host_id: str) -> dict[str, Any]:
+        context = self._resolve_astrbot_host_action_context(host_id)
+        if not context.get("ok"):
+            return context
+        layout = context.get("layout", {}) if isinstance(context.get("layout"), dict) else {}
+        runtime_state = (
+            context.get("runtime_state", {})
+            if isinstance(context.get("runtime_state"), dict)
+            else {}
+        )
+        snapshot = context.get("snapshot", {}) if isinstance(context.get("snapshot"), dict) else {}
+        return {
+            "ok": True,
+            "generated_at": snapshot.get("generated_at"),
+            "host": context.get("host", {}),
+            "runtime_state": runtime_state,
+            "layout": {
+                "host_id": str(layout.get("host_id") or "").strip(),
+                "skills_root": str(layout.get("skills_root") or "").strip(),
+                "astrbot_data_dir": str(layout.get("astrbot_data_dir") or "").strip(),
+                "skills_config_path": str(layout.get("skills_config_path") or "").strip(),
+                "sandbox_cache_path": str(layout.get("sandbox_cache_path") or "").strip(),
+                "neo_map_path": str(layout.get("neo_map_path") or "").strip(),
+            },
+            "warnings": snapshot.get("warnings", []),
+        }
+
+    def _build_astrbot_host_mutation_response(
+        self,
+        host_id: str,
+        *,
+        inventory_snapshot: dict[str, Any],
+        skills_snapshot: dict[str, Any],
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        host_payload = self.webui_get_astrbot_host_payload(host_id)
+        response = {
+            "ok": True,
+            "generated_at": host_payload.get("generated_at", skills_snapshot.get("generated_at")),
+            "host": host_payload.get("host", {}),
+            "runtime_state": host_payload.get("runtime_state", {}),
+            "layout": host_payload.get("layout", {}),
+            "warnings": host_payload.get("warnings", []),
+            "skills": skills_snapshot,
+            "inventory": inventory_snapshot,
+        }
+        if isinstance(extra, dict):
+            response.update(extra)
+        return response
+
+    async def _trigger_astrbot_sandbox_sync(self) -> dict[str, Any]:
+        try:
+            from astrbot.core.computer.computer_client import sync_skills_to_active_sandboxes
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot sandbox sync adapter unavailable: {exc}",
+                "reason_code": "sandbox_sync_unavailable",
+            }
+        try:
+            maybe_coro = sync_skills_to_active_sandboxes()
+            if asyncio.iscoroutine(maybe_coro):
+                await maybe_coro
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot sandbox sync failed: {exc}",
+                "reason_code": "sandbox_sync_failed",
+            }
+        return {
+            "ok": True,
+            "message": "astrbot sandbox sync completed",
+            "reason_code": "",
+        }
+
+    def webui_set_astrbot_skill_active(self, host_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        context = self._resolve_astrbot_host_action_context(host_id)
+        if not context.get("ok"):
+            return context
+        action_payload = payload if isinstance(payload, dict) else {}
+        skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
+        active = _to_bool(action_payload.get("active"), True)
+        result = set_astrbot_skill_active(
+            context.get("layout", {}),
+            skill_name=skill_name,
+            active=active,
+        )
+        if not result.get("ok"):
+            return {
+                "ok": False,
+                "message": str(result.get("message") or "astrbot toggle action failed"),
+                "reason_code": str(result.get("reason_code") or "").strip(),
+                "result": result,
+            }
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_host_id = str(context.get("host_id") or "").strip()
+        self._append_skills_audit_event(
+            "astrbot_skill_toggle",
+            source_id=normalized_host_id,
+            payload={
+                "skill_name": str(result.get("skill_name") or "").strip(),
+                "active": _to_bool(result.get("active"), active),
+                "changed": _to_bool(result.get("changed"), False),
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot skill toggled: "
+                f"host={normalized_host_id} "
+                f"skill={str(result.get('skill_name') or '').strip()} "
+                f"active={_to_bool(result.get('active'), active)}"
+            ),
+            source="webui",
+        )
+        return self._build_astrbot_host_mutation_response(
+            normalized_host_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
+            extra={"action": "toggle_skill", "result": result},
+        )
+
+    def webui_delete_astrbot_skill(self, host_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        context = self._resolve_astrbot_host_action_context(host_id)
+        if not context.get("ok"):
+            return context
+        action_payload = payload if isinstance(payload, dict) else {}
+        skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
+        result = delete_astrbot_local_skill(context.get("layout", {}), skill_name=skill_name)
+        if not result.get("ok"):
+            return {
+                "ok": False,
+                "message": str(result.get("message") or "astrbot delete action failed"),
+                "reason_code": str(result.get("reason_code") or "").strip(),
+                "result": result,
+            }
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_host_id = str(context.get("host_id") or "").strip()
+        self._append_skills_audit_event(
+            "astrbot_skill_delete",
+            source_id=normalized_host_id,
+            payload={
+                "skill_name": str(result.get("skill_name") or "").strip(),
+                "deleted_local_dir": _to_bool(result.get("deleted_local_dir"), False),
+                "removed_from_config": _to_bool(result.get("removed_from_config"), False),
+                "removed_from_sandbox_cache": _to_bool(result.get("removed_from_sandbox_cache"), False),
+            },
+        )
+        self._push_debug_log(
+            "warn",
+            (
+                "astrbot skill deleted: "
+                f"host={normalized_host_id} "
+                f"skill={str(result.get('skill_name') or '').strip()}"
+            ),
+            source="webui",
+        )
+        return self._build_astrbot_host_mutation_response(
+            normalized_host_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
+            extra={"action": "delete_skill", "result": result},
+        )
+
+    async def webui_sync_astrbot_sandbox(
+        self,
+        host_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = payload if isinstance(payload, dict) else {}
+        context = self._resolve_astrbot_host_action_context(host_id)
+        if not context.get("ok"):
+            return context
+
+        sync_result = await self._trigger_astrbot_sandbox_sync()
+        if not sync_result.get("ok"):
+            return sync_result
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_host_id = str(context.get("host_id") or "").strip()
+        self._append_skills_audit_event(
+            "astrbot_sandbox_sync",
+            source_id=normalized_host_id,
+            payload={"ok": True},
+        )
+        self._push_debug_log(
+            "info",
+            f"astrbot sandbox sync completed: host={normalized_host_id}",
+            source="webui",
+        )
+        return self._build_astrbot_host_mutation_response(
+            normalized_host_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
+            extra={"action": "sandbox_sync", "result": sync_result},
+        )
 
     def webui_get_skill_sources_payload(self) -> dict[str, Any]:
         snapshot = self.webui_get_skills_payload()
@@ -1317,14 +2413,56 @@ class OneSyncPlugin(Star):
         if not normalized_install_unit_id:
             return {"ok": False, "message": "install_unit_id is required"}
         snapshot = self.webui_get_skills_payload()
-        return build_install_unit_detail_payload(snapshot, normalized_install_unit_id)
+        detail = build_install_unit_detail_payload(snapshot, normalized_install_unit_id)
+        if not detail.get("ok"):
+            return detail
+        source_rows = self._augment_source_rows_with_git_checkouts(
+            [
+                item
+                for item in detail.get("source_rows", [])
+                if isinstance(item, dict)
+            ],
+        )
+        install_unit = detail.get("install_unit", {}) if isinstance(detail.get("install_unit"), dict) else {}
+        detail["update_plan"] = self._augment_update_plan_with_source_sync_fallback_preview(
+            detail.get("update_plan"),
+            source_rows,
+            display_name=str(
+                install_unit.get("display_name")
+                or normalized_install_unit_id
+                or "install unit"
+            ).strip(),
+        )
+        return detail
 
     def webui_get_collection_group_payload(self, collection_group_id: str) -> dict[str, Any]:
         normalized_collection_group_id = str(collection_group_id or "").strip()
         if not normalized_collection_group_id:
             return {"ok": False, "message": "collection_group_id is required"}
         snapshot = self.webui_get_skills_payload()
-        return build_collection_group_detail_payload(snapshot, normalized_collection_group_id)
+        detail = build_collection_group_detail_payload(snapshot, normalized_collection_group_id)
+        if not detail.get("ok"):
+            return detail
+
+        collection_group = detail.get("collection_group", {}) if isinstance(detail.get("collection_group"), dict) else {}
+        install_unit_rows = [
+            item
+            for item in detail.get("install_unit_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_rows = self._augment_source_rows_with_git_checkouts(
+            [
+                item
+                for item in detail.get("source_rows", [])
+                if isinstance(item, dict)
+            ],
+        )
+        detail["update_plan"] = self._build_effective_collection_group_update_plan(
+            collection_group=collection_group,
+            install_unit_rows=install_unit_rows,
+            source_rows=source_rows,
+        )
+        return detail
 
     def _resolve_install_unit_action_context(self, install_unit_id: str) -> dict[str, Any]:
         normalized_install_unit_id = str(install_unit_id or "").strip()
@@ -1479,10 +2617,975 @@ class OneSyncPlugin(Star):
             "repairable_target_ids": repairable_target_ids,
         }
 
+    def _build_source_index_by_id(self, source_rows: list[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+        rows = [item for item in (source_rows or []) if isinstance(item, dict)]
+        index: dict[str, dict[str, Any]] = {}
+        for item in rows:
+            source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            index[source_id] = item
+        return index
+
+    def _resolve_plan_source_rows(
+        self,
+        plan: dict[str, Any] | None,
+        source_index: dict[str, dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        source_map = source_index if isinstance(source_index, dict) else {}
+        source_ids = [
+            _normalize_inventory_id(item, default="")
+            for item in _to_str_list((plan or {}).get("source_ids", []))
+        ]
+        source_ids = [item for item in source_ids if item]
+        if source_ids:
+            return [source_map[item] for item in source_ids if item in source_map]
+
+        install_unit_id = str((plan or {}).get("install_unit_id") or "").strip()
+        source_paths = {
+            str(item).strip()
+            for item in _to_str_list((plan or {}).get("source_paths", []))
+            if str(item).strip()
+        }
+        rows: list[dict[str, Any]] = []
+        for item in source_map.values():
+            if not isinstance(item, dict):
+                continue
+            item_install_unit_id = str(item.get("install_unit_id") or "").strip()
+            item_source_path = str(item.get("source_path") or "").strip()
+            if install_unit_id and item_install_unit_id == install_unit_id:
+                rows.append(item)
+                continue
+            if source_paths and item_source_path in source_paths:
+                rows.append(item)
+        return rows
+
+    def _classify_syncable_source_rows(
+        self,
+        source_rows: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        rows = [item for item in (source_rows or []) if isinstance(item, dict)]
+        syncable_rows: list[dict[str, Any]] = []
+        non_syncable_rows: list[dict[str, Any]] = []
+        for item in rows:
+            if is_source_syncable(item):
+                syncable_rows.append(item)
+            else:
+                non_syncable_rows.append(item)
+        syncable_source_ids = _dedupe_keep_order(
+            [
+                str(item.get("source_id") or "").strip()
+                for item in syncable_rows
+                if str(item.get("source_id") or "").strip()
+            ],
+        )
+        non_syncable_source_ids = _dedupe_keep_order(
+            [
+                str(item.get("source_id") or "").strip()
+                for item in non_syncable_rows
+                if str(item.get("source_id") or "").strip()
+            ],
+        )
+        return {
+            "rows": rows,
+            "syncable_rows": syncable_rows,
+            "non_syncable_rows": non_syncable_rows,
+            "syncable_source_ids": syncable_source_ids,
+            "non_syncable_source_ids": non_syncable_source_ids,
+            "all_syncable": bool(rows) and not non_syncable_rows,
+        }
+
+    def _augment_update_plan_with_source_sync_fallback_preview(
+        self,
+        update_plan: dict[str, Any] | None,
+        source_rows: list[dict[str, Any]] | None,
+        *,
+        display_name: str = "",
+    ) -> dict[str, Any]:
+        plan = update_plan if isinstance(update_plan, dict) else {}
+        augmented: dict[str, Any] = {**plan}
+        commands = _to_str_list(augmented.get("commands", []))
+        precheck_commands = _to_str_list(augmented.get("precheck_commands", []))
+        reason_code = str(augmented.get("reason_code") or "").strip().lower()
+        augmented["commands"] = commands
+        augmented["command_count"] = len(commands)
+        augmented["precheck_commands"] = precheck_commands
+        augmented["precheck_command_count"] = len(precheck_commands)
+
+        syncable_status = self._classify_syncable_source_rows(source_rows)
+        syncable_source_ids = syncable_status.get("syncable_source_ids", [])
+        non_syncable_source_ids = syncable_status.get("non_syncable_source_ids", [])
+        augmented["syncable_source_ids"] = syncable_source_ids
+        augmented["non_syncable_source_ids"] = non_syncable_source_ids
+
+        if not _to_bool(augmented.get("supported"), False) and syncable_status.get("all_syncable"):
+            normalized_name = str(display_name or augmented.get("display_name") or "aggregate").strip()
+            augmented["supported"] = True
+            augmented["fallback_mode"] = "source_sync"
+            augmented["message"] = f"update fallback will run source sync for {normalized_name}"
+            reason_code = ""
+
+        fallback_mode = str(augmented.get("fallback_mode") or "").strip().lower()
+        supported = _to_bool(augmented.get("supported"), False)
+        has_commands = len(commands) > 0
+        if fallback_mode == "source_sync":
+            update_mode = "source_sync"
+            actionable = True
+        elif supported and has_commands:
+            update_mode = "command"
+            actionable = True
+        else:
+            update_mode = "manual_only"
+            actionable = False
+        if update_mode == "manual_only" and not reason_code:
+            if non_syncable_source_ids:
+                reason_code = "non_syncable_sources_present"
+            else:
+                reason_code = "manual_only"
+        augmented["update_mode"] = update_mode
+        augmented["actionable"] = actionable
+        augmented["manual_only"] = update_mode == "manual_only"
+        augmented["reason_code"] = reason_code
+
+        return augmented
+
+    def _is_source_sync_update_plan(self, plan: dict[str, Any] | None) -> bool:
+        payload = plan if isinstance(plan, dict) else {}
+        update_mode = str(payload.get("update_mode") or "").strip().lower()
+        if update_mode == "source_sync":
+            return True
+        fallback_mode = str(payload.get("fallback_mode") or "").strip().lower()
+        if fallback_mode == "source_sync":
+            return True
+        supported = _to_bool(payload.get("supported"), False)
+        has_commands = bool(_to_str_list(payload.get("commands", [])))
+        has_syncable_sources = bool(_to_str_list(payload.get("syncable_source_ids", [])))
+        non_syncable_sources = _to_str_list(payload.get("non_syncable_source_ids", []))
+        return supported and not has_commands and has_syncable_sources and not non_syncable_sources
+
+    def _build_install_unit_update_plan_dedupe_key(self, plan: dict[str, Any] | None) -> str:
+        payload = plan if isinstance(plan, dict) else {}
+        update_mode = str(payload.get("update_mode") or "").strip().lower()
+        commands = _dedupe_keep_order(_to_str_list(payload.get("commands", [])))
+        precheck_commands = _dedupe_keep_order(_to_str_list(payload.get("precheck_commands", [])))
+        source_ids = _dedupe_keep_order(_to_str_list(payload.get("source_ids", [])))
+        source_paths = _dedupe_keep_order(_to_str_list(payload.get("source_paths", [])))
+        syncable_source_ids = _dedupe_keep_order(_to_str_list(payload.get("syncable_source_ids", [])))
+        non_syncable_source_ids = _dedupe_keep_order(_to_str_list(payload.get("non_syncable_source_ids", [])))
+        install_ref = str(payload.get("install_ref") or "").strip()
+        manager = str(payload.get("manager") or "").strip().lower()
+        policy = str(payload.get("policy") or "").strip().lower()
+        reason_code = str(payload.get("reason_code") or "").strip().lower()
+        install_unit_id = str(payload.get("install_unit_id") or "").strip()
+        manual_only = _to_bool(payload.get("manual_only", False), False)
+
+        dedupe_payload = {
+            "update_mode": update_mode,
+            "manager": manager,
+            "policy": policy,
+            "install_ref": install_ref,
+            "commands": commands,
+            "precheck_commands": precheck_commands,
+            "syncable_source_ids": syncable_source_ids,
+            "non_syncable_source_ids": non_syncable_source_ids,
+            "source_paths": source_paths,
+            "source_ids": source_ids,
+            "reason_code": reason_code,
+            "manual_only": manual_only,
+            "install_unit_id": install_unit_id if not any(
+                [
+                    install_ref,
+                    commands,
+                    precheck_commands,
+                    syncable_source_ids,
+                    source_paths,
+                    source_ids,
+                ],
+            ) else "",
+        }
+        return json.dumps(dedupe_payload, ensure_ascii=False, sort_keys=True)
+
+    def _build_effective_collection_group_update_plan(
+        self,
+        *,
+        collection_group: dict[str, Any] | None,
+        install_unit_rows: list[dict[str, Any]] | None,
+        source_rows: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        group = collection_group if isinstance(collection_group, dict) else {}
+        unit_rows = [item for item in (install_unit_rows or []) if isinstance(item, dict)]
+        rows = [item for item in (source_rows or []) if isinstance(item, dict)]
+        base_plan = build_collection_group_update_plan(group, unit_rows, rows)
+        display_name = str(
+            group.get("display_name")
+            or base_plan.get("display_name")
+            or base_plan.get("collection_group_id")
+            or "collection group"
+        ).strip()
+
+        install_unit_display_names: dict[str, str] = {}
+        for item in unit_rows:
+            install_unit_id = str(item.get("install_unit_id") or "").strip()
+            if not install_unit_id:
+                continue
+            install_unit_display_names[install_unit_id] = str(
+                item.get("display_name")
+                or item.get("install_unit_display_name")
+                or install_unit_id
+            ).strip()
+
+        raw_unit_plans = [
+            item
+            for item in base_plan.get("install_unit_plans", [])
+            if isinstance(item, dict)
+        ]
+        effective_unit_plans: list[dict[str, Any]] = []
+        for item in raw_unit_plans:
+            install_unit_id = str(item.get("install_unit_id") or "").strip()
+            install_unit_source_rows = [
+                source
+                for source in rows
+                if str(source.get("install_unit_id") or "").strip() == install_unit_id
+            ]
+            effective_unit_plans.append(
+                self._augment_update_plan_with_source_sync_fallback_preview(
+                    item,
+                    install_unit_source_rows,
+                    display_name=install_unit_display_names.get(install_unit_id, install_unit_id or "install unit"),
+                ),
+            )
+
+        actionable_unit_plans = [
+            item
+            for item in effective_unit_plans
+            if _to_bool(item.get("actionable"), False)
+        ]
+        blocked_unit_plans = [
+            item
+            for item in effective_unit_plans
+            if not _to_bool(item.get("actionable"), False)
+        ]
+        command_unit_plans = [
+            item
+            for item in actionable_unit_plans
+            if _to_str_list(item.get("commands", []))
+        ]
+        source_sync_unit_plans = [
+            item
+            for item in actionable_unit_plans
+            if self._is_source_sync_update_plan(item)
+            and not _to_str_list(item.get("commands", []))
+        ]
+        command_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in command_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+        source_sync_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in source_sync_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+        skipped_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in blocked_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+        skipped_manual_only_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in blocked_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+                and str(item.get("reason_code") or "").strip().lower()
+                in {"manual_managed", "manual_only", "non_syncable_sources_present"}
+            ],
+        )
+        skipped_manual_only_install_unit_id_set = set(skipped_manual_only_install_unit_ids)
+        skipped_other_install_unit_ids = _dedupe_keep_order(
+            [
+                install_unit_id
+                for install_unit_id in skipped_install_unit_ids
+                if install_unit_id not in skipped_manual_only_install_unit_id_set
+            ],
+        )
+
+        precheck_commands = [
+            command
+            for item in command_unit_plans
+            for command in _to_str_list(item.get("precheck_commands", []))
+        ]
+        commands = [
+            command
+            for item in command_unit_plans
+            for command in _to_str_list(item.get("commands", []))
+        ]
+        managers = _dedupe_keep_order(
+            [
+                str(item.get("manager") or "").strip()
+                for item in actionable_unit_plans
+                if str(item.get("manager") or "").strip()
+            ],
+        )
+        policies = _dedupe_keep_order(
+            [
+                str(item.get("policy") or "").strip()
+                for item in actionable_unit_plans
+                if str(item.get("policy") or "").strip()
+            ],
+        )
+
+        supported_install_unit_total = len(actionable_unit_plans)
+        unsupported_install_unit_total = len(blocked_unit_plans)
+        aggregate_supported = supported_install_unit_total > 0
+        fully_supported = aggregate_supported and unsupported_install_unit_total == 0
+        partial_supported = aggregate_supported and unsupported_install_unit_total > 0
+
+        if not aggregate_supported:
+            update_mode = "manual_only"
+            actionable = False
+        elif partial_supported:
+            update_mode = "partial"
+            actionable = True
+        elif source_sync_unit_plans and not command_unit_plans:
+            update_mode = "source_sync"
+            actionable = True
+        else:
+            update_mode = "command"
+            actionable = True
+
+        if not actionable:
+            message = f"update unsupported for collection group: {display_name}"
+        elif update_mode == "source_sync":
+            message = f"update fallback will run source sync for {display_name}"
+        elif update_mode == "partial":
+            message = (
+                f"collection group update prepared for {supported_install_unit_total} install units "
+                f"({unsupported_install_unit_total} blocked)"
+            )
+        else:
+            message = f"collection group update prepared for {supported_install_unit_total} install units"
+
+        unsupported_install_units = [
+            {
+                "install_unit_id": str(item.get("install_unit_id") or "").strip(),
+                "message": str(item.get("message") or "").strip(),
+                "reason_code": str(item.get("reason_code") or "").strip().lower(),
+            }
+            for item in blocked_unit_plans
+            if str(item.get("install_unit_id") or "").strip() or str(item.get("message") or "").strip()
+        ]
+        blocked_reasons = [
+            {
+                "install_unit_id": str(item.get("install_unit_id") or "").strip(),
+                "reason": str(item.get("message") or "").strip(),
+                "reason_code": str(item.get("reason_code") or "").strip().lower(),
+            }
+            for item in blocked_unit_plans
+            if str(item.get("install_unit_id") or "").strip() or str(item.get("message") or "").strip()
+        ]
+        blocked_reason_codes = _dedupe_keep_order(
+            [
+                str(item.get("reason_code") or "").strip().lower()
+                for item in blocked_unit_plans
+                if str(item.get("reason_code") or "").strip()
+            ],
+        )
+        if update_mode == "manual_only":
+            if len(blocked_reason_codes) == 1:
+                reason_code = blocked_reason_codes[0]
+            elif blocked_reason_codes:
+                reason_code = "mixed_blocked_reasons"
+            else:
+                reason_code = "manual_only"
+        else:
+            reason_code = ""
+        syncable_source_ids = _dedupe_keep_order(
+            [
+                source_id
+                for item in actionable_unit_plans
+                for source_id in _to_str_list(item.get("syncable_source_ids", []))
+                if str(source_id).strip()
+            ],
+        )
+        non_syncable_source_ids = _dedupe_keep_order(
+            [
+                source_id
+                for item in blocked_unit_plans
+                for source_id in _to_str_list(item.get("non_syncable_source_ids", []))
+                if str(source_id).strip()
+            ],
+        )
+        actionable_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in actionable_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+
+        return {
+            **base_plan,
+            "display_name": display_name,
+            "install_unit_plans": effective_unit_plans,
+            "manager": managers[0] if len(managers) == 1 else ("mixed" if managers else ""),
+            "policy": policies[0] if len(policies) == 1 else ("mixed" if policies else ""),
+            "precheck_commands": precheck_commands,
+            "precheck_command_count": len(precheck_commands),
+            "commands": commands,
+            "command_count": len(commands),
+            "supported": aggregate_supported,
+            "actionable": actionable,
+            "manual_only": update_mode == "manual_only",
+            "update_mode": update_mode,
+            "fallback_mode": "source_sync" if update_mode == "source_sync" else "",
+            "message": message,
+            "supported_install_unit_total": supported_install_unit_total,
+            "unsupported_install_unit_total": unsupported_install_unit_total,
+            "unsupported_install_units": unsupported_install_units,
+            "blocked_reasons": blocked_reasons,
+            "reason_code": reason_code,
+            "aggregate_supported": aggregate_supported,
+            "fully_supported": fully_supported,
+            "partial_supported": partial_supported,
+            "command_install_unit_total": len(command_unit_plans),
+            "source_sync_install_unit_total": len(source_sync_unit_plans),
+            "command_install_unit_ids": command_install_unit_ids,
+            "source_sync_install_unit_ids": source_sync_install_unit_ids,
+            "actionable_install_unit_ids": actionable_install_unit_ids,
+            "skipped_install_unit_ids": skipped_install_unit_ids,
+            "skipped_install_unit_total": len(skipped_install_unit_ids),
+            "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
+            "skipped_manual_only_install_unit_total": len(skipped_manual_only_install_unit_ids),
+            "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+            "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
+            "syncable_source_ids": syncable_source_ids,
+            "non_syncable_source_ids": non_syncable_source_ids,
+        }
+
+    @staticmethod
+    def _empty_install_unit_execution_summary() -> dict[str, Any]:
+        return {
+            "results": [],
+            "install_unit_results": [],
+            "executed_install_unit_ids": [],
+            "failed_install_units": [],
+            "success_count": 0,
+            "failure_count": 0,
+            "precheck_success_count": 0,
+            "precheck_failure_count": 0,
+            "update_success_count": 0,
+            "update_failure_count": 0,
+            "revision_capture_enabled_install_unit_total": 0,
+            "revision_changed_source_total": 0,
+            "revision_unchanged_source_total": 0,
+            "revision_unknown_source_total": 0,
+            "revision_capture_failed_source_total": 0,
+            "revision_changed_install_unit_ids": [],
+            "rollback_preview_install_unit_total": 0,
+            "rollback_preview_candidate_total": 0,
+            "synced_source_ids": [],
+            "failed_sources": [],
+            "source_sync_install_unit_total": 0,
+            "source_sync_success_count": 0,
+            "source_sync_failure_count": 0,
+        }
+
+    def _merge_install_unit_execution_summaries(
+        self,
+        summaries: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        merged = self._empty_install_unit_execution_summary()
+        for summary in summaries or []:
+            if not isinstance(summary, dict):
+                continue
+            merged["results"].extend(
+                [item for item in summary.get("results", []) if isinstance(item, dict)],
+            )
+            merged["install_unit_results"].extend(
+                [item for item in summary.get("install_unit_results", []) if isinstance(item, dict)],
+            )
+            merged["failed_install_units"].extend(
+                [item for item in summary.get("failed_install_units", []) if isinstance(item, dict)],
+            )
+            merged["failed_sources"].extend(
+                [item for item in summary.get("failed_sources", []) if isinstance(item, dict)],
+            )
+
+            merged["executed_install_unit_ids"] = _dedupe_keep_order(
+                merged["executed_install_unit_ids"] + _to_str_list(summary.get("executed_install_unit_ids", [])),
+            )
+            merged["revision_changed_install_unit_ids"] = _dedupe_keep_order(
+                merged["revision_changed_install_unit_ids"] + _to_str_list(summary.get("revision_changed_install_unit_ids", [])),
+            )
+            merged["synced_source_ids"] = _dedupe_keep_order(
+                merged["synced_source_ids"] + _to_str_list(summary.get("synced_source_ids", [])),
+            )
+
+            for numeric_key in (
+                "success_count",
+                "failure_count",
+                "precheck_success_count",
+                "precheck_failure_count",
+                "update_success_count",
+                "update_failure_count",
+                "revision_capture_enabled_install_unit_total",
+                "revision_changed_source_total",
+                "revision_unchanged_source_total",
+                "revision_unknown_source_total",
+                "revision_capture_failed_source_total",
+                "rollback_preview_install_unit_total",
+                "rollback_preview_candidate_total",
+                "source_sync_install_unit_total",
+                "source_sync_success_count",
+                "source_sync_failure_count",
+            ):
+                merged[numeric_key] = int(merged.get(numeric_key, 0) or 0) + int(summary.get(numeric_key, 0) or 0)
+
+        return merged
+
+    def _execute_install_unit_source_sync_plans(
+        self,
+        update_plans: list[dict[str, Any]] | None,
+        source_rows: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        plans = [item for item in (update_plans or []) if isinstance(item, dict)]
+        if not plans:
+            return self._empty_install_unit_execution_summary()
+
+        source_index = self._build_source_index_by_id(source_rows)
+        install_unit_results: list[dict[str, Any]] = []
+        phase_results: list[dict[str, Any]] = []
+        executed_install_unit_ids: list[str] = []
+        failed_install_units: list[dict[str, Any]] = []
+        synced_source_ids: list[str] = []
+        failed_sources: list[dict[str, Any]] = []
+
+        for plan in plans:
+            install_unit_id = str(plan.get("install_unit_id") or "").strip()
+            display_name = str(plan.get("display_name") or install_unit_id or "install unit").strip()
+            plan_source_rows = self._resolve_plan_source_rows(plan, source_index)
+            plan_results: list[dict[str, Any]] = []
+
+            if not plan_source_rows:
+                failed_install_units.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "reason": "source_sync_rows_missing",
+                        "message": f"source sync failed for {install_unit_id or 'install unit'}: no source members",
+                    },
+                )
+                install_unit_results.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "display_name": display_name,
+                        "manager": str(plan.get("manager") or "").strip(),
+                        "policy": str(plan.get("policy") or "").strip(),
+                        "precheck_commands": [],
+                        "precheck_command_count": 0,
+                        "commands": [],
+                        "command_count": 0,
+                        "results": [],
+                        "ok": False,
+                        "failure_reason": "source_sync_rows_missing",
+                        "skipped_update_commands": True,
+                        "revision_capture": {
+                            "enabled": False,
+                            "source_total": 0,
+                            "changed_source_ids": [],
+                            "changed_total": 0,
+                            "unchanged_source_ids": [],
+                            "unchanged_total": 0,
+                            "unknown_source_ids": [],
+                            "unknown_total": 0,
+                            "changed": False,
+                            "before": [],
+                            "after": [],
+                            "failed_sources": [],
+                        },
+                        "rollback_preview": {
+                            "supported": False,
+                            "candidate_total": 0,
+                            "candidates": [],
+                            "skipped_sources": [],
+                            "warning": "",
+                        },
+                    },
+                )
+                if install_unit_id:
+                    executed_install_unit_ids.append(install_unit_id)
+                continue
+
+            unit_failed_sources: list[dict[str, Any]] = []
+            for source in plan_source_rows:
+                source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
+                if not source_id:
+                    continue
+                source_with_checkout = self._augment_source_row_with_git_checkout(source)
+                sync_record = build_source_sync_record(source_with_checkout)
+                self._update_saved_registry_source_metadata(
+                    source_id=source_id,
+                    source_payload=source_with_checkout,
+                    sync_payload=sync_record,
+                )
+                sync_status = str(sync_record.get("sync_status") or "").strip()
+                sync_ok = sync_status == "ok"
+                sync_message = str(sync_record.get("sync_message") or "").strip()
+                result_payload = {
+                    "install_unit_id": install_unit_id,
+                    "source_id": source_id,
+                    "command": f"source_sync:{source_id}",
+                    "phase": "source_sync",
+                    "exit_code": 0 if sync_ok else 1,
+                    "stdout": "",
+                    "stderr": "" if sync_ok else sync_message,
+                    "duration_s": 0.0,
+                    "timed_out": False,
+                    "ok": sync_ok,
+                    "sync_status": sync_status,
+                    "sync_error_code": str(sync_record.get("sync_error_code") or "").strip(),
+                    "sync_message": sync_message,
+                }
+                plan_results.append(result_payload)
+                phase_results.append(result_payload)
+                if sync_ok:
+                    synced_source_ids.append(source_id)
+                    continue
+                failed_payload = {
+                    "source_id": source_id,
+                    "sync_status": sync_status,
+                    "sync_message": sync_message,
+                }
+                unit_failed_sources.append(failed_payload)
+                failed_sources.append(failed_payload)
+
+            plan_ok = bool(plan_results) and not unit_failed_sources
+            if install_unit_id:
+                executed_install_unit_ids.append(install_unit_id)
+            install_unit_results.append(
+                {
+                    "install_unit_id": install_unit_id,
+                    "display_name": display_name,
+                    "manager": str(plan.get("manager") or "").strip(),
+                    "policy": str(plan.get("policy") or "").strip(),
+                    "precheck_commands": [],
+                    "precheck_command_count": 0,
+                    "commands": [],
+                    "command_count": 0,
+                    "results": plan_results,
+                    "ok": plan_ok,
+                    "failure_reason": "" if plan_ok else "source_sync_failed",
+                    "skipped_update_commands": True,
+                    "revision_capture": {
+                        "enabled": False,
+                        "source_total": 0,
+                        "changed_source_ids": [],
+                        "changed_total": 0,
+                        "unchanged_source_ids": [],
+                        "unchanged_total": 0,
+                        "unknown_source_ids": [],
+                        "unknown_total": 0,
+                        "changed": False,
+                        "before": [],
+                        "after": [],
+                        "failed_sources": [],
+                    },
+                    "rollback_preview": {
+                        "supported": False,
+                        "candidate_total": 0,
+                        "candidates": [],
+                        "skipped_sources": [],
+                        "warning": "",
+                    },
+                },
+            )
+            if not plan_ok:
+                failed_install_units.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "reason": "source_sync_failed",
+                        "message": f"source sync failed for {install_unit_id or 'install unit'}",
+                    },
+                )
+
+        source_sync_success_count = sum(1 for item in phase_results if item.get("ok"))
+        source_sync_failure_count = len(phase_results) - source_sync_success_count
+        return {
+            "results": phase_results,
+            "install_unit_results": install_unit_results,
+            "executed_install_unit_ids": executed_install_unit_ids,
+            "failed_install_units": failed_install_units,
+            "success_count": source_sync_success_count,
+            "failure_count": source_sync_failure_count,
+            "precheck_success_count": 0,
+            "precheck_failure_count": 0,
+            "update_success_count": source_sync_success_count,
+            "update_failure_count": source_sync_failure_count,
+            "revision_capture_enabled_install_unit_total": 0,
+            "revision_changed_source_total": 0,
+            "revision_unchanged_source_total": 0,
+            "revision_unknown_source_total": 0,
+            "revision_capture_failed_source_total": 0,
+            "revision_changed_install_unit_ids": [],
+            "rollback_preview_install_unit_total": 0,
+            "rollback_preview_candidate_total": 0,
+            "synced_source_ids": synced_source_ids,
+            "failed_sources": failed_sources,
+            "source_sync_install_unit_total": len(install_unit_results),
+            "source_sync_success_count": source_sync_success_count,
+            "source_sync_failure_count": source_sync_failure_count,
+        }
+
+    def _capture_git_revisions_for_sources(
+        self,
+        source_rows: list[dict[str, Any]] | None,
+        *,
+        persist_sync_metadata: bool = False,
+    ) -> dict[str, Any]:
+        rows = [item for item in (source_rows or []) if isinstance(item, dict)]
+        captured_rows: list[dict[str, Any]] = []
+        failed_sources: list[dict[str, Any]] = []
+        for source in rows:
+            source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            source_with_checkout = self._augment_source_row_with_git_checkout(source)
+            source_for_capture = {
+                **source_with_checkout,
+                "source_id": source_id,
+                # Revision capture only cares about local checkout state and should not block on remote lookups.
+                "locator": "",
+                "registry_package_name": "",
+                "registry_package_manager": "",
+            }
+            sync_record = build_source_sync_record(source_for_capture)
+            if persist_sync_metadata:
+                self._update_saved_registry_source_metadata(
+                    source_id=source_id,
+                    source_payload=source_with_checkout,
+                    sync_payload=sync_record,
+                )
+            captured = {
+                "source_id": source_id,
+                "sync_status": str(sync_record.get("sync_status") or ""),
+                "sync_error_code": str(sync_record.get("sync_error_code") or ""),
+                "sync_message": str(sync_record.get("sync_message") or ""),
+                "sync_local_revision": str(sync_record.get("sync_local_revision") or ""),
+                "sync_remote_revision": str(sync_record.get("sync_remote_revision") or ""),
+                "sync_resolved_revision": str(sync_record.get("sync_resolved_revision") or ""),
+                "sync_branch": str(sync_record.get("sync_branch") or ""),
+                "sync_dirty": _to_bool(sync_record.get("sync_dirty", False), False),
+            }
+            captured_rows.append(captured)
+            if captured["sync_status"] != "ok":
+                failed_sources.append(
+                    {
+                        "source_id": source_id,
+                        "sync_status": captured["sync_status"],
+                        "sync_error_code": captured["sync_error_code"],
+                        "sync_message": captured["sync_message"],
+                    },
+                )
+
+        return {
+            "rows": captured_rows,
+            "failed_sources": failed_sources,
+        }
+
+    def _payload_confirms_skills_rollback(self, payload: dict[str, Any] | None) -> bool:
+        body = payload if isinstance(payload, dict) else {}
+        if not _to_bool(body.get("execute", False), False):
+            return False
+        provided = str(body.get("confirm") or "").strip()
+        return secrets.compare_digest(provided, SKILLS_ROLLBACK_CONFIRM_TOKEN)
+
+    def _extract_before_revision_rows(self, payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+        body = payload if isinstance(payload, dict) else {}
+        raw_rows = body.get("before_revisions", [])
+        if isinstance(raw_rows, dict):
+            raw_rows = [
+                {
+                    "source_id": key,
+                    "revision": value,
+                }
+                for key, value in raw_rows.items()
+            ]
+        rows = raw_rows if isinstance(raw_rows, list) else []
+
+        if not rows:
+            rollback_preview = body.get("rollback_preview", {})
+            if isinstance(rollback_preview, dict):
+                preview_rows = rollback_preview.get("candidates", [])
+                rows = preview_rows if isinstance(preview_rows, list) else []
+
+        normalized_rows: list[dict[str, Any]] = []
+        seen_source_ids: set[str] = set()
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+            revision = str(
+                item.get("revision")
+                or item.get("before_revision")
+                or item.get("sync_resolved_revision")
+                or "",
+            ).strip()
+            if not source_id or not revision or source_id in seen_source_ids:
+                continue
+            seen_source_ids.add(source_id)
+            normalized_rows.append(
+                {
+                    "source_id": source_id,
+                    "sync_resolved_revision": revision,
+                },
+            )
+        return normalized_rows
+
+    async def _execute_rollback_preview_candidates(
+        self,
+        candidates: list[dict[str, Any]],
+        *,
+        source_rows: list[dict[str, Any]] | None = None,
+        before_rows: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        command_results: list[dict[str, Any]] = []
+        source_results: list[dict[str, Any]] = []
+        executed_source_ids: list[str] = []
+        failed_sources: list[dict[str, Any]] = []
+
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+            command = str(item.get("command") or "").strip()
+            precheck_commands = _to_str_list(item.get("precheck_commands", []))
+            if not source_id or not command:
+                continue
+            executed_source_ids.append(source_id)
+            source_command_results: list[dict[str, Any]] = []
+            precheck_failed = False
+            failure_reason = ""
+
+            for precheck in precheck_commands:
+                result = await self.runner.run(precheck, timeout_s=180)
+                result_payload = {
+                    "source_id": source_id,
+                    "phase": "precheck",
+                    "command": result.command,
+                    "exit_code": result.exit_code,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "duration_s": result.duration_s,
+                    "timed_out": result.timed_out,
+                    "ok": result.exit_code == 0 and not result.timed_out,
+                }
+                source_command_results.append(result_payload)
+                command_results.append(result_payload)
+                if not result_payload.get("ok"):
+                    precheck_failed = True
+                    failure_reason = "precheck_failed"
+                    break
+
+            if not precheck_failed:
+                result = await self.runner.run(command, timeout_s=900)
+                result_payload = {
+                    "source_id": source_id,
+                    "phase": "rollback",
+                    "command": result.command,
+                    "exit_code": result.exit_code,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "duration_s": result.duration_s,
+                    "timed_out": result.timed_out,
+                    "ok": result.exit_code == 0 and not result.timed_out,
+                }
+                source_command_results.append(result_payload)
+                command_results.append(result_payload)
+                if not result_payload.get("ok"):
+                    failure_reason = "rollback_failed"
+
+            source_ok = bool(source_command_results) and all(item.get("ok") for item in source_command_results)
+            source_result = {
+                "source_id": source_id,
+                "source_path": str(item.get("source_path") or ""),
+                "before_revision": str(item.get("before_revision") or ""),
+                "command": command,
+                "precheck_commands": precheck_commands,
+                "results": source_command_results,
+                "ok": source_ok,
+                "failure_reason": failure_reason if not source_ok else "",
+            }
+            source_results.append(source_result)
+            if not source_ok:
+                if not failure_reason:
+                    failure_reason = "rollback_failed"
+                failed_sources.append(
+                    {
+                        "source_id": source_id,
+                        "reason": failure_reason,
+                        "message": (
+                            f"rollback precheck failed for {source_id}"
+                            if failure_reason == "precheck_failed"
+                            else f"rollback command failed for {source_id}"
+                        ),
+                    },
+                )
+
+        success_count = sum(1 for item in command_results if item.get("ok"))
+        failure_count = len(command_results) - success_count
+
+        target_source_ids = {
+            _normalize_inventory_id(item.get("source_id", ""), default="")
+            for item in candidates
+            if isinstance(item, dict) and _normalize_inventory_id(item.get("source_id", ""), default="")
+        }
+        target_source_rows = [
+            item
+            for item in (source_rows or [])
+            if isinstance(item, dict)
+            and _normalize_inventory_id(item.get("source_id", ""), default="") in target_source_ids
+        ]
+        after_capture = self._capture_git_revisions_for_sources(
+            target_source_rows,
+            persist_sync_metadata=True,
+        )
+        restore_delta = summarize_revision_capture_delta(before_rows or [], after_capture.get("rows", []))
+        restored_source_ids = _to_str_list(restore_delta.get("unchanged_source_ids", []))
+        not_restored_source_ids = _dedupe_keep_order(
+            _to_str_list(restore_delta.get("changed_source_ids", []))
+            + _to_str_list(restore_delta.get("unknown_source_ids", [])),
+        )
+
+        return {
+            "results": command_results,
+            "source_results": source_results,
+            "executed_source_ids": _dedupe_keep_order(executed_source_ids),
+            "failed_sources": failed_sources,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "restore_capture": {
+                "before": before_rows or [],
+                "after": after_capture.get("rows", []),
+                "failed_sources": after_capture.get("failed_sources", []),
+                **restore_delta,
+            },
+            "restored_source_ids": restored_source_ids,
+            "restored_source_total": len(restored_source_ids),
+            "not_restored_source_ids": not_restored_source_ids,
+            "not_restored_source_total": len(not_restored_source_ids),
+        }
+
     async def _execute_install_unit_update_plans(
         self,
         update_plans: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        skills_snapshot = self.webui_get_skills_payload()
+        source_index = self._build_source_index_by_id(skills_snapshot.get("source_rows", []))
         install_unit_results: list[dict[str, Any]] = []
         command_results: list[dict[str, Any]] = []
         executed_install_unit_ids: list[str] = []
@@ -1491,18 +3594,41 @@ class OneSyncPlugin(Star):
         for plan in update_plans:
             if not isinstance(plan, dict) or not plan.get("supported"):
                 continue
+            precheck_commands = _to_str_list(plan.get("precheck_commands", []))
             commands = _to_str_list(plan.get("commands", []))
             if not commands:
                 continue
             install_unit_id = str(plan.get("install_unit_id") or "").strip()
             plan_results: list[dict[str, Any]] = []
-            timeout_s = 1800 if str(plan.get("manager") or "").strip().lower() == "git" else 900
+            manager = str(plan.get("manager") or "").strip().lower()
+            precheck_timeout_s = 180 if manager == "git" else 120
+            update_timeout_s = 1800 if manager == "git" else 900
+            precheck_failed = False
+            failure_reason = ""
+            plan_source_rows = self._resolve_plan_source_rows(plan, source_index)
+            before_revision_capture = {"rows": [], "failed_sources": []}
+            after_revision_capture = {"rows": [], "failed_sources": []}
+            revision_delta = summarize_revision_capture_delta([], [])
+            rollback_preview = {
+                "supported": False,
+                "candidate_total": 0,
+                "candidates": [],
+                "skipped_sources": [],
+                "warning": "",
+            }
 
-            for command in commands:
-                result = await self.runner.run(command, timeout_s=timeout_s)
+            if manager == "git" and plan_source_rows:
+                before_revision_capture = self._capture_git_revisions_for_sources(
+                    plan_source_rows,
+                    persist_sync_metadata=False,
+                )
+
+            for command in precheck_commands:
+                result = await self.runner.run(command, timeout_s=precheck_timeout_s)
                 result_payload = {
                     "install_unit_id": install_unit_id,
                     "command": result.command,
+                    "phase": "precheck",
                     "exit_code": result.exit_code,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
@@ -1512,8 +3638,83 @@ class OneSyncPlugin(Star):
                 }
                 plan_results.append(result_payload)
                 command_results.append(result_payload)
+                if not result_payload.get("ok"):
+                    precheck_failed = True
+                    failure_reason = "precheck_failed"
+                    break
 
-            plan_ok = bool(plan_results) and all(item.get("ok") for item in plan_results)
+            if not precheck_failed:
+                for command in commands:
+                    result = await self.runner.run(command, timeout_s=update_timeout_s)
+                    result_payload = {
+                        "install_unit_id": install_unit_id,
+                        "command": result.command,
+                        "phase": "update",
+                        "exit_code": result.exit_code,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "duration_s": result.duration_s,
+                        "timed_out": result.timed_out,
+                        "ok": result.exit_code == 0 and not result.timed_out,
+                    }
+                    plan_results.append(result_payload)
+                    command_results.append(result_payload)
+                    if result_payload.get("ok"):
+                        continue
+
+                    manager_for_fallback = str(plan.get("manager") or "").strip().lower()
+                    if (
+                        manager_for_fallback in {"bunx", "npx", "pnpm", "npm"}
+                        and _looks_like_command_not_found(result_payload)
+                    ):
+                        result_payload["ignored"] = True
+                        result_payload["fallback_reason"] = "primary_command_unavailable"
+                        fallback_commands = _build_registry_fallback_commands(plan, command)
+                        fallback_succeeded = False
+                        for fallback_command in fallback_commands:
+                            fallback_result = await self.runner.run(fallback_command, timeout_s=update_timeout_s)
+                            fallback_payload = {
+                                "install_unit_id": install_unit_id,
+                                "command": fallback_result.command,
+                                "phase": "update_fallback",
+                                "exit_code": fallback_result.exit_code,
+                                "stdout": fallback_result.stdout,
+                                "stderr": fallback_result.stderr,
+                                "duration_s": fallback_result.duration_s,
+                                "timed_out": fallback_result.timed_out,
+                                "ok": fallback_result.exit_code == 0 and not fallback_result.timed_out,
+                                "fallback_from": result.command,
+                            }
+                            plan_results.append(fallback_payload)
+                            command_results.append(fallback_payload)
+                            if fallback_payload.get("ok"):
+                                fallback_succeeded = True
+                                break
+                        if fallback_succeeded:
+                            continue
+                    failure_reason = "update_failed"
+
+            if manager == "git" and plan_source_rows:
+                after_revision_capture = self._capture_git_revisions_for_sources(
+                    plan_source_rows,
+                    persist_sync_metadata=True,
+                )
+                revision_delta = summarize_revision_capture_delta(
+                    before_revision_capture.get("rows", []),
+                    after_revision_capture.get("rows", []),
+                )
+                rollback_preview = build_git_rollback_preview(
+                    plan_source_rows,
+                    before_revision_capture.get("rows", []),
+                    _to_str_list(revision_delta.get("changed_source_ids", [])),
+                )
+
+            effective_results = [
+                item
+                for item in plan_results
+                if isinstance(item, dict) and not _to_bool(item.get("ignored", False), False)
+            ]
+            plan_ok = bool(effective_results) and all(item.get("ok") for item in effective_results)
             if install_unit_id:
                 executed_install_unit_ids.append(install_unit_id)
             install_unit_result = {
@@ -1521,22 +3722,117 @@ class OneSyncPlugin(Star):
                 "display_name": str(plan.get("display_name") or install_unit_id or "").strip(),
                 "manager": str(plan.get("manager") or "").strip(),
                 "policy": str(plan.get("policy") or "").strip(),
+                "precheck_commands": precheck_commands,
+                "precheck_command_count": len(precheck_commands),
                 "commands": commands,
                 "command_count": len(commands),
                 "results": plan_results,
                 "ok": plan_ok,
+                "failure_reason": failure_reason if not plan_ok else "",
+                "skipped_update_commands": precheck_failed,
+                "revision_capture": {
+                    "enabled": bool(manager == "git" and plan_source_rows),
+                    "source_total": int(revision_delta.get("source_total", 0)),
+                    "changed_source_ids": _to_str_list(revision_delta.get("changed_source_ids", [])),
+                    "changed_total": int(revision_delta.get("changed_total", 0)),
+                    "unchanged_source_ids": _to_str_list(revision_delta.get("unchanged_source_ids", [])),
+                    "unchanged_total": int(revision_delta.get("unchanged_total", 0)),
+                    "unknown_source_ids": _to_str_list(revision_delta.get("unknown_source_ids", [])),
+                    "unknown_total": int(revision_delta.get("unknown_total", 0)),
+                    "changed": _to_bool(revision_delta.get("changed", False), False),
+                    "before": before_revision_capture.get("rows", []),
+                    "after": after_revision_capture.get("rows", []),
+                    "failed_sources": after_revision_capture.get("failed_sources", []),
+                },
+                "rollback_preview": rollback_preview,
             }
             install_unit_results.append(install_unit_result)
             if not plan_ok:
+                if not failure_reason:
+                    failure_reason = "update_failed"
+                if failure_reason == "precheck_failed":
+                    failed_message = f"precheck failed for {install_unit_id or 'install unit'}"
+                else:
+                    failed_message = f"update command failed for {install_unit_id or 'install unit'}"
                 failed_install_units.append(
                     {
                         "install_unit_id": install_unit_id,
-                        "message": f"update command failed for {install_unit_id or 'install unit'}",
+                        "reason": failure_reason,
+                        "message": failed_message,
                     },
                 )
 
-        success_count = sum(1 for item in command_results if item.get("ok"))
-        failure_count = len(command_results) - success_count
+        effective_command_results = [
+            item
+            for item in command_results
+            if isinstance(item, dict) and not _to_bool(item.get("ignored", False), False)
+        ]
+        success_count = sum(1 for item in effective_command_results if item.get("ok"))
+        failure_count = len(effective_command_results) - success_count
+        precheck_success_count = sum(
+            1
+            for item in effective_command_results
+            if str(item.get("phase") or "").strip() == "precheck" and item.get("ok")
+        )
+        precheck_failure_count = sum(
+            1
+            for item in effective_command_results
+            if str(item.get("phase") or "").strip() == "precheck" and not item.get("ok")
+        )
+        update_success_count = sum(
+            1
+            for item in effective_command_results
+            if str(item.get("phase") or "").strip() in {"update", "update_fallback"} and item.get("ok")
+        )
+        update_failure_count = sum(
+            1
+            for item in effective_command_results
+            if str(item.get("phase") or "").strip() in {"update", "update_fallback"} and not item.get("ok")
+        )
+        revision_capture_enabled_install_unit_total = sum(
+            1
+            for item in install_unit_results
+            if _to_bool((item.get("revision_capture", {}) or {}).get("enabled", False), False)
+        )
+        revision_changed_source_total = sum(
+            int((item.get("revision_capture", {}) or {}).get("changed_total", 0))
+            for item in install_unit_results
+        )
+        revision_unchanged_source_total = sum(
+            int((item.get("revision_capture", {}) or {}).get("unchanged_total", 0))
+            for item in install_unit_results
+        )
+        revision_unknown_source_total = sum(
+            int((item.get("revision_capture", {}) or {}).get("unknown_total", 0))
+            for item in install_unit_results
+        )
+        revision_capture_failed_source_total = sum(
+            len(
+                [
+                    str(row.get("source_id") or "").strip()
+                    for row in (item.get("revision_capture", {}) or {}).get("failed_sources", [])
+                    if isinstance(row, dict) and str(row.get("source_id") or "").strip()
+                ],
+            )
+            for item in install_unit_results
+        )
+        revision_changed_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in install_unit_results
+                if _to_bool((item.get("revision_capture", {}) or {}).get("changed", False), False)
+                and str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+        rollback_preview_install_unit_total = sum(
+            1
+            for item in install_unit_results
+            if _to_bool((item.get("rollback_preview", {}) or {}).get("supported", False), False)
+        )
+        rollback_preview_candidate_total = sum(
+            int((item.get("rollback_preview", {}) or {}).get("candidate_total", 0))
+            for item in install_unit_results
+        )
         return {
             "results": command_results,
             "install_unit_results": install_unit_results,
@@ -1544,6 +3840,18 @@ class OneSyncPlugin(Star):
             "failed_install_units": failed_install_units,
             "success_count": success_count,
             "failure_count": failure_count,
+            "precheck_success_count": precheck_success_count,
+            "precheck_failure_count": precheck_failure_count,
+            "update_success_count": update_success_count,
+            "update_failure_count": update_failure_count,
+            "revision_capture_enabled_install_unit_total": revision_capture_enabled_install_unit_total,
+            "revision_changed_source_total": revision_changed_source_total,
+            "revision_unchanged_source_total": revision_unchanged_source_total,
+            "revision_unknown_source_total": revision_unknown_source_total,
+            "revision_capture_failed_source_total": revision_capture_failed_source_total,
+            "revision_changed_install_unit_ids": revision_changed_install_unit_ids,
+            "rollback_preview_install_unit_total": rollback_preview_install_unit_total,
+            "rollback_preview_candidate_total": rollback_preview_candidate_total,
         }
 
     async def webui_update_install_unit(
@@ -1561,10 +3869,42 @@ class OneSyncPlugin(Star):
             context.get("source_rows", []),
         )
         if not plan.get("supported"):
+            syncable_status = self._classify_syncable_source_rows(context.get("source_rows", []))
+            if syncable_status.get("all_syncable"):
+                sync_response = self.webui_sync_install_unit(install_unit_id)
+                if sync_response.get("ok"):
+                    normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+                    sync_update_summary = {
+                        **plan,
+                        "supported": True,
+                        "fallback_mode": "source_sync",
+                        "message": (
+                            "install unit update fallback executed as source sync: "
+                            f"{normalized_install_unit_id}"
+                        ),
+                        "syncable_source_ids": syncable_status.get("syncable_source_ids", []),
+                        "non_syncable_source_ids": syncable_status.get("non_syncable_source_ids", []),
+                        "synced_source_ids": sync_response.get("synced_source_ids", []),
+                        "failed_sources": sync_response.get("failed_sources", []),
+                    }
+                    sync_response["update"] = sync_update_summary
+                    sync_response["updated_install_unit_ids"] = [normalized_install_unit_id]
+                    sync_response["failed_install_units"] = []
+                    self._append_skills_audit_event(
+                        "install_unit_update_fallback_sync",
+                        source_id=normalized_install_unit_id,
+                        payload={
+                            "syncable_source_ids": syncable_status.get("syncable_source_ids", []),
+                            "failed_sources": sync_response.get("failed_sources", []),
+                        },
+                    )
+                    return sync_response
             return {
                 "ok": False,
                 "message": str(plan.get("message") or f"update unsupported for install unit: {install_unit_id}"),
                 "update": plan,
+                "syncable_source_ids": syncable_status.get("syncable_source_ids", []),
+                "non_syncable_source_ids": syncable_status.get("non_syncable_source_ids", []),
             }
 
         execution = await self._execute_install_unit_update_plans([plan])
@@ -1578,16 +3918,23 @@ class OneSyncPlugin(Star):
             "message": (
                 "install unit update finished: "
                 f"{execution.get('success_count', 0)} commands ok, "
-                f"{execution.get('failure_count', 0)} failed"
+                f"{execution.get('failure_count', 0)} failed, "
+                f"{execution.get('revision_changed_source_total', 0)} source revisions changed"
             ),
         }
         self._append_skills_audit_event(
             "install_unit_update",
             source_id=normalized_install_unit_id,
             payload={
+                "precheck_commands": _to_str_list(plan.get("precheck_commands", [])),
                 "commands": _to_str_list(plan.get("commands", [])),
                 "success_count": execution.get("success_count", 0),
                 "failure_count": execution.get("failure_count", 0),
+                "precheck_failure_count": execution.get("precheck_failure_count", 0),
+                "revision_changed_source_total": execution.get("revision_changed_source_total", 0),
+                "revision_unchanged_source_total": execution.get("revision_unchanged_source_total", 0),
+                "revision_unknown_source_total": execution.get("revision_unknown_source_total", 0),
+                "rollback_preview_candidate_total": execution.get("rollback_preview_candidate_total", 0),
             },
         )
         self._push_debug_log(
@@ -1621,35 +3968,87 @@ class OneSyncPlugin(Star):
         if not context.get("ok"):
             return context
 
-        plan = build_collection_group_update_plan(
-            context.get("collection_group", {}),
-            context.get("install_unit_rows", []),
-            context.get("source_rows", []),
+        plan = self._build_effective_collection_group_update_plan(
+            collection_group=context.get("collection_group", {}),
+            install_unit_rows=context.get("install_unit_rows", []),
+            source_rows=context.get("source_rows", []),
         )
-        if not plan.get("supported"):
+        if not _to_bool(plan.get("actionable"), False):
             return {
                 "ok": False,
                 "message": str(plan.get("message") or f"update unsupported for collection group: {collection_group_id}"),
                 "update": plan,
+                "syncable_source_ids": _to_str_list(plan.get("syncable_source_ids", [])),
+                "non_syncable_source_ids": _to_str_list(plan.get("non_syncable_source_ids", [])),
             }
 
-        supported_unit_plans = [
+        actionable_unit_plans = [
             item
             for item in plan.get("install_unit_plans", [])
-            if isinstance(item, dict) and item.get("supported")
+            if isinstance(item, dict) and _to_bool(item.get("actionable"), False)
         ]
-        execution = await self._execute_install_unit_update_plans(supported_unit_plans)
+        command_unit_plans = [
+            item
+            for item in actionable_unit_plans
+            if _to_str_list(item.get("commands", []))
+        ]
+        source_sync_unit_plans = [
+            item
+            for item in actionable_unit_plans
+            if self._is_source_sync_update_plan(item)
+            and not _to_str_list(item.get("commands", []))
+        ]
+        command_execution = (
+            await self._execute_install_unit_update_plans(command_unit_plans)
+            if command_unit_plans
+            else self._empty_install_unit_execution_summary()
+        )
+        source_sync_execution = self._execute_install_unit_source_sync_plans(
+            source_sync_unit_plans,
+            context.get("source_rows", []),
+        )
+        execution = self._merge_install_unit_execution_summaries(
+            [command_execution, source_sync_execution],
+        )
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         await self._save_state()
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
         normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        command_install_unit_ids = _to_str_list(plan.get("command_install_unit_ids", []))
+        source_sync_install_unit_ids = _to_str_list(plan.get("source_sync_install_unit_ids", []))
+        skipped_install_unit_ids = _to_str_list(plan.get("skipped_install_unit_ids", []))
+        skipped_manual_only_install_unit_ids = _to_str_list(plan.get("skipped_manual_only_install_unit_ids", []))
+        skipped_other_install_unit_ids = _to_str_list(plan.get("skipped_other_install_unit_ids", []))
+        executed_install_unit_ids = _to_str_list(execution.get("executed_install_unit_ids", []))
+        source_sync_success_count = int(execution.get("source_sync_success_count", 0) or 0)
+        source_sync_failure_count = int(execution.get("source_sync_failure_count", 0) or 0)
         update_summary = {
             **plan,
             **execution,
+            "executed_install_unit_ids": executed_install_unit_ids,
+            "executed_install_unit_total": len(executed_install_unit_ids),
+            "command_install_unit_ids": command_install_unit_ids,
+            "command_install_unit_total": len(command_install_unit_ids),
+            "source_sync_install_unit_ids": source_sync_install_unit_ids,
+            "source_sync_install_unit_total": len(source_sync_install_unit_ids),
+            "skipped_install_unit_ids": skipped_install_unit_ids,
+            "skipped_install_unit_total": len(skipped_install_unit_ids),
+            "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
+            "skipped_manual_only_install_unit_total": len(skipped_manual_only_install_unit_ids),
+            "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+            "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
+            "synced_source_ids": _to_str_list(execution.get("synced_source_ids", [])),
+            "failed_sources": [
+                item for item in execution.get("failed_sources", [])
+                if isinstance(item, dict)
+            ],
             "message": (
                 "collection group update finished: "
                 f"{execution.get('success_count', 0)} commands ok, "
                 f"{execution.get('failure_count', 0)} failed, "
+                f"{source_sync_success_count} source sync ok, "
+                f"{source_sync_failure_count} source sync failed, "
+                f"{execution.get('revision_changed_source_total', 0)} source revisions changed, "
                 f"{plan.get('unsupported_install_unit_total', 0)} unsupported units"
             ),
         }
@@ -1660,16 +4059,38 @@ class OneSyncPlugin(Star):
                 "install_unit_ids": execution.get("executed_install_unit_ids", []),
                 "success_count": execution.get("success_count", 0),
                 "failure_count": execution.get("failure_count", 0),
+                "precheck_failure_count": execution.get("precheck_failure_count", 0),
+                "revision_changed_source_total": execution.get("revision_changed_source_total", 0),
+                "revision_unchanged_source_total": execution.get("revision_unchanged_source_total", 0),
+                "revision_unknown_source_total": execution.get("revision_unknown_source_total", 0),
+                "rollback_preview_candidate_total": execution.get("rollback_preview_candidate_total", 0),
+                "source_sync_success_count": source_sync_success_count,
+                "source_sync_failure_count": source_sync_failure_count,
                 "unsupported_install_unit_total": plan.get("unsupported_install_unit_total", 0),
+                "command_install_unit_total": len(command_install_unit_ids),
+                "source_sync_install_unit_total": len(source_sync_install_unit_ids),
+                "skipped_install_unit_total": len(skipped_install_unit_ids),
+                "skipped_manual_only_install_unit_total": len(skipped_manual_only_install_unit_ids),
+                "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
             },
         )
         self._push_debug_log(
-            "info" if not execution.get("failure_count") and not plan.get("unsupported_install_unit_total") else "warn",
+            (
+                "info"
+                if (
+                    not execution.get("failure_count")
+                    and source_sync_failure_count == 0
+                    and not plan.get("unsupported_install_unit_total")
+                )
+                else "warn"
+            ),
             (
                 "collection group updated: "
                 f"collection_group={normalized_collection_group_id} "
                 f"ok={execution.get('success_count', 0)} "
                 f"failed={execution.get('failure_count', 0)} "
+                f"sync_ok={source_sync_success_count} "
+                f"sync_failed={source_sync_failure_count} "
                 f"unsupported={plan.get('unsupported_install_unit_total', 0)}"
             ),
             source="webui",
@@ -1680,9 +4101,571 @@ class OneSyncPlugin(Star):
             skills_snapshot=refreshed_skills_snapshot,
             extra={
                 "update": update_summary,
-                "updated_install_unit_ids": execution.get("executed_install_unit_ids", []),
+                "updated_install_unit_ids": executed_install_unit_ids,
                 "failed_install_units": execution.get("failed_install_units", []),
                 "unsupported_install_units": plan.get("unsupported_install_units", []),
+                "skipped_install_unit_ids": skipped_install_unit_ids,
+                "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
+                "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+            },
+        )
+
+    async def webui_update_all_skill_aggregates(
+        self,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = payload if isinstance(payload, dict) else {}
+        skills_snapshot = self.webui_get_skills_payload()
+        install_unit_rows = [
+            item
+            for item in skills_snapshot.get("install_unit_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_rows = [
+            item
+            for item in skills_snapshot.get("source_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_rows_by_install_unit_id: dict[str, list[dict[str, Any]]] = {}
+        for source_row in source_rows:
+            install_unit_id = str(source_row.get("install_unit_id") or "").strip()
+            if not install_unit_id:
+                continue
+            source_rows_by_install_unit_id.setdefault(install_unit_id, []).append(source_row)
+
+        all_plans: list[dict[str, Any]] = []
+        seen_plan_keys: dict[str, str] = {}
+        duplicate_install_unit_ids: list[str] = []
+        duplicate_install_unit_pairs: list[dict[str, Any]] = []
+
+        for install_unit in install_unit_rows:
+            install_unit_id = str(install_unit.get("install_unit_id") or "").strip()
+            if not install_unit_id:
+                continue
+            plan_source_rows = source_rows_by_install_unit_id.get(install_unit_id, [])
+            plan = self._augment_update_plan_with_source_sync_fallback_preview(
+                build_install_unit_update_plan(install_unit, plan_source_rows),
+                plan_source_rows,
+                display_name=str(
+                    install_unit.get("display_name")
+                    or install_unit.get("install_unit_display_name")
+                    or install_unit_id
+                    or "install unit"
+                ).strip(),
+            )
+            dedupe_key = self._build_install_unit_update_plan_dedupe_key(plan)
+            previous_install_unit_id = seen_plan_keys.get(dedupe_key, "")
+            if previous_install_unit_id:
+                duplicate_install_unit_ids.append(install_unit_id)
+                duplicate_install_unit_pairs.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "deduped_into_install_unit_id": previous_install_unit_id,
+                    },
+                )
+                continue
+            seen_plan_keys[dedupe_key] = install_unit_id
+            all_plans.append(plan)
+
+        actionable_unit_plans = [
+            item
+            for item in all_plans
+            if isinstance(item, dict) and _to_bool(item.get("actionable"), False)
+        ]
+        command_unit_plans = [
+            item
+            for item in actionable_unit_plans
+            if _to_str_list(item.get("commands", []))
+        ]
+        source_sync_unit_plans = [
+            item
+            for item in actionable_unit_plans
+            if self._is_source_sync_update_plan(item)
+            and not _to_str_list(item.get("commands", []))
+        ]
+        blocked_unit_plans = [
+            item
+            for item in all_plans
+            if isinstance(item, dict) and not _to_bool(item.get("actionable"), False)
+        ]
+
+        command_execution = (
+            await self._execute_install_unit_update_plans(command_unit_plans)
+            if command_unit_plans
+            else self._empty_install_unit_execution_summary()
+        )
+        source_sync_execution = self._execute_install_unit_source_sync_plans(
+            source_sync_unit_plans,
+            source_rows,
+        )
+        execution = self._merge_install_unit_execution_summaries(
+            [command_execution, source_sync_execution],
+        )
+
+        executed_install_unit_ids = _to_str_list(execution.get("executed_install_unit_ids", []))
+        skipped_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in blocked_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+        skipped_manual_only_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in blocked_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+                and _to_bool(item.get("manual_only", False), False)
+            ],
+        )
+        skipped_manual_only_install_unit_id_set = set(skipped_manual_only_install_unit_ids)
+        skipped_other_install_unit_ids = _dedupe_keep_order(
+            [
+                install_unit_id
+                for install_unit_id in skipped_install_unit_ids
+                if install_unit_id not in skipped_manual_only_install_unit_id_set
+            ],
+        )
+        unsupported_install_units = [
+            {
+                "install_unit_id": str(item.get("install_unit_id") or "").strip(),
+                "message": str(item.get("message") or "").strip(),
+                "reason_code": str(item.get("reason_code") or "").strip().lower(),
+            }
+            for item in blocked_unit_plans
+            if str(item.get("install_unit_id") or "").strip() or str(item.get("message") or "").strip()
+        ]
+        command_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in command_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+        source_sync_install_unit_ids = _dedupe_keep_order(
+            [
+                str(item.get("install_unit_id") or "").strip()
+                for item in source_sync_unit_plans
+                if str(item.get("install_unit_id") or "").strip()
+            ],
+        )
+
+        if command_install_unit_ids and source_sync_install_unit_ids:
+            update_mode = "partial"
+        elif command_install_unit_ids:
+            update_mode = "command"
+        elif source_sync_install_unit_ids:
+            update_mode = "source_sync"
+        else:
+            update_mode = "manual_only"
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        await self._save_state()
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        update_summary = {
+            "supported": bool(actionable_unit_plans),
+            "actionable": bool(actionable_unit_plans),
+            "manual_only": update_mode == "manual_only",
+            "update_mode": update_mode,
+            "manager": "mixed" if command_install_unit_ids and source_sync_install_unit_ids else "",
+            "policy": "mixed" if command_install_unit_ids and source_sync_install_unit_ids else "",
+            "candidate_install_unit_total": len(install_unit_rows),
+            "planned_install_unit_total": len(all_plans),
+            "deduplicated_install_unit_total": len(duplicate_install_unit_ids),
+            "deduplicated_install_unit_ids": duplicate_install_unit_ids,
+            "deduplicated_install_unit_pairs": duplicate_install_unit_pairs,
+            "actionable_install_unit_ids": _dedupe_keep_order(
+                [
+                    str(item.get("install_unit_id") or "").strip()
+                    for item in actionable_unit_plans
+                    if str(item.get("install_unit_id") or "").strip()
+                ],
+            ),
+            "actionable_install_unit_total": len(actionable_unit_plans),
+            "supported_install_unit_total": len(actionable_unit_plans),
+            "unsupported_install_unit_total": len(blocked_unit_plans),
+            "unsupported_install_units": unsupported_install_units,
+            "command_install_unit_ids": command_install_unit_ids,
+            "command_install_unit_total": len(command_install_unit_ids),
+            "source_sync_install_unit_ids": source_sync_install_unit_ids,
+            "source_sync_install_unit_total": len(source_sync_install_unit_ids),
+            "skipped_install_unit_ids": skipped_install_unit_ids,
+            "skipped_install_unit_total": len(skipped_install_unit_ids),
+            "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
+            "skipped_manual_only_install_unit_total": len(skipped_manual_only_install_unit_ids),
+            "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+            "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
+            "executed_install_unit_ids": executed_install_unit_ids,
+            "executed_install_unit_total": len(executed_install_unit_ids),
+            **execution,
+            "message": (
+                "aggregate update-all finished: "
+                f"{execution.get('success_count', 0)} commands ok, "
+                f"{execution.get('failure_count', 0)} failed, "
+                f"{execution.get('source_sync_success_count', 0)} source sync ok, "
+                f"{execution.get('source_sync_failure_count', 0)} source sync failed, "
+                f"{len(skipped_install_unit_ids)} blocked, "
+                f"{len(duplicate_install_unit_ids)} deduplicated"
+            ),
+        }
+        self._append_skills_audit_event(
+            "aggregates_update_all",
+            source_id="all",
+            payload={
+                "candidate_install_unit_total": len(install_unit_rows),
+                "planned_install_unit_total": len(all_plans),
+                "deduplicated_install_unit_total": len(duplicate_install_unit_ids),
+                "executed_install_unit_ids": executed_install_unit_ids,
+                "success_count": execution.get("success_count", 0),
+                "failure_count": execution.get("failure_count", 0),
+                "source_sync_success_count": execution.get("source_sync_success_count", 0),
+                "source_sync_failure_count": execution.get("source_sync_failure_count", 0),
+                "skipped_install_unit_total": len(skipped_install_unit_ids),
+            },
+        )
+        self._push_debug_log(
+            (
+                "info"
+                if (
+                    not execution.get("failure_count")
+                    and not execution.get("source_sync_failure_count")
+                )
+                else "warn"
+            ),
+            (
+                "aggregate update-all: "
+                f"planned={len(all_plans)} "
+                f"executed={len(executed_install_unit_ids)} "
+                f"ok={execution.get('success_count', 0)} "
+                f"failed={execution.get('failure_count', 0)} "
+                f"sync_ok={execution.get('source_sync_success_count', 0)} "
+                f"sync_failed={execution.get('source_sync_failure_count', 0)} "
+                f"skipped={len(skipped_install_unit_ids)} "
+                f"deduped={len(duplicate_install_unit_ids)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "generated_at": refreshed_skills_snapshot.get("generated_at", skills_snapshot.get("generated_at")),
+            "update": update_summary,
+            "updated_install_unit_ids": executed_install_unit_ids,
+            "failed_install_units": execution.get("failed_install_units", []),
+            "unsupported_install_units": unsupported_install_units,
+            "skipped_install_unit_ids": skipped_install_unit_ids,
+            "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
+            "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+            "deduplicated_install_unit_ids": duplicate_install_unit_ids,
+            "skills": refreshed_skills_snapshot,
+            "inventory": inventory_snapshot,
+        }
+
+    async def webui_rollback_install_unit(
+        self,
+        install_unit_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        rollback_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_install_unit_action_context(install_unit_id)
+        if not context.get("ok"):
+            return context
+        if not self._payload_confirms_skills_rollback(rollback_payload):
+            return {
+                "ok": False,
+                "message": (
+                    "rollback confirmation is required: set payload.execute=true "
+                    f"and payload.confirm='{SKILLS_ROLLBACK_CONFIRM_TOKEN}'"
+                ),
+            }
+
+        before_rows = self._extract_before_revision_rows(rollback_payload)
+        if not before_rows:
+            return {
+                "ok": False,
+                "message": "before_revisions is required for rollback",
+            }
+
+        source_index = self._build_source_index_by_id(context.get("source_rows", []))
+        target_before_rows = [
+            item
+            for item in before_rows
+            if isinstance(item, dict)
+            and _normalize_inventory_id(item.get("source_id", ""), default="") in source_index
+        ]
+        if not target_before_rows:
+            return {
+                "ok": False,
+                "message": "before_revisions has no matching source members for this install unit",
+            }
+
+        target_source_ids = _dedupe_keep_order(
+            [
+                _normalize_inventory_id(item.get("source_id", ""), default="")
+                for item in target_before_rows
+                if _normalize_inventory_id(item.get("source_id", ""), default="")
+            ],
+        )
+        target_source_rows = [source_index[item] for item in target_source_ids if item in source_index]
+        rollback_preview = build_git_rollback_preview(
+            target_source_rows,
+            target_before_rows,
+            target_source_ids,
+        )
+        if not rollback_preview.get("supported"):
+            return {
+                "ok": False,
+                "message": "rollback preview cannot build executable candidates for this install unit",
+                "rollback_preview": rollback_preview,
+            }
+
+        execution = await self._execute_rollback_preview_candidates(
+            [item for item in rollback_preview.get("candidates", []) if isinstance(item, dict)],
+            source_rows=target_source_rows,
+            before_rows=target_before_rows,
+        )
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        await self._save_state()
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        rollback_summary = {
+            **rollback_preview,
+            **execution,
+            "message": (
+                "install unit rollback finished: "
+                f"{execution.get('success_count', 0)} commands ok, "
+                f"{execution.get('failure_count', 0)} failed, "
+                f"{execution.get('restored_source_total', 0)} sources restored"
+            ),
+        }
+        self._append_skills_audit_event(
+            "install_unit_rollback",
+            source_id=normalized_install_unit_id,
+            payload={
+                "source_ids": target_source_ids,
+                "candidate_total": rollback_preview.get("candidate_total", 0),
+                "success_count": execution.get("success_count", 0),
+                "failure_count": execution.get("failure_count", 0),
+                "restored_source_total": execution.get("restored_source_total", 0),
+                "not_restored_source_total": execution.get("not_restored_source_total", 0),
+            },
+        )
+        self._push_debug_log(
+            "info" if not execution.get("failure_count") else "warn",
+            (
+                "install unit rollback: "
+                f"install_unit={normalized_install_unit_id} "
+                f"restored={execution.get('restored_source_total', 0)} "
+                f"not_restored={execution.get('not_restored_source_total', 0)}"
+            ),
+            source="webui",
+        )
+        return self._build_install_unit_mutation_response(
+            normalized_install_unit_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "rollback": rollback_summary,
+                "rolled_back_source_ids": execution.get("restored_source_ids", []),
+                "failed_rollback_sources": execution.get("failed_sources", []),
+            },
+        )
+
+    async def webui_rollback_collection_group(
+        self,
+        collection_group_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        rollback_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_collection_group_action_context(collection_group_id)
+        if not context.get("ok"):
+            return context
+        if not self._payload_confirms_skills_rollback(rollback_payload):
+            return {
+                "ok": False,
+                "message": (
+                    "rollback confirmation is required: set payload.execute=true "
+                    f"and payload.confirm='{SKILLS_ROLLBACK_CONFIRM_TOKEN}'"
+                ),
+            }
+
+        before_rows = self._extract_before_revision_rows(rollback_payload)
+        if not before_rows:
+            return {
+                "ok": False,
+                "message": "before_revisions is required for rollback",
+            }
+
+        source_index = self._build_source_index_by_id(context.get("source_rows", []))
+        install_unit_rows = [
+            item
+            for item in context.get("install_unit_rows", [])
+            if isinstance(item, dict)
+        ]
+        source_rows = [
+            item
+            for item in context.get("source_rows", [])
+            if isinstance(item, dict)
+        ]
+        before_by_source_id = {
+            _normalize_inventory_id(item.get("source_id", ""), default=""): item
+            for item in before_rows
+            if isinstance(item, dict) and _normalize_inventory_id(item.get("source_id", ""), default="")
+        }
+
+        install_unit_results: list[dict[str, Any]] = []
+        executed_install_unit_ids: list[str] = []
+        failed_install_units: list[dict[str, Any]] = []
+        skipped_install_units: list[str] = []
+        command_results: list[dict[str, Any]] = []
+        success_count = 0
+        failure_count = 0
+        rollback_preview_candidate_total = 0
+        restored_source_total = 0
+        not_restored_source_total = 0
+
+        for install_unit in install_unit_rows:
+            install_unit_id = str(install_unit.get("install_unit_id") or "").strip()
+            if not install_unit_id:
+                continue
+            unit_source_rows = [
+                item
+                for item in source_rows
+                if str(item.get("install_unit_id") or "").strip() == install_unit_id
+            ]
+            unit_source_ids = _dedupe_keep_order(
+                [
+                    _normalize_inventory_id(item.get("source_id", ""), default="")
+                    for item in unit_source_rows
+                    if _normalize_inventory_id(item.get("source_id", ""), default="")
+                ],
+            )
+            unit_before_rows = [
+                before_by_source_id[item]
+                for item in unit_source_ids
+                if item in before_by_source_id
+            ]
+            if not unit_before_rows:
+                skipped_install_units.append(install_unit_id)
+                continue
+
+            rollback_preview = build_git_rollback_preview(
+                unit_source_rows,
+                unit_before_rows,
+                [
+                    _normalize_inventory_id(item.get("source_id", ""), default="")
+                    for item in unit_before_rows
+                    if _normalize_inventory_id(item.get("source_id", ""), default="")
+                ],
+            )
+            if not rollback_preview.get("supported"):
+                unit_result = {
+                    "install_unit_id": install_unit_id,
+                    "display_name": str(install_unit.get("display_name") or install_unit_id),
+                    "ok": False,
+                    "rollback_preview": rollback_preview,
+                    "message": "rollback preview cannot build executable candidates",
+                }
+                install_unit_results.append(unit_result)
+                failed_install_units.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "reason": "rollback_preview_unsupported",
+                        "message": "rollback preview cannot build executable candidates",
+                    },
+                )
+                continue
+
+            execution = await self._execute_rollback_preview_candidates(
+                [item for item in rollback_preview.get("candidates", []) if isinstance(item, dict)],
+                source_rows=unit_source_rows,
+                before_rows=unit_before_rows,
+            )
+            unit_ok = not execution.get("failure_count") and not execution.get("not_restored_source_total")
+            unit_result = {
+                "install_unit_id": install_unit_id,
+                "display_name": str(install_unit.get("display_name") or install_unit_id),
+                "ok": unit_ok,
+                "rollback_preview": rollback_preview,
+                **execution,
+            }
+            install_unit_results.append(unit_result)
+            command_results.extend([item for item in execution.get("results", []) if isinstance(item, dict)])
+            success_count += int(execution.get("success_count", 0))
+            failure_count += int(execution.get("failure_count", 0))
+            rollback_preview_candidate_total += int(rollback_preview.get("candidate_total", 0))
+            restored_source_total += int(execution.get("restored_source_total", 0))
+            not_restored_source_total += int(execution.get("not_restored_source_total", 0))
+            if unit_ok:
+                executed_install_unit_ids.append(install_unit_id)
+            else:
+                failed_install_units.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "reason": "rollback_failed",
+                        "message": f"rollback failed for install unit: {install_unit_id}",
+                    },
+                )
+
+        if not install_unit_results:
+            return {
+                "ok": False,
+                "message": "before_revisions has no matching rollback candidates for this collection group",
+            }
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        await self._save_state()
+        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        rollback_summary = {
+            "collection_group_id": normalized_collection_group_id,
+            "install_unit_results": install_unit_results,
+            "executed_install_unit_ids": executed_install_unit_ids,
+            "failed_install_units": failed_install_units,
+            "skipped_install_units": skipped_install_units,
+            "results": command_results,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "rollback_preview_candidate_total": rollback_preview_candidate_total,
+            "restored_source_total": restored_source_total,
+            "not_restored_source_total": not_restored_source_total,
+            "message": (
+                "collection group rollback finished: "
+                f"{success_count} commands ok, "
+                f"{failure_count} failed, "
+                f"{restored_source_total} sources restored"
+            ),
+        }
+        self._append_skills_audit_event(
+            "collection_group_rollback",
+            source_id=normalized_collection_group_id,
+            payload={
+                "install_unit_ids": executed_install_unit_ids,
+                "failed_install_units": failed_install_units,
+                "candidate_total": rollback_preview_candidate_total,
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "restored_source_total": restored_source_total,
+                "not_restored_source_total": not_restored_source_total,
+            },
+        )
+        self._push_debug_log(
+            "info" if not failure_count else "warn",
+            (
+                "collection group rollback: "
+                f"collection_group={normalized_collection_group_id} "
+                f"restored={restored_source_total} not_restored={not_restored_source_total}"
+            ),
+            source="webui",
+        )
+        return self._build_collection_group_mutation_response(
+            normalized_collection_group_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=refreshed_skills_snapshot,
+            extra={
+                "rollback": rollback_summary,
+                "rolled_back_install_unit_ids": executed_install_unit_ids,
+                "failed_install_units": failed_install_units,
+                "skipped_install_units": skipped_install_units,
             },
         )
 
@@ -1969,10 +4952,11 @@ class OneSyncPlugin(Star):
         if not isinstance(source, dict):
             return {"ok": False, "message": f"source_id not found: {normalized_source_id}"}
 
-        sync_record = build_source_sync_record(source)
+        source_with_checkout = self._augment_source_row_with_git_checkout(source)
+        sync_record = build_source_sync_record(source_with_checkout)
         registry = self._update_saved_registry_source_metadata(
             source_id=normalized_source_id,
-            source_payload=source,
+            source_payload=source_with_checkout,
             sync_payload=sync_record,
         )
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
@@ -2017,10 +5001,11 @@ class OneSyncPlugin(Star):
             source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
             if not source_id:
                 continue
-            sync_record = build_source_sync_record(source)
+            source_with_checkout = self._augment_source_row_with_git_checkout(source)
+            sync_record = build_source_sync_record(source_with_checkout)
             registry = self._update_saved_registry_source_metadata(
                 source_id=source_id,
-                source_payload=source,
+                source_payload=source_with_checkout,
                 sync_payload=sync_record,
             )
             if str(sync_record.get("sync_status") or "") == "ok":
@@ -2148,10 +5133,11 @@ class OneSyncPlugin(Star):
             source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
             if not source_id:
                 continue
-            sync_record = build_source_sync_record(source)
+            source_with_checkout = self._augment_source_row_with_git_checkout(source)
+            sync_record = build_source_sync_record(source_with_checkout)
             registry = self._update_saved_registry_source_metadata(
                 source_id=source_id,
-                source_payload=source,
+                source_payload=source_with_checkout,
                 sync_payload=sync_record,
             )
             if str(sync_record.get("sync_status") or "") == "ok":
@@ -2339,8 +5325,7 @@ class OneSyncPlugin(Star):
         syncable_sources = [
             item
             for item in source_rows
-            if str(item.get("registry_package_name", "")).strip()
-            and str(item.get("registry_package_manager", "")).strip().lower() == "npm"
+            if is_source_syncable(item)
         ]
 
         synced_source_ids: list[str] = []
@@ -2351,10 +5336,11 @@ class OneSyncPlugin(Star):
             source_id = _normalize_inventory_id(source.get("source_id", ""), default="")
             if not source_id:
                 continue
-            sync_record = build_source_sync_record(source)
+            source_with_checkout = self._augment_source_row_with_git_checkout(source)
+            sync_record = build_source_sync_record(source_with_checkout)
             registry = self._update_saved_registry_source_metadata(
                 source_id=source_id,
-                source_payload=source,
+                source_payload=source_with_checkout,
                 sync_payload=sync_record,
             )
             if str(sync_record.get("sync_status") or "") == "ok":
@@ -2435,6 +5421,9 @@ class OneSyncPlugin(Star):
             "freshness_status": str(source_row.get("freshness_status") or "missing"),
             "registry_package_name": str(source_row.get("registry_package_name") or ""),
             "registry_package_manager": str(source_row.get("registry_package_manager") or ""),
+            "sync_auth_token": str(source_row.get("sync_auth_token") or ""),
+            "sync_auth_header": str(source_row.get("sync_auth_header") or ""),
+            "sync_api_base": str(source_row.get("sync_api_base") or ""),
             "compatible_software_ids": _to_str_list(source_row.get("compatible_software_ids", [])),
             "compatible_software_families": _to_str_list(source_row.get("compatible_software_families", [])),
             "tags": _to_str_list(source_row.get("tags", [])),
@@ -2442,6 +5431,15 @@ class OneSyncPlugin(Star):
             "sync_checked_at": str(sync_row.get("sync_checked_at") or ""),
             "sync_kind": str(sync_row.get("sync_kind") or ""),
             "sync_message": str(sync_row.get("sync_message") or ""),
+            "sync_local_revision": str(sync_row.get("sync_local_revision") or ""),
+            "sync_remote_revision": str(sync_row.get("sync_remote_revision") or ""),
+            "sync_resolved_revision": str(sync_row.get("sync_resolved_revision") or ""),
+            "sync_branch": str(sync_row.get("sync_branch") or ""),
+            "sync_dirty": _to_bool(sync_row.get("sync_dirty", False), False),
+            "sync_error_code": str(sync_row.get("sync_error_code") or ""),
+            "git_checkout_path": str(source_row.get("git_checkout_path") or ""),
+            "git_checkout_managed": _to_bool(source_row.get("git_checkout_managed", False), False),
+            "git_checkout_error": str(source_row.get("git_checkout_error") or ""),
             "registry_latest_version": str(sync_row.get("registry_latest_version") or ""),
             "registry_published_at": str(sync_row.get("registry_published_at") or ""),
             "registry_homepage": str(sync_row.get("registry_homepage") or ""),
@@ -3210,6 +6208,9 @@ class OneSyncPlugin(Star):
             web_cfg = {}
         inventory_opts = self._inventory_runtime_options()
 
+        web_password = str(web_cfg.get("password", "") or "")
+        web_password_configured = bool(web_password.strip())
+
         config_payload = {
             "enabled": _to_bool(self.config.get("enabled", True), True),
             "poll_interval_minutes": _to_int(self.config.get("poll_interval_minutes", 30), 30, 1),
@@ -3231,7 +6232,8 @@ class OneSyncPlugin(Star):
                 "enabled": _to_bool(web_cfg.get("enabled", False), False),
                 "host": str(web_cfg.get("host", "127.0.0.1") or "127.0.0.1").strip() or "127.0.0.1",
                 "port": _to_int(web_cfg.get("port", 8099), 8099, 1),
-                "password": str(web_cfg.get("password", "") or ""),
+                "password": "",
+                "password_configured": web_password_configured,
             },
             "web_admin_url": str(self.config.get("web_admin_url", "") or ""),
             "software_catalog": software_catalog,
@@ -3260,6 +6262,7 @@ class OneSyncPlugin(Star):
                 "software_kinds": ["cli", "gui", "claw", "other"],
                 "binding_scopes": ["global", "workspace"],
                 "skill_management_modes": ["npx", "filesystem", "hybrid"],
+                "web_admin_password_configured": web_password_configured,
             },
         }
 
@@ -3315,7 +6318,12 @@ class OneSyncPlugin(Star):
             )
             self.config["target_config_mode"] = mode
 
-            web_cfg_raw = incoming.get("web_admin", self.config.get("web_admin", {}))
+            current_web_cfg = self.config.get("web_admin", {})
+            if not isinstance(current_web_cfg, dict):
+                current_web_cfg = {}
+            current_web_password = str(current_web_cfg.get("password", "") or "")
+
+            web_cfg_raw = incoming.get("web_admin", current_web_cfg)
             if web_cfg_raw is None:
                 web_cfg_raw = {}
             if not isinstance(web_cfg_raw, dict):
@@ -3324,11 +6332,23 @@ class OneSyncPlugin(Star):
             web_port = _to_int(web_cfg_raw.get("port", 8099), 8099, 1)
             if web_port > 65535:
                 web_port = 65535
+            password_mode = str(web_cfg_raw.get("password_mode", "") or "").strip().lower()
+            raw_password = str(web_cfg_raw.get("password", "") or "")
+            if password_mode == "keep":
+                next_web_password = current_web_password
+            elif password_mode == "clear":
+                next_web_password = ""
+            elif password_mode == "set":
+                next_web_password = raw_password
+            elif "password" in web_cfg_raw:
+                next_web_password = raw_password
+            else:
+                next_web_password = current_web_password
             self.config["web_admin"] = {
                 "enabled": _to_bool(web_cfg_raw.get("enabled", False), False),
                 "host": web_host,
                 "port": web_port,
-                "password": str(web_cfg_raw.get("password", "") or ""),
+                "password": next_web_password,
             }
 
             parsed_targets_from_json: dict[str, dict[str, Any]] | None = None

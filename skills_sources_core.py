@@ -206,10 +206,22 @@ def _normalize_registry_source(raw: dict[str, Any], *, generated_at: str = "") -
         "freshness_status": str(raw.get("freshness_status") or ("fresh" if raw.get("source_exists") else "missing")).strip(),
         "registry_package_name": registry_package_name,
         "registry_package_manager": registry_package_manager,
+        "sync_auth_token": str(raw.get("sync_auth_token") or "").strip(),
+        "sync_auth_header": str(raw.get("sync_auth_header") or "").strip(),
+        "sync_api_base": str(raw.get("sync_api_base") or "").strip(),
         "sync_status": str(raw.get("sync_status") or "").strip(),
         "sync_checked_at": str(raw.get("sync_checked_at") or "").strip(),
         "sync_kind": str(raw.get("sync_kind") or "").strip(),
         "sync_message": str(raw.get("sync_message") or "").strip(),
+        "sync_local_revision": str(raw.get("sync_local_revision") or "").strip(),
+        "sync_remote_revision": str(raw.get("sync_remote_revision") or "").strip(),
+        "sync_resolved_revision": str(raw.get("sync_resolved_revision") or "").strip(),
+        "sync_branch": str(raw.get("sync_branch") or "").strip(),
+        "sync_dirty": _to_bool(raw.get("sync_dirty", False), False),
+        "sync_error_code": str(raw.get("sync_error_code") or "").strip(),
+        "git_checkout_path": str(raw.get("git_checkout_path") or "").strip(),
+        "git_checkout_managed": _to_bool(raw.get("git_checkout_managed", False), False),
+        "git_checkout_error": str(raw.get("git_checkout_error") or "").strip(),
         "registry_latest_version": str(raw.get("registry_latest_version") or "").strip(),
         "registry_published_at": str(raw.get("registry_published_at") or "").strip(),
         "registry_homepage": str(raw.get("registry_homepage") or "").strip(),
@@ -256,11 +268,38 @@ def normalize_skills_registry(raw: Any) -> dict[str, Any]:
 
 
 def _merge_registry_source(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    sync_authority_keys = {
+        "sync_status",
+        "sync_checked_at",
+        "sync_kind",
+        "sync_message",
+        "sync_local_revision",
+        "sync_remote_revision",
+        "sync_resolved_revision",
+        "sync_branch",
+        "sync_dirty",
+        "sync_error_code",
+        "registry_latest_version",
+        "registry_published_at",
+        "registry_homepage",
+        "registry_description",
+        "git_checkout_path",
+        "git_checkout_managed",
+        "git_checkout_error",
+    }
     merged = copy.deepcopy(base)
     for key, value in overlay.items():
         if key not in merged:
             merged[key] = value
             continue
+        if key in sync_authority_keys:
+            if str(merged.get("sync_status") or "").strip():
+                continue
+            current = merged.get(key)
+            if isinstance(current, bool):
+                continue
+            if current is not None and not (isinstance(current, str) and not current.strip()):
+                continue
         if isinstance(value, bool):
             merged[key] = value
             continue
@@ -362,6 +401,25 @@ def refresh_registry_source(
     *,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
+    sync_override_keys = {
+        "sync_status",
+        "sync_checked_at",
+        "sync_kind",
+        "sync_message",
+        "sync_local_revision",
+        "sync_remote_revision",
+        "sync_resolved_revision",
+        "sync_branch",
+        "sync_dirty",
+        "sync_error_code",
+        "registry_latest_version",
+        "registry_published_at",
+        "registry_homepage",
+        "registry_description",
+        "git_checkout_path",
+        "git_checkout_managed",
+        "git_checkout_error",
+    }
     normalized_registry = normalize_skills_registry(registry)
     normalized_source_id = str(source_id or "").strip()
     if not normalized_source_id:
@@ -375,13 +433,17 @@ def refresh_registry_source(
             next_sources.append(copy.deepcopy(item))
             continue
         found = True
+        normalized_updates = _normalize_registry_source(
+            {**item, **update_payload, "source_id": normalized_source_id, "last_refresh_at": str(generated_at or "")},
+            generated_at=str(generated_at or ""),
+        )
         merged = _merge_registry_source(
             item,
-            _normalize_registry_source(
-                {**item, **update_payload, "source_id": normalized_source_id, "last_refresh_at": str(generated_at or "")},
-                generated_at=str(generated_at or ""),
-            ),
+            normalized_updates,
         )
+        for key in sync_override_keys:
+            if key in update_payload or key in normalized_updates:
+                merged[key] = normalized_updates.get(key)
         merged["last_refresh_at"] = str(generated_at or merged.get("last_refresh_at") or "")
         next_sources.append(merged)
     if not found:

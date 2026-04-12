@@ -12,6 +12,8 @@ _REGISTRY_HINT_PREFIXES = (
     "npm ",
 )
 
+_REGISTRY_RUNNERS = ("bunx", "npx", "pnpm", "npm")
+
 
 def _to_str_list(value: Any) -> list[str]:
     if value is None:
@@ -65,6 +67,10 @@ def _normalize_manager(value: Any) -> str:
     return manager
 
 
+def _normalize_source_id(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
 def _manager_from_hint(management_hint: str) -> str:
     hint = str(management_hint or "").strip().lower()
     if hint.startswith("pnpm dlx "):
@@ -101,6 +107,141 @@ def _build_registry_command(manager: str, install_ref: str) -> str:
     if manager == "npm":
         return f"npm install -g {_shell_token(f'{install_ref}@latest')}"
     return ""
+
+
+def _build_registry_precheck_commands(manager: str) -> list[str]:
+    normalized = _normalize_manager(manager)
+    candidates = [normalized, *_REGISTRY_RUNNERS]
+    ordered = _dedupe_keep_order([item for item in candidates if item in _REGISTRY_RUNNERS])
+    if not ordered:
+        ordered = list(_REGISTRY_RUNNERS)
+    checks = [f"command -v {item} >/dev/null 2>&1" for item in ordered]
+    if not checks:
+        return []
+    return [" || ".join(checks)]
+
+
+def _build_git_precheck_commands(source_path: str) -> list[str]:
+    token = _shell_token(source_path)
+    if not token:
+        return []
+    return [
+        f"git -C {token} rev-parse --is-inside-work-tree",
+        f'test -z "$(git -C {token} status --porcelain)"',
+    ]
+
+
+def summarize_revision_capture_delta(
+    before_rows: list[dict[str, Any]] | None,
+    after_rows: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    before_list = [item for item in (before_rows or []) if isinstance(item, dict)]
+    after_list = [item for item in (after_rows or []) if isinstance(item, dict)]
+
+    before_index: dict[str, dict[str, Any]] = {}
+    for item in before_list:
+        source_id = _normalize_source_id(item.get("source_id"))
+        if source_id:
+            before_index[source_id] = item
+
+    after_index: dict[str, dict[str, Any]] = {}
+    for item in after_list:
+        source_id = _normalize_source_id(item.get("source_id"))
+        if source_id:
+            after_index[source_id] = item
+
+    source_ids = _dedupe_keep_order(list(before_index.keys()) + list(after_index.keys()))
+    changed_source_ids: list[str] = []
+    unchanged_source_ids: list[str] = []
+    unknown_source_ids: list[str] = []
+
+    for source_id in source_ids:
+        before_row = before_index.get(source_id, {})
+        after_row = after_index.get(source_id, {})
+        before_revision = str(before_row.get("sync_resolved_revision") or "").strip()
+        after_revision = str(after_row.get("sync_resolved_revision") or "").strip()
+        if before_revision and after_revision:
+            if before_revision == after_revision:
+                unchanged_source_ids.append(source_id)
+            else:
+                changed_source_ids.append(source_id)
+            continue
+        unknown_source_ids.append(source_id)
+
+    return {
+        "source_ids": source_ids,
+        "source_total": len(source_ids),
+        "changed_source_ids": changed_source_ids,
+        "changed_total": len(changed_source_ids),
+        "unchanged_source_ids": unchanged_source_ids,
+        "unchanged_total": len(unchanged_source_ids),
+        "unknown_source_ids": unknown_source_ids,
+        "unknown_total": len(unknown_source_ids),
+        "changed": bool(changed_source_ids),
+    }
+
+
+def build_git_rollback_preview(
+    source_rows: list[dict[str, Any]] | None,
+    before_rows: list[dict[str, Any]] | None,
+    changed_source_ids: list[str] | None,
+) -> dict[str, Any]:
+    sources = [item for item in (source_rows or []) if isinstance(item, dict)]
+    before = [item for item in (before_rows or []) if isinstance(item, dict)]
+    normalized_changed_ids = _dedupe_keep_order(
+        [
+            _normalize_source_id(item)
+            for item in (changed_source_ids or [])
+            if _normalize_source_id(item)
+        ],
+    )
+    source_index: dict[str, dict[str, Any]] = {}
+    for item in sources:
+        source_id = _normalize_source_id(item.get("source_id"))
+        if source_id:
+            source_index[source_id] = item
+
+    before_index: dict[str, dict[str, Any]] = {}
+    for item in before:
+        source_id = _normalize_source_id(item.get("source_id"))
+        if source_id:
+            before_index[source_id] = item
+
+    candidates: list[dict[str, Any]] = []
+    skipped_sources: list[dict[str, Any]] = []
+    for source_id in normalized_changed_ids:
+        source_row = source_index.get(source_id, {})
+        before_row = before_index.get(source_id, {})
+        source_path = str(source_row.get("source_path") or "").strip()
+        before_revision = str(before_row.get("sync_resolved_revision") or "").strip()
+        if not source_path or not before_revision:
+            skipped_sources.append(
+                {
+                    "source_id": source_id,
+                    "reason": "missing_source_path_or_before_revision",
+                },
+            )
+            continue
+        path_token = _shell_token(source_path)
+        revision_token = _shell_token(before_revision)
+        candidates.append(
+            {
+                "source_id": source_id,
+                "source_path": source_path,
+                "before_revision": before_revision,
+                "precheck_commands": _build_git_precheck_commands(source_path),
+                "command": f"git -C {path_token} reset --hard {revision_token}",
+                "warning": "destructive_reset_hard",
+            },
+        )
+
+    return {
+        "supported": bool(candidates),
+        "candidate_total": len(candidates),
+        "candidates": candidates,
+        "skipped_sources": skipped_sources,
+        "warning": "preview_only_not_executed",
+    }
 
 
 def build_install_unit_update_plan(
@@ -142,35 +283,49 @@ def build_install_unit_update_plan(
 
     source_paths = _dedupe_keep_order(
         [
-            str(item.get("source_path") or "").strip()
+            str(item.get("git_checkout_path") or item.get("source_path") or "").strip()
             for item in rows
-            if str(item.get("source_path") or "").strip()
+            if str(item.get("git_checkout_path") or item.get("source_path") or "").strip()
+        ],
+    )
+    source_ids = _dedupe_keep_order(
+        [
+            _normalize_source_id(item.get("source_id"))
+            for item in rows
+            if _normalize_source_id(item.get("source_id"))
         ],
     )
 
     hint_command = _resolve_registry_hint_command(management_hint, update_policy)
     commands: list[str] = []
+    precheck_commands: list[str] = []
     supported = False
     message = ""
+    reason_code = ""
 
     if hint_command:
         supported = True
+        precheck_commands = _build_registry_precheck_commands(manager)
         commands = [hint_command]
         message = f"registry update will use management_hint for {display_name}"
     else:
         registry_command = _build_registry_command(manager, install_ref)
         if registry_command and update_policy == "registry":
             supported = True
+            precheck_commands = _build_registry_precheck_commands(manager)
             commands = [registry_command]
             message = f"registry update is available for {display_name}"
         elif manager == "git" and source_paths:
             supported = True
+            precheck_commands = _build_git_precheck_commands(source_paths[0])
             commands = [f"git -C {_shell_token(source_paths[0])} pull --ff-only"]
             message = f"git update is available for {display_name}"
         elif manager in {"filesystem", "manual", ""} or update_policy == "manual":
             message = f"update unsupported for manually managed aggregate: {display_name}"
+            reason_code = "manual_managed"
         else:
             message = f"update unsupported for manager '{manager or 'unknown'}': {display_name}"
+            reason_code = "unsupported_manager"
 
     return {
         "install_unit_id": install_unit_id,
@@ -179,11 +334,15 @@ def build_install_unit_update_plan(
         "policy": str(update_policy or "").strip().lower(),
         "install_ref": install_ref,
         "management_hint": management_hint,
+        "source_ids": source_ids,
         "source_paths": source_paths,
+        "precheck_commands": precheck_commands,
+        "precheck_command_count": len(precheck_commands),
         "commands": commands,
         "command_count": len(commands),
         "supported": supported,
         "message": message,
+        "reason_code": reason_code,
     }
 
 
@@ -227,6 +386,11 @@ def build_collection_group_update_plan(
 
     supported_plans = [item for item in plans if item.get("supported")]
     unsupported_plans = [item for item in plans if not item.get("supported")]
+    precheck_commands = [
+        command
+        for item in supported_plans
+        for command in _to_str_list(item.get("precheck_commands", []))
+    ]
     commands = [
         command
         for item in supported_plans
@@ -234,10 +398,24 @@ def build_collection_group_update_plan(
     ]
     managers = _dedupe_keep_order([str(item.get("manager") or "").strip() for item in supported_plans])
     policies = _dedupe_keep_order([str(item.get("policy") or "").strip() for item in supported_plans])
+    blocked_reason_codes = _dedupe_keep_order(
+        [
+            str(item.get("reason_code") or "").strip().lower()
+            for item in unsupported_plans
+            if str(item.get("reason_code") or "").strip()
+        ],
+    )
     if supported_plans:
         message = f"collection group update prepared for {len(supported_plans)} install units"
+        reason_code = ""
     else:
         message = f"update unsupported for collection group: {display_name}"
+        if len(blocked_reason_codes) == 1:
+            reason_code = blocked_reason_codes[0]
+        elif blocked_reason_codes:
+            reason_code = "mixed_blocked_reasons"
+        else:
+            reason_code = "manual_only"
 
     return {
         "collection_group_id": collection_group_id,
@@ -245,6 +423,8 @@ def build_collection_group_update_plan(
         "supported": bool(supported_plans),
         "manager": managers[0] if len(managers) == 1 else ("mixed" if managers else ""),
         "policy": policies[0] if len(policies) == 1 else ("mixed" if policies else ""),
+        "precheck_commands": precheck_commands,
+        "precheck_command_count": len(precheck_commands),
         "commands": commands,
         "command_count": len(commands),
         "install_unit_plans": plans,
@@ -254,8 +434,18 @@ def build_collection_group_update_plan(
             {
                 "install_unit_id": str(item.get("install_unit_id") or "").strip(),
                 "message": str(item.get("message") or "").strip(),
+                "reason_code": str(item.get("reason_code") or "").strip().lower(),
             }
             for item in unsupported_plans
         ],
+        "blocked_reasons": [
+            {
+                "install_unit_id": str(item.get("install_unit_id") or "").strip(),
+                "reason": str(item.get("message") or "").strip(),
+                "reason_code": str(item.get("reason_code") or "").strip().lower(),
+            }
+            for item in unsupported_plans
+        ],
+        "reason_code": reason_code,
         "message": message,
     }

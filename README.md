@@ -14,6 +14,9 @@ OneSync 是一个面向 AstrBot 的通用可扩展软件更新器插件。
 - WebUI 现已支持读取与修改插件配置（含 Human/Developer 双模式目标编辑与 `targets_json` 互相同步）。
 - 原生支持 `system_package` 策略：`apt_get/yum/dnf/pacman/zypper/choco/winget/brew`。
 - v1 新增“Skills管理”资产面板：支持 npx-based Skills 发现、CLI 资产自动发现、兼容性过滤、Deploy Target projection diff 和 Skill 绑定保存。
+- Skills 管理链路现已支持 install-unit / collection-group 级运维，而不是只对 leaf skill 做平铺操作。
+- WebUI 已支持“一键更新全部聚合”，会统一执行可更新聚合并自动跳过 `manual_only` 边界。
+- git-backed skill source 现已支持“受管 checkout 自动补齐”：当叶子 skill 目录不是 git 仓库时，OneSync 会在插件数据目录下自动物化 repo checkout，再执行 git update。
 
 ## 配置模式（重要）
 
@@ -113,6 +116,7 @@ WebUI 与 API：
 - `POST /api/skills/install-units/{install_unit_id}/update`：执行 install unit 的真实更新命令。
 - `POST /api/skills/collections/{collection_group_id}/sync`：同步 collection group 下全部 source 的上游元数据。
 - `POST /api/skills/collections/{collection_group_id}/update`：执行 collection group 中所有受支持 install unit 的真实更新命令。
+- `POST /api/skills/aggregates/update-all`：批量执行当前所有可执行聚合的更新计划，并返回 executed/skipped/source-sync 分层统计。
 - `POST /api/skills/sources/sync-all`：批量同步当前所有可同步 source。
 - `POST /api/skills/deploy-targets/{target_id}`：保存当前 target 的 selected sources。
 - `POST /api/skills/deploy-targets/{target_id}/reproject`：重建单个 target 的 generated projection，用于消除缓存与落盘状态漂移。
@@ -127,9 +131,29 @@ WebUI 与 API：
 - `filesystem/hybrid` 模式下，仍支持从 `skill_roots` 扫描 `SKILL.md` 并与手工 `skill_catalog` 合并去重。
 - `GET /api/skills/*` 当前采用 cache-first 读取，不会在每次页面访问时强制重写 `generated/*.json`；如需刷新真相源，请显式调用 `POST /api/skills/import` 或 target 级 `reproject`。
 - 当前来源归因已可区分 `registry_package / skill_lock_source / documented_source_repo / catalog_source_repo / community_source_repo / local_custom_skill`；例如用户自建的 `doc` skill 会被归类为 `local_custom_skill`。
-- `Sync Source` 与 `Update Install Unit` 不是同一件事：前者当前只支持 npm registry 元数据同步，后者则按 install unit 的有效 `update_plan` 决定是否可执行。
-- 当前“更新功能”属于部分完善：npm 包与带本地 checkout 的 git source 可更新，但 repo 引用型来源、manual/local custom skill 仍不能自动更新。
+- `Sync Source` 与 `Update Install Unit` 不是同一件事：前者负责刷新 source 元数据，后者负责执行 install unit / collection group 的真实更新计划。
+- git-backed `skill_lock` / repo 来源现在不再强依赖用户手工准备本地 git repo。若叶子 skill 目录不是 git worktree，OneSync 会在 `plugin_data/.../skills/git_repos/` 下创建受管 checkout，并让 sync/update 都走这份 checkout。
+- 当前“更新功能”已从“部分可用”推进到“核心路径可用”：
+  - npm / registry-backed 聚合可更新
+  - git-backed `skill_lock` 聚合现已可自动补齐 checkout 后更新
+  - repo-metadata-backed 聚合可执行 source sync fallback
+  - `local_custom` / `synthetic_single` / `derived` 等无真实包边界来源会被显式收敛到 `manual_only`
 - 维护者可参考 [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) 与 [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) 了解完整支持矩阵。
+
+### 最新进展（2026-04-12）
+
+- 8099 live 运维台已部署“更新全部聚合”入口，并完成真实执行验证。
+- `find-skills` 与 `frontend-design` 这两类原本因“叶子目录不是 git repo”而失败的 `skill_lock` 聚合，现已能自动补齐受管 checkout 并更新成功。
+- `synthetic_single:*` 这类没有真实包边界的 npx leaf 不再伪装成可更新聚合，而是稳定落入 `manual_only`。
+- 当前 live `POST /api/skills/aggregates/update-all` 最近一次验证结果：
+  - `candidate_install_unit_total = 20`
+  - `executed_install_unit_total = 14`
+  - `command_install_unit_total = 3`
+  - `source_sync_install_unit_total = 11`
+  - `skipped_install_unit_total = 6`
+  - `success_count = 8`
+  - `failure_count = 2`
+  - `precheck_failure_count = 0`
 
 ### Stitch MCP 基线脚本（前端校正）
 

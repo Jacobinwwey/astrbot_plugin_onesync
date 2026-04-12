@@ -45,6 +45,12 @@ else:  # pragma: no cover
 class _FakePlugin:
     def __init__(self) -> None:
         self.config = {"web_admin": {}}
+        self._web_admin_cfg = {
+            "enabled": False,
+            "host": "127.0.0.1",
+            "port": 8099,
+        }
+        self._web_admin_password = "seed-password"
         self.inventory_snapshot = {
             "ok": True,
             "generated_at": "2026-04-06T08:00:00+00:00",
@@ -213,6 +219,10 @@ class _FakePlugin:
             },
             "warnings": [],
         }
+        self.last_astrbot_toggle_payload = None
+        self.last_astrbot_delete_payload = None
+        self.last_astrbot_sync_payload = None
+        self.last_astrbot_neo_sync_payload = None
 
     def _get_install_unit_row(self, install_unit_id: str) -> dict | None:
         for row in self.skills_snapshot["install_unit_rows"]:
@@ -234,6 +244,44 @@ class _FakePlugin:
             "supported": True,
             "message": f"registry update is available for {display_name}",
         }
+
+    @staticmethod
+    def _redact_sync_auth_header(value) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        if ":" not in raw:
+            return raw
+        header_name = raw.split(":", 1)[0].strip()
+        if not header_name:
+            return "<redacted>"
+        return f"{header_name}: <redacted>"
+
+    def webui_redact_sensitive_payload(self, payload):
+        def _walk(value):
+            if isinstance(value, list):
+                return [_walk(item) for item in value]
+            if isinstance(value, tuple):
+                return [_walk(item) for item in value]
+            if isinstance(value, dict):
+                redacted = {}
+                for key, item in value.items():
+                    normalized_key = str(key or "").strip()
+                    if normalized_key == "sync_auth_token":
+                        token_text = str(item or "").strip()
+                        redacted[normalized_key] = ""
+                        redacted["sync_auth_token_configured"] = bool(token_text)
+                        continue
+                    if normalized_key == "sync_auth_header":
+                        header_text = str(item or "").strip()
+                        redacted[normalized_key] = self._redact_sync_auth_header(header_text)
+                        redacted["sync_auth_header_configured"] = bool(header_text)
+                        continue
+                    redacted[normalized_key] = _walk(item)
+                return redacted
+            return value
+
+        return _walk(payload)
 
     def webui_get_inventory_payload(self) -> dict:
         return self.inventory_snapshot
@@ -430,6 +478,81 @@ class _FakePlugin:
             "inventory": self.inventory_snapshot,
         }
 
+    async def webui_update_all_skill_aggregates(self, payload: dict | None = None) -> dict:
+        body = payload if isinstance(payload, dict) else {}
+        if body.get("force_fail"):
+            return {"ok": False, "message": "aggregate update-all failed"}
+        return {
+            "ok": True,
+            "update": {
+                "supported": True,
+                "actionable": True,
+                "update_mode": "command",
+                "planned_install_unit_total": 1,
+                "deduplicated_install_unit_total": 1,
+                "command_install_unit_total": 1,
+                "source_sync_install_unit_total": 0,
+                "skipped_install_unit_total": 0,
+                "executed_install_unit_total": 1,
+                "success_count": 1,
+                "failure_count": 0,
+                "message": "aggregate update-all finished",
+            },
+            "updated_install_unit_ids": ["install:skill_cli"],
+            "failed_install_units": [],
+            "unsupported_install_units": [],
+            "skipped_install_unit_ids": [],
+            "deduplicated_install_unit_ids": ["npm:@every-env/compound-plugin"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    async def webui_rollback_install_unit(self, install_unit_id: str, payload: dict) -> dict:
+        if install_unit_id == "unsupported":
+            return {"ok": False, "message": "rollback unsupported for aggregate"}
+        install_unit = self._get_install_unit_row(install_unit_id)
+        if install_unit is None:
+            return {"ok": False, "message": "not found"}
+        if not payload.get("execute") or str(payload.get("confirm", "")) != "ROLLBACK_ACCEPT_RISK":
+            return {"ok": False, "message": "rollback confirmation is required"}
+        return {
+            "ok": True,
+            "install_unit": install_unit,
+            "source_rows": self.skills_snapshot["source_rows"],
+            "rollback": {
+                "candidate_total": 1,
+                "success_count": 1,
+                "failure_count": 0,
+                "restored_source_total": 1,
+                "not_restored_source_total": 0,
+            },
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    async def webui_rollback_collection_group(self, collection_group_id: str, payload: dict) -> dict:
+        if collection_group_id == "unsupported":
+            return {"ok": False, "message": "rollback unsupported for aggregate"}
+        if collection_group_id != "collection:cli_tools":
+            return {"ok": False, "message": "not found"}
+        if not payload.get("execute") or str(payload.get("confirm", "")) != "ROLLBACK_ACCEPT_RISK":
+            return {"ok": False, "message": "rollback confirmation is required"}
+        return {
+            "ok": True,
+            "collection_group": self.skills_snapshot["collection_group_rows"][0],
+            "install_unit_rows": self.skills_snapshot["install_unit_rows"],
+            "source_rows": self.skills_snapshot["source_rows"],
+            "rollback": {
+                "candidate_total": 1,
+                "success_count": 1,
+                "failure_count": 0,
+                "restored_source_total": 1,
+                "not_restored_source_total": 0,
+            },
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
     def webui_deploy_collection_group(self, collection_group_id: str, payload: dict) -> dict:
         if collection_group_id != "collection:cli_tools":
             return {"ok": False, "message": "not found"}
@@ -475,8 +598,76 @@ class _FakePlugin:
         return {
             "ok": True,
             "generated_at": self.skills_snapshot["generated_at"],
-            "counts": {"registry_total": 1},
+            "counts": {"registry_total": 1, "install_atom_total": 2},
             "items": self.skills_snapshot["registry"]["sources"],
+            "warnings": [],
+        }
+
+    def webui_get_install_atom_registry_payload(self) -> dict:
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "counts": {
+                "install_atom_total": 2,
+                "resolved_total": 1,
+                "partial_total": 0,
+                "unresolved_total": 1,
+            },
+            "items": [
+                {
+                    "install_unit_id": "npm:@every-env/compound-plugin",
+                    "display_name": "Compound Engineering",
+                    "evidence_level": "explicit",
+                    "resolution_status": "resolved",
+                },
+                {
+                    "install_unit_id": "install:skill_cli",
+                    "display_name": "CLI Tool Pack",
+                    "evidence_level": "unresolved",
+                    "resolution_status": "unresolved",
+                },
+            ],
+            "warnings": [],
+        }
+
+    def webui_get_skills_audit_payload(self, *, limit: int = 50, action: str = "", source_id: str = "") -> dict:
+        items = [
+            {
+                "timestamp": "2026-04-11T09:00:00+00:00",
+                "action": "install_unit_rollback",
+                "source_id": "install:skill_cli",
+                "payload": {
+                    "candidate_total": 1,
+                    "restored_source_total": 1,
+                    "not_restored_source_total": 0,
+                    "failure_count": 0,
+                },
+            },
+            {
+                "timestamp": "2026-04-11T08:58:00+00:00",
+                "action": "collection_group_rollback",
+                "source_id": "collection:cli_tools",
+                "payload": {
+                    "candidate_total": 2,
+                    "restored_source_total": 1,
+                    "not_restored_source_total": 1,
+                    "failure_count": 1,
+                },
+            },
+        ]
+        action_keyword = str(action or "").strip().lower()
+        normalized_source_id = str(source_id or "").strip()
+        filtered = [
+            item
+            for item in items
+            if (not action_keyword or action_keyword in str(item.get("action") or "").lower())
+            and (not normalized_source_id or str(item.get("source_id") or "") == normalized_source_id)
+        ][: max(1, int(limit or 1))]
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "counts": {"total": len(filtered)},
+            "items": filtered,
             "warnings": [],
         }
 
@@ -487,6 +678,156 @@ class _FakePlugin:
             "counts": {"host_total": 1},
             "items": self.skills_snapshot["host_rows"],
             "warnings": [],
+        }
+
+    def webui_get_astrbot_neo_sources_payload(self) -> dict:
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "counts": {"source_total": 1, "ready_total": 1, "missing_total": 0},
+            "items": [
+                {
+                    "source_id": "astrneo:astrbot:demo.skill",
+                    "display_name": "neo-demo",
+                    "source_kind": "astrneo_release",
+                    "provider_key": "astrbot",
+                    "astrneo_host_id": "astrbot",
+                    "astrneo_skill_key": "demo.skill",
+                    "astrneo_release_id": "rel-1",
+                    "status": "ready",
+                },
+            ],
+            "warnings": [],
+        }
+
+    def webui_get_astrbot_neo_source_payload(self, source_id: str) -> dict:
+        if source_id != "astrneo:astrbot:demo.skill":
+            return {"ok": False, "message": "astrbot neo source not found"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "source": {
+                "source_id": "astrneo:astrbot:demo.skill",
+                "display_name": "neo-demo",
+                "source_kind": "astrneo_release",
+                "provider_key": "astrbot",
+                "astrneo_host_id": "astrbot",
+                "astrneo_skill_key": "demo.skill",
+                "astrneo_release_id": "rel-1",
+                "status": "ready",
+            },
+            "warnings": [],
+        }
+
+
+    async def webui_sync_astrbot_neo_source(self, source_id: str, payload: dict | None = None) -> dict:
+        action_payload = payload if isinstance(payload, dict) else {}
+        self.last_astrbot_neo_sync_payload = {"source_id": source_id, "payload": action_payload}
+        if source_id != "astrneo:astrbot:demo.skill":
+            return {"ok": False, "message": "astrbot neo source not found"}
+        if action_payload.get("force_fail"):
+            return {"ok": False, "message": "astrbot neo source sync failed", "reason_code": "neo_sync_failed"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "action": "neo_source_sync",
+            "source": {
+                "source_id": "astrneo:astrbot:demo.skill",
+                "display_name": "neo-demo",
+                "source_kind": "astrneo_release",
+                "provider_key": "astrbot",
+                "astrneo_host_id": "astrbot",
+                "astrneo_skill_key": "demo.skill",
+                "astrneo_release_id": "rel-2",
+                "status": "ready",
+            },
+            "sync": {
+                "skill_key": "demo.skill",
+                "local_skill_name": "neo-demo",
+                "release_id": str(action_payload.get("release_id") or "rel-2"),
+                "candidate_id": "cand-2",
+                "payload_ref": "payload-2",
+                "map_path": "/tmp/astrbot/data/skills/neo_skill_map.json",
+                "synced_at": self.skills_snapshot["generated_at"],
+            },
+            "warnings": [],
+        }
+
+    def webui_get_astrbot_host_payload(self, host_id: str) -> dict:
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "host": {
+                "host_id": "astrbot",
+                "display_name": "AstrBot",
+                "runtime_state_backend": "astrbot",
+            },
+            "runtime_state": {
+                "summary": {
+                    "state_available": True,
+                    "skills_root": "/tmp/astrbot/data/skills",
+                },
+                "state_rows": [],
+                "warnings": [],
+            },
+            "layout": {
+                "host_id": "astrbot",
+                "skills_root": "/tmp/astrbot/data/skills",
+                "astrbot_data_dir": "/tmp/astrbot/data",
+                "skills_config_path": "/tmp/astrbot/data/skills.json",
+                "sandbox_cache_path": "/tmp/astrbot/data/sandbox_skills_cache.json",
+                "neo_map_path": "/tmp/astrbot/data/skills/neo_skill_map.json",
+            },
+            "warnings": [],
+        }
+
+    def webui_set_astrbot_skill_active(self, host_id: str, payload: dict) -> dict:
+        self.last_astrbot_toggle_payload = {"host_id": host_id, "payload": payload}
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        if not str((payload or {}).get("skill_name", "")).strip():
+            return {"ok": False, "message": "invalid skill_name"}
+        return {
+            "ok": True,
+            "action": "toggle_skill",
+            "result": {
+                "ok": True,
+                "skill_name": str(payload.get("skill_name")),
+                "active": bool(payload.get("active", True)),
+            },
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_delete_astrbot_skill(self, host_id: str, payload: dict) -> dict:
+        self.last_astrbot_delete_payload = {"host_id": host_id, "payload": payload}
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        if not str((payload or {}).get("skill_name", "")).strip():
+            return {"ok": False, "message": "invalid skill_name"}
+        return {
+            "ok": True,
+            "action": "delete_skill",
+            "result": {
+                "ok": True,
+                "skill_name": str(payload.get("skill_name")),
+            },
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    async def webui_sync_astrbot_sandbox(self, host_id: str, payload: dict) -> dict:
+        self.last_astrbot_sync_payload = {"host_id": host_id, "payload": payload}
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        return {
+            "ok": True,
+            "action": "sandbox_sync",
+            "result": {"ok": True, "message": "sync done"},
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
         }
 
     async def webui_scan_inventory(self) -> dict:
@@ -653,10 +994,47 @@ class _FakePlugin:
         return {"ok": True, "rows": [], "counts": {}, "latest_job": None}
 
     def webui_get_config_payload(self) -> dict:
-        return {"ok": True, "config": {}, "meta": {}}
+        password_configured = bool(str(self._web_admin_password or "").strip())
+        return {
+            "ok": True,
+            "config": {
+                "web_admin": {
+                    "enabled": bool(self._web_admin_cfg.get("enabled", False)),
+                    "host": str(self._web_admin_cfg.get("host", "127.0.0.1") or "127.0.0.1"),
+                    "port": int(self._web_admin_cfg.get("port", 8099) or 8099),
+                    "password": "",
+                    "password_configured": password_configured,
+                },
+            },
+            "meta": {
+                "web_admin_password_configured": password_configured,
+            },
+        }
 
     def webui_update_config(self, payload: dict) -> dict:
-        return {"ok": True, "config": payload}
+        incoming = payload.get("config", payload)
+        if not isinstance(incoming, dict):
+            return {"ok": False, "message": "config must be object"}
+        web_cfg_raw = incoming.get("web_admin", {})
+        if not isinstance(web_cfg_raw, dict):
+            return {"ok": False, "message": "web_admin must be object"}
+        self._web_admin_cfg = {
+            "enabled": bool(web_cfg_raw.get("enabled", False)),
+            "host": str(web_cfg_raw.get("host", "127.0.0.1") or "127.0.0.1"),
+            "port": int(web_cfg_raw.get("port", 8099) or 8099),
+        }
+        password_mode = str(web_cfg_raw.get("password_mode", "") or "").strip().lower()
+        has_password = "password" in web_cfg_raw
+        raw_password = str(web_cfg_raw.get("password", "") or "")
+        if password_mode == "clear":
+            self._web_admin_password = ""
+        elif password_mode == "set":
+            self._web_admin_password = raw_password
+        elif password_mode == "keep":
+            pass
+        elif has_password:
+            self._web_admin_password = raw_password
+        return self.webui_get_config_payload()
 
     def webui_get_latest_job(self):
         return None
@@ -724,6 +1102,54 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(400, resp.status_code)
         self.assertFalse(resp.json()["ok"])
 
+    def test_config_routes_keep_web_password_secret_and_support_password_mode(self) -> None:
+        get_resp = self.client.get("/api/config")
+        self.assertEqual(200, get_resp.status_code)
+        get_data = get_resp.json()
+        self.assertEqual("", get_data["config"]["web_admin"]["password"])
+        self.assertTrue(get_data["config"]["web_admin"]["password_configured"])
+        self.assertTrue(get_data["meta"]["web_admin_password_configured"])
+
+        keep_resp = self.client.post(
+            "/api/config",
+            json={"config": {"web_admin": {"enabled": True, "host": "127.0.0.1", "port": 8099, "password_mode": "keep"}}},
+        )
+        self.assertEqual(200, keep_resp.status_code)
+        keep_data = keep_resp.json()
+        self.assertEqual("", keep_data["config"]["web_admin"]["password"])
+        self.assertTrue(keep_data["config"]["web_admin"]["password_configured"])
+        self.assertTrue(keep_data["meta"]["web_admin_password_configured"])
+
+        clear_resp = self.client.post(
+            "/api/config",
+            json={"config": {"web_admin": {"enabled": True, "host": "127.0.0.1", "port": 8099, "password_mode": "clear"}}},
+        )
+        self.assertEqual(200, clear_resp.status_code)
+        clear_data = clear_resp.json()
+        self.assertEqual("", clear_data["config"]["web_admin"]["password"])
+        self.assertFalse(clear_data["config"]["web_admin"]["password_configured"])
+        self.assertFalse(clear_data["meta"]["web_admin_password_configured"])
+
+        set_resp = self.client.post(
+            "/api/config",
+            json={
+                "config": {
+                    "web_admin": {
+                        "enabled": True,
+                        "host": "127.0.0.1",
+                        "port": 8099,
+                        "password_mode": "set",
+                        "password": "new-secret-password",
+                    },
+                },
+            },
+        )
+        self.assertEqual(200, set_resp.status_code)
+        set_data = set_resp.json()
+        self.assertEqual("", set_data["config"]["web_admin"]["password"])
+        self.assertTrue(set_data["config"]["web_admin"]["password_configured"])
+        self.assertTrue(set_data["meta"]["web_admin_password_configured"])
+
     def test_skills_routes_return_expected_payloads(self) -> None:
         overview_resp = self.client.get("/api/skills/overview")
         self.assertEqual(200, overview_resp.status_code)
@@ -733,9 +1159,52 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, registry_resp.status_code)
         self.assertEqual("skill_cli", registry_resp.json()["items"][0]["source_id"])
 
+        install_atom_resp = self.client.get("/api/skills/install-atoms")
+        self.assertEqual(200, install_atom_resp.status_code)
+        self.assertEqual(2, install_atom_resp.json()["counts"]["install_atom_total"])
+        self.assertEqual(
+            "npm:@every-env/compound-plugin",
+            install_atom_resp.json()["items"][0]["install_unit_id"],
+        )
+        rollback_audit_resp = self.client.get(
+            "/api/skills/audit",
+            params={"limit": 10, "action": "rollback", "source_id": "install:skill_cli"},
+        )
+        self.assertEqual(200, rollback_audit_resp.status_code)
+        self.assertEqual(1, rollback_audit_resp.json()["counts"]["total"])
+        self.assertEqual("install_unit_rollback", rollback_audit_resp.json()["items"][0]["action"])
+        self.assertEqual("install:skill_cli", rollback_audit_resp.json()["items"][0]["source_id"])
+
         hosts_resp = self.client.get("/api/skills/hosts")
         self.assertEqual(200, hosts_resp.status_code)
         self.assertEqual("claude_code", hosts_resp.json()["items"][0]["host_id"])
+
+        astrbot_neo_sources_resp = self.client.get("/api/skills/astrbot-neo-sources")
+        self.assertEqual(200, astrbot_neo_sources_resp.status_code)
+        self.assertEqual(1, astrbot_neo_sources_resp.json()["counts"]["source_total"])
+        self.assertEqual(
+            "astrneo:astrbot:demo.skill",
+            astrbot_neo_sources_resp.json()["items"][0]["source_id"],
+        )
+
+        astrbot_neo_source_detail_resp = self.client.get("/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill")
+        self.assertEqual(200, astrbot_neo_source_detail_resp.status_code)
+        self.assertEqual(
+            "astrneo:astrbot:demo.skill",
+            astrbot_neo_source_detail_resp.json()["source"]["source_id"],
+        )
+
+        missing_astrbot_neo_source_detail_resp = self.client.get("/api/skills/astrbot-neo-sources/missing")
+        self.assertEqual(404, missing_astrbot_neo_source_detail_resp.status_code)
+        self.assertFalse(missing_astrbot_neo_source_detail_resp.json()["ok"])
+
+        astrbot_host_resp = self.client.get("/api/skills/hosts/astrbot/astrbot")
+        self.assertEqual(200, astrbot_host_resp.status_code)
+        self.assertEqual("astrbot", astrbot_host_resp.json()["host"]["host_id"])
+
+        missing_astrbot_host_resp = self.client.get("/api/skills/hosts/missing/astrbot")
+        self.assertEqual(404, missing_astrbot_host_resp.status_code)
+        self.assertFalse(missing_astrbot_host_resp.json()["ok"])
 
         sources_resp = self.client.get("/api/skills/sources")
         self.assertEqual(200, sources_resp.status_code)
@@ -828,6 +1297,98 @@ class WebUIServerTests(unittest.TestCase):
         self.assertTrue(group_update_resp.json()["ok"])
         self.assertEqual("bunx", group_update_resp.json()["update"]["manager"])
 
+        update_all_resp = self.client.post("/api/skills/aggregates/update-all", json={})
+        self.assertEqual(200, update_all_resp.status_code)
+        self.assertTrue(update_all_resp.json()["ok"])
+        self.assertEqual(1, update_all_resp.json()["update"]["planned_install_unit_total"])
+        self.assertEqual(["install:skill_cli"], update_all_resp.json()["updated_install_unit_ids"])
+
+        astrbot_toggle_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/skills/toggle",
+            json={"skill_name": "demo", "active": False},
+        )
+        self.assertEqual(200, astrbot_toggle_resp.status_code)
+        self.assertTrue(astrbot_toggle_resp.json()["ok"])
+        self.assertEqual("toggle_skill", astrbot_toggle_resp.json()["action"])
+
+        astrbot_delete_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/skills/delete",
+            json={"skill_name": "demo"},
+        )
+        self.assertEqual(200, astrbot_delete_resp.status_code)
+        self.assertTrue(astrbot_delete_resp.json()["ok"])
+        self.assertEqual("delete_skill", astrbot_delete_resp.json()["action"])
+
+        astrbot_sync_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/sandbox/sync",
+            json={},
+        )
+        self.assertEqual(200, astrbot_sync_resp.status_code)
+        self.assertTrue(astrbot_sync_resp.json()["ok"])
+        self.assertEqual("sandbox_sync", astrbot_sync_resp.json()["action"])
+
+
+        astrbot_neo_sync_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill/sync",
+            json={"release_id": "rel-2"},
+        )
+        self.assertEqual(200, astrbot_neo_sync_resp.status_code)
+        self.assertTrue(astrbot_neo_sync_resp.json()["ok"])
+        self.assertEqual("neo_source_sync", astrbot_neo_sync_resp.json()["action"])
+        self.assertEqual("astrneo:astrbot:demo.skill", self.plugin.last_astrbot_neo_sync_payload["source_id"])
+
+        astrbot_neo_sync_bad_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill/sync",
+            json={"force_fail": True},
+        )
+        self.assertEqual(400, astrbot_neo_sync_bad_resp.status_code)
+        self.assertFalse(astrbot_neo_sync_bad_resp.json()["ok"])
+
+        astrbot_neo_sync_missing_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/missing/sync",
+            json={},
+        )
+        self.assertEqual(404, astrbot_neo_sync_missing_resp.status_code)
+        self.assertFalse(astrbot_neo_sync_missing_resp.json()["ok"])
+
+        astrbot_toggle_bad_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/skills/toggle",
+            json={"skill_name": ""},
+        )
+        self.assertEqual(400, astrbot_toggle_bad_resp.status_code)
+        self.assertFalse(astrbot_toggle_bad_resp.json()["ok"])
+
+        astrbot_sync_missing_resp = self.client.post(
+            "/api/skills/hosts/missing/astrbot/sandbox/sync",
+            json={},
+        )
+        self.assertEqual(404, astrbot_sync_missing_resp.status_code)
+        self.assertFalse(astrbot_sync_missing_resp.json()["ok"])
+
+        unit_rollback_resp = self.client.post(
+            "/api/skills/install-units/install%3Askill_cli/rollback",
+            json={
+                "execute": True,
+                "confirm": "ROLLBACK_ACCEPT_RISK",
+                "before_revisions": [{"source_id": "skill_cli", "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
+            },
+        )
+        self.assertEqual(200, unit_rollback_resp.status_code)
+        self.assertTrue(unit_rollback_resp.json()["ok"])
+        self.assertEqual(1, unit_rollback_resp.json()["rollback"]["restored_source_total"])
+
+        group_rollback_resp = self.client.post(
+            "/api/skills/collections/collection%3Acli_tools/rollback",
+            json={
+                "execute": True,
+                "confirm": "ROLLBACK_ACCEPT_RISK",
+                "before_revisions": [{"source_id": "skill_cli", "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
+            },
+        )
+        self.assertEqual(200, group_rollback_resp.status_code)
+        self.assertTrue(group_rollback_resp.json()["ok"])
+        self.assertEqual(1, group_rollback_resp.json()["rollback"]["restored_source_total"])
+
         unit_deploy_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/deploy",
             json={"software_ids": ["claude_code"], "scope": "global"},
@@ -866,6 +1427,13 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(404, missing_unit_update_resp.status_code)
         self.assertFalse(missing_unit_update_resp.json()["ok"])
 
+        missing_unit_rollback_resp = self.client.post(
+            "/api/skills/install-units/missing/rollback",
+            json={"execute": True, "confirm": "ROLLBACK_ACCEPT_RISK"},
+        )
+        self.assertEqual(404, missing_unit_rollback_resp.status_code)
+        self.assertFalse(missing_unit_rollback_resp.json()["ok"])
+
         missing_group_refresh_resp = self.client.post("/api/skills/collections/missing/refresh", json={})
         self.assertEqual(404, missing_group_refresh_resp.status_code)
         self.assertFalse(missing_group_refresh_resp.json()["ok"])
@@ -877,6 +1445,13 @@ class WebUIServerTests(unittest.TestCase):
         missing_group_update_resp = self.client.post("/api/skills/collections/missing/update", json={})
         self.assertEqual(404, missing_group_update_resp.status_code)
         self.assertFalse(missing_group_update_resp.json()["ok"])
+
+        missing_group_rollback_resp = self.client.post(
+            "/api/skills/collections/missing/rollback",
+            json={"execute": True, "confirm": "ROLLBACK_ACCEPT_RISK"},
+        )
+        self.assertEqual(404, missing_group_rollback_resp.status_code)
+        self.assertFalse(missing_group_rollback_resp.json()["ok"])
 
         missing_unit_repair_resp = self.client.post("/api/skills/install-units/missing/repair", json={})
         self.assertEqual(404, missing_unit_repair_resp.status_code)
@@ -893,6 +1468,38 @@ class WebUIServerTests(unittest.TestCase):
         bad_group_update_resp = self.client.post("/api/skills/collections/unsupported/update", json={})
         self.assertEqual(400, bad_group_update_resp.status_code)
         self.assertFalse(bad_group_update_resp.json()["ok"])
+
+        bad_update_all_resp = self.client.post("/api/skills/aggregates/update-all", json={"force_fail": True})
+        self.assertEqual(400, bad_update_all_resp.status_code)
+        self.assertFalse(bad_update_all_resp.json()["ok"])
+
+        bad_unit_rollback_resp = self.client.post(
+            "/api/skills/install-units/install%3Askill_cli/rollback",
+            json={},
+        )
+        self.assertEqual(400, bad_unit_rollback_resp.status_code)
+        self.assertFalse(bad_unit_rollback_resp.json()["ok"])
+
+        unsupported_unit_rollback_resp = self.client.post(
+            "/api/skills/install-units/unsupported/rollback",
+            json={"execute": True, "confirm": "ROLLBACK_ACCEPT_RISK"},
+        )
+        self.assertEqual(400, unsupported_unit_rollback_resp.status_code)
+        self.assertFalse(unsupported_unit_rollback_resp.json()["ok"])
+
+        bad_group_rollback_resp = self.client.post(
+            "/api/skills/collections/collection%3Acli_tools/rollback",
+            json={},
+        )
+        self.assertEqual(400, bad_group_rollback_resp.status_code)
+        self.assertFalse(bad_group_rollback_resp.json()["ok"])
+
+        unsupported_group_rollback_resp = self.client.post(
+            "/api/skills/collections/unsupported/rollback",
+            json={"execute": True, "confirm": "ROLLBACK_ACCEPT_RISK"},
+        )
+        self.assertEqual(400, unsupported_group_rollback_resp.status_code)
+        self.assertFalse(unsupported_group_rollback_resp.json()["ok"])
 
         bad_unit_deploy_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/deploy",
@@ -1000,6 +1607,45 @@ class WebUIServerTests(unittest.TestCase):
         )
         self.assertEqual(400, bad_reproject_resp.status_code)
         self.assertFalse(bad_reproject_resp.json()["ok"])
+
+    def test_skills_routes_redact_sync_auth_fields(self) -> None:
+        self.plugin.skills_snapshot["source_rows"][0]["sync_auth_token"] = "token-source-secret"
+        self.plugin.skills_snapshot["source_rows"][0]["sync_auth_header"] = "PRIVATE-TOKEN: source-header-secret"
+        self.plugin.skills_snapshot["registry"]["sources"][0]["sync_auth_token"] = "token-registry-secret"
+        self.plugin.skills_snapshot["registry"]["sources"][0]["sync_auth_header"] = "Authorization: Bearer registry-secret"
+
+        overview_resp = self.client.get("/api/skills/overview")
+        self.assertEqual(200, overview_resp.status_code)
+        overview_data = overview_resp.json()
+        source_row = overview_data["source_rows"][0]
+        registry_row = overview_data["registry"]["sources"][0]
+
+        self.assertEqual("", source_row["sync_auth_token"])
+        self.assertTrue(source_row["sync_auth_token_configured"])
+        self.assertEqual("PRIVATE-TOKEN: <redacted>", source_row["sync_auth_header"])
+        self.assertTrue(source_row["sync_auth_header_configured"])
+
+        self.assertEqual("", registry_row["sync_auth_token"])
+        self.assertTrue(registry_row["sync_auth_token_configured"])
+        self.assertEqual("Authorization: <redacted>", registry_row["sync_auth_header"])
+        self.assertTrue(registry_row["sync_auth_header_configured"])
+
+        self.plugin.skills_snapshot["source_rows"][0]["sync_auth_header"] = "X-GitHub-Token"
+        sources_resp = self.client.get("/api/skills/sources")
+        self.assertEqual(200, sources_resp.status_code)
+        self.assertEqual("X-GitHub-Token", sources_resp.json()["items"][0]["sync_auth_header"])
+
+        bindings_resp = self.client.post(
+            "/api/inventory/bindings",
+            json={"software_id": "claude_code", "skill_ids": ["skill_cli"], "scope": "global"},
+        )
+        self.assertEqual(200, bindings_resp.status_code)
+        bindings_data = bindings_resp.json()
+        binding_source_row = bindings_data["skills"]["source_rows"][0]
+        self.assertEqual("", binding_source_row["sync_auth_token"])
+        self.assertTrue(binding_source_row["sync_auth_token_configured"])
+        self.assertEqual("X-GitHub-Token", binding_source_row["sync_auth_header"])
+        self.assertTrue(binding_source_row["sync_auth_header_configured"])
 
     def test_install_unit_routes_support_ids_with_slashes(self) -> None:
         encoded_install_unit_id = "npm%3A%40every-env%2Fcompound-plugin"
