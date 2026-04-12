@@ -28,7 +28,12 @@ class SkillsUpdateCoreTests(unittest.TestCase):
                 "management_hint": "bunx @every-env/compound-plugin",
                 "update_policy": "registry",
             },
-            [],
+            [
+                {
+                    "source_id": "ce_brainstorm",
+                    "source_path": "/root/.codex/skills/ce-brainstorm",
+                }
+            ],
         )
 
         self.assertTrue(plan["supported"])
@@ -39,7 +44,12 @@ class SkillsUpdateCoreTests(unittest.TestCase):
             ],
             plan["precheck_commands"],
         )
-        self.assertEqual(["bunx @every-env/compound-plugin"], plan["commands"])
+        self.assertEqual(
+            [
+                "bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex",
+            ],
+            plan["commands"],
+        )
 
     def test_build_install_unit_update_plan_supports_git_pull(self) -> None:
         plan = build_install_unit_update_plan(
@@ -213,7 +223,7 @@ class SkillsUpdateCoreTests(unittest.TestCase):
                 {
                     "source_id": "ce_brainstorm",
                     "install_unit_id": "npm:@every-env/compound-plugin",
-                    "source_path": "/tmp/compound",
+                    "source_path": "/root/.codex/skills/ce-brainstorm",
                 },
                 {
                     "source_id": "manual_demo",
@@ -234,7 +244,12 @@ class SkillsUpdateCoreTests(unittest.TestCase):
             ],
             plan["precheck_commands"],
         )
-        self.assertEqual(["bunx @every-env/compound-plugin"], plan["commands"])
+        self.assertEqual(
+            [
+                "bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex",
+            ],
+            plan["commands"],
+        )
 
     def test_build_collection_group_update_plan_returns_reason_code_for_manual_only_group(self) -> None:
         plan = build_collection_group_update_plan(

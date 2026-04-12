@@ -1301,7 +1301,12 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("collection:compound_engineering", detail["collection_group"]["collection_group_id"])
         self.assertTrue(detail["update_plan"]["supported"])
         self.assertEqual("bunx", detail["update_plan"]["manager"])
-        self.assertEqual(["bunx @every-env/compound-plugin"], detail["update_plan"]["commands"])
+        self.assertEqual(
+            [
+                "bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex",
+            ],
+            detail["update_plan"]["commands"],
+        )
 
     def test_build_collection_group_detail_payload_returns_install_units_sources_and_targets(self) -> None:
         snapshot = copy.deepcopy(self.inventory_snapshot)
@@ -1334,7 +1339,12 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertTrue(detail["update_plan"]["supported"])
         self.assertEqual(1, detail["update_plan"]["supported_install_unit_total"])
         self.assertEqual(0, detail["update_plan"]["unsupported_install_unit_total"])
-        self.assertEqual(["bunx @every-env/compound-plugin"], detail["update_plan"]["commands"])
+        self.assertEqual(
+            [
+                "bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex",
+            ],
+            detail["update_plan"]["commands"],
+        )
 
     def test_build_collection_group_detail_payload_exposes_block_reason_codes(self) -> None:
         overview = {

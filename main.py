@@ -298,6 +298,52 @@ def _build_registry_update_command(manager: str, install_ref: str) -> str:
     return ""
 
 
+def _replace_registry_command_runner(command: str, manager: str) -> str:
+    text = str(command or "").strip()
+    normalized_manager = _normalize_update_manager(manager)
+    if not text or normalized_manager not in {"bunx", "npx", "pnpm", "npm"}:
+        return ""
+    prefix_map = {
+        "bunx": "bunx ",
+        "npx": "npx ",
+        "pnpm": "pnpm dlx ",
+    }
+    matched_prefix = ""
+    remainder = ""
+    for prefix in ("bunx ", "npx ", "pnpm dlx "):
+        if text.startswith(prefix):
+            matched_prefix = prefix
+            remainder = text[len(prefix):].strip()
+            break
+    if not matched_prefix or not remainder:
+        return ""
+    try:
+        remainder_tokens = shlex.split(remainder, posix=True)
+    except Exception:
+        remainder_tokens = []
+    if not remainder_tokens:
+        return ""
+    if normalized_manager == "npm":
+        package_token = remainder_tokens[0]
+        arg_tokens = remainder_tokens[1:]
+        option_index = next(
+            (index for index, token in enumerate(arg_tokens) if str(token).startswith("-")),
+            -1,
+        )
+        command_tokens = ["npm", "exec", "--yes", package_token]
+        if option_index >= 0:
+            command_tokens.extend(arg_tokens[:option_index])
+            command_tokens.append("--")
+            command_tokens.extend(arg_tokens[option_index:])
+        else:
+            command_tokens.extend(arg_tokens)
+        return " ".join(_shell_quote(token) for token in command_tokens if str(token).strip())
+    next_prefix = prefix_map.get(normalized_manager, "")
+    if not next_prefix:
+        return ""
+    return f"{next_prefix}{' '.join(_shell_quote(token) for token in remainder_tokens)}".strip()
+
+
 def _registry_manager_from_command(command: str) -> str:
     lowered = str(command or "").strip().lower()
     if lowered.startswith("bunx "):
@@ -332,7 +378,9 @@ def _build_registry_fallback_commands(plan: dict[str, Any], attempted_command: s
     for candidate in manager_candidates:
         if candidate == attempted_manager:
             continue
-        command = _build_registry_update_command(candidate, install_ref)
+        command = _replace_registry_command_runner(attempted_command, candidate)
+        if not command:
+            command = _build_registry_update_command(candidate, install_ref)
         if command and command != str(attempted_command or "").strip():
             commands.append(command)
     return _dedupe_keep_order(commands)
@@ -4240,6 +4288,7 @@ class OneSyncPlugin(Star):
                         result_payload["fallback_reason"] = "primary_command_unavailable"
                         fallback_commands = _build_registry_fallback_commands(plan, command)
                         fallback_succeeded = False
+                        fallback_attempt_payloads: list[dict[str, Any]] = []
                         for fallback_command in fallback_commands:
                             fallback_result = await self.runner.run(fallback_command, timeout_s=update_timeout_s)
                             fallback_payload = {
@@ -4256,8 +4305,14 @@ class OneSyncPlugin(Star):
                             }
                             plan_results.append(fallback_payload)
                             command_results.append(fallback_payload)
+                            fallback_attempt_payloads.append(fallback_payload)
                             if fallback_payload.get("ok"):
                                 fallback_succeeded = True
+                                for prior_attempt in fallback_attempt_payloads:
+                                    if prior_attempt is fallback_payload:
+                                        continue
+                                    prior_attempt["ignored"] = True
+                                    prior_attempt["fallback_superseded"] = True
                                 break
                         if fallback_succeeded:
                             continue

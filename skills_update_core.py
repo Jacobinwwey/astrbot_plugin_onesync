@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shlex
+from pathlib import Path
 from typing import Any
 
 
@@ -13,6 +14,8 @@ _REGISTRY_HINT_PREFIXES = (
 )
 
 _REGISTRY_RUNNERS = ("bunx", "npx", "pnpm", "npm")
+_COMPOUND_PLUGIN_PACKAGE = "@every-env/compound-plugin"
+_COMPOUND_PLUGIN_NAME = "compound-engineering"
 
 
 def _to_str_list(value: Any) -> list[str]:
@@ -94,7 +97,61 @@ def _resolve_registry_hint_command(management_hint: str, update_policy: str) -> 
     return ""
 
 
-def _build_registry_command(manager: str, install_ref: str) -> str:
+def _derive_codex_home_from_source_paths(source_paths: list[str] | None) -> str:
+    for raw_path in source_paths or []:
+        path_text = str(raw_path or "").strip()
+        if not path_text:
+            continue
+        path = Path(path_text)
+        parts = [part.strip() for part in path.parts if str(part).strip()]
+        try:
+            skills_index = parts.index("skills")
+        except ValueError:
+            continue
+        if skills_index <= 0:
+            continue
+        codex_home = Path(*parts[:skills_index])
+        codex_home_text = str(codex_home).strip()
+        if codex_home_text:
+            return codex_home_text
+    return ""
+
+
+def _build_compound_plugin_registry_command(manager: str, install_ref: str, source_paths: list[str] | None) -> str:
+    install_ref_text = str(install_ref or "").strip()
+    if install_ref_text != _COMPOUND_PLUGIN_PACKAGE:
+        return ""
+    codex_home = _derive_codex_home_from_source_paths(source_paths)
+    if not codex_home:
+        return ""
+    codex_home_token = _shell_token(codex_home)
+    if manager == "bunx":
+        return (
+            f"bunx {_shell_token(_COMPOUND_PLUGIN_PACKAGE)} install {_COMPOUND_PLUGIN_NAME} "
+            f"--to codex --codexHome {codex_home_token}"
+        )
+    if manager == "npx":
+        return (
+            f"npx {_shell_token(_COMPOUND_PLUGIN_PACKAGE)} install {_COMPOUND_PLUGIN_NAME} "
+            f"--to codex --codexHome {codex_home_token}"
+        )
+    if manager == "pnpm":
+        return (
+            f"pnpm dlx {_shell_token(_COMPOUND_PLUGIN_PACKAGE)} install {_COMPOUND_PLUGIN_NAME} "
+            f"--to codex --codexHome {codex_home_token}"
+        )
+    if manager == "npm":
+        return (
+            f"npm exec --yes {_shell_token(_COMPOUND_PLUGIN_PACKAGE)} install {_COMPOUND_PLUGIN_NAME} "
+            f"-- --to codex --codexHome {codex_home_token}"
+        )
+    return ""
+
+
+def _build_registry_command(manager: str, install_ref: str, *, source_paths: list[str] | None = None) -> str:
+    specialized = _build_compound_plugin_registry_command(manager, install_ref, source_paths)
+    if specialized:
+        return specialized
     token = _shell_token(install_ref)
     if not token:
         return ""
@@ -296,6 +353,7 @@ def build_install_unit_update_plan(
         ],
     )
 
+    specialized_command = _build_registry_command(manager, install_ref, source_paths=source_paths)
     hint_command = _resolve_registry_hint_command(management_hint, update_policy)
     commands: list[str] = []
     precheck_commands: list[str] = []
@@ -303,13 +361,18 @@ def build_install_unit_update_plan(
     message = ""
     reason_code = ""
 
-    if hint_command:
+    if specialized_command:
+        supported = True
+        precheck_commands = _build_registry_precheck_commands(manager)
+        commands = [specialized_command]
+        message = f"registry update will use specialized command for {display_name}"
+    elif hint_command:
         supported = True
         precheck_commands = _build_registry_precheck_commands(manager)
         commands = [hint_command]
         message = f"registry update will use management_hint for {display_name}"
     else:
-        registry_command = _build_registry_command(manager, install_ref)
+        registry_command = _build_registry_command(manager, install_ref, source_paths=source_paths)
         if registry_command and update_policy == "registry":
             supported = True
             precheck_commands = _build_registry_precheck_commands(manager)

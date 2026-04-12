@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import sys
 import tempfile
+import types as pytypes
 import types
 import unittest
 from pathlib import Path
@@ -553,3 +554,92 @@ class OneSyncPluginGitCheckoutPrewarmTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(2, result["source_sync_success_count"])
         self.assertEqual(0, result["source_sync_failure_count"])
         self.assertEqual(1, result["source_sync_cache_hit_total"])
+
+    async def test_execute_install_unit_update_plans_treats_successful_fallback_chain_as_success(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.webui_get_skills_payload = lambda: {"source_rows": []}
+
+        class _FakeRunner:
+            def __init__(self) -> None:
+                self._results = [
+                    pytypes.SimpleNamespace(
+                        command="command -v bunx >/dev/null 2>&1 || command -v npx >/dev/null 2>&1 || command -v pnpm >/dev/null 2>&1 || command -v npm >/dev/null 2>&1",
+                        exit_code=0,
+                        stdout="",
+                        stderr="",
+                        duration_s=0.01,
+                        timed_out=False,
+                    ),
+                    pytypes.SimpleNamespace(
+                        command="bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex",
+                        exit_code=127,
+                        stdout="",
+                        stderr="/bin/bash: line 1: bunx: command not found\n",
+                        duration_s=0.01,
+                        timed_out=False,
+                    ),
+                    pytypes.SimpleNamespace(
+                        command="npx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex",
+                        exit_code=127,
+                        stdout="",
+                        stderr="/usr/bin/env: 'bun': No such file or directory\n",
+                        duration_s=0.2,
+                        timed_out=False,
+                    ),
+                    pytypes.SimpleNamespace(
+                        command="pnpm dlx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex",
+                        exit_code=127,
+                        stdout="",
+                        stderr="exec: bun: not found\n",
+                        duration_s=0.2,
+                        timed_out=False,
+                    ),
+                    pytypes.SimpleNamespace(
+                        command="npm exec --yes @every-env/compound-plugin install compound-engineering -- --to codex --codexHome /root/.codex",
+                        exit_code=0,
+                        stdout="changed 5 packages in 3s\n",
+                        stderr="",
+                        duration_s=0.3,
+                        timed_out=False,
+                    ),
+                ]
+
+            async def run(self, command: str, *, timeout_s: int = 600, cwd: str | None = None, env_update=None):
+                _ = timeout_s, cwd, env_update
+                result = self._results.pop(0)
+                assert result.command == command
+                return result
+
+        plugin.runner = _FakeRunner()
+
+        result = await OneSyncPlugin._execute_install_unit_update_plans(
+            plugin,
+            [
+                {
+                    "install_unit_id": "npm:@every-env/compound-plugin",
+                    "display_name": "Compound Engineering",
+                    "manager": "bunx",
+                    "policy": "registry",
+                    "install_ref": "@every-env/compound-plugin",
+                    "supported": True,
+                    "precheck_commands": [
+                        "command -v bunx >/dev/null 2>&1 || command -v npx >/dev/null 2>&1 || command -v pnpm >/dev/null 2>&1 || command -v npm >/dev/null 2>&1"
+                    ],
+                    "commands": [
+                        "bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex"
+                    ],
+                }
+            ],
+        )
+
+        self.assertEqual(2, result["success_count"])
+        self.assertEqual(0, result["failure_count"])
+        self.assertEqual(1, result["update_success_count"])
+        self.assertEqual(0, result["update_failure_count"])
+        self.assertEqual([], result["failed_install_units"])
+        self.assertEqual(True, result["install_unit_results"][0]["ok"])
+        ignored = [
+            item for item in result["install_unit_results"][0]["results"]
+            if isinstance(item, dict) and item.get("ignored")
+        ]
+        self.assertGreaterEqual(len(ignored), 3)

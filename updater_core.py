@@ -295,6 +295,7 @@ class CommandRunner:
             if home_dir:
                 candidates.extend(
                     [
+                        os.path.join(home_dir, ".bun", "bin"),
                         os.path.join(home_dir, ".cargo", "bin"),
                         os.path.join(home_dir, ".local", "bin"),
                     ],

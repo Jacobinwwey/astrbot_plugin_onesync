@@ -229,8 +229,20 @@ To call the feature "complete", the next implementation steps should be:
     - `failure_count = 2`
     - `failure_taxonomy.failed_source_total = 0`
     - `update.source_sync_cache_hit_total = 4`
+  - Compound Engineering install-unit update now uses a semantically correct install command:
+    - `bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex`
+  - Current live verification for the Compound Engineering single install-unit update:
+    - `success_count = 2`
+    - `failure_count = 0`
+    - `failed_install_units = []`
+  - After fixing the CE update command, the latest live `update-all` has further converged to:
+    - `success_count = 19`
+    - `failure_count = 0`
+    - `skipped_install_unit_total = 7`
+    - `failure_taxonomy.failed_install_unit_total = 0`
+    - `failure_taxonomy.blocked_reason_groups[0] = manual_managed:7`
 - Full regression result is now:
-  - `pytest -q` -> `175 passed`
+  - `pytest -q` -> `177 passed`
 
 - WebUI now renders a rollback audit trail panel backed by `/api/skills/audit?action=rollback`, with automatic switching between current-aggregate scope and global recent records.
 - Rollback flow now supports selective rollback by `source_id`, so operators can scope blast radius instead of always rolling back the full aggregate.

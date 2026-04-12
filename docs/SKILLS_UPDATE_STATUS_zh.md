@@ -229,8 +229,20 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
     - `failure_count = 2`
     - `failure_taxonomy.failed_source_total = 0`
     - `update.source_sync_cache_hit_total = 4`
+  - `Compound Engineering` install-unit update 已修正为语义正确的安装命令：
+    - `bunx @every-env/compound-plugin install compound-engineering --to codex --codexHome /root/.codex`
+  - `Compound Engineering` 单项 update 当前 live 实测结果：
+    - `success_count = 2`
+    - `failure_count = 0`
+    - `failed_install_units = []`
+  - 在 CE update command 修正后，最新 live `update-all` 已进一步收敛为：
+    - `success_count = 19`
+    - `failure_count = 0`
+    - `skipped_install_unit_total = 7`
+    - `failure_taxonomy.failed_install_unit_total = 0`
+    - `failure_taxonomy.blocked_reason_groups[0] = manual_managed:7`
 - 当前完整回归结果已更新：
-  - `pytest -q` -> `175 passed`
+  - `pytest -q` -> `177 passed`
 
 - WebUI 已接入回滚审计轨迹面板：从 `/api/skills/audit?action=rollback` 拉取记录并在当前聚合与全局最近回滚之间自动切换展示。
 - 回滚流程已支持“按 source_id 选择子集回滚”，避免对整个聚合盲目全量回滚。
