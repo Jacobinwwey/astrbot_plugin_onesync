@@ -244,8 +244,12 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
   - `source_sync_cache_hit_total` 现已从后端指标提升到前端摘要可见项：
     - 当前 “更新全部聚合” 提示会显示 `Source Sync 结果复用 {count} 次`
     - 对应 debug log 也会显示 `sync_cache_hits=...`
+  - Utility Inspector 现已新增“聚合更新报告”面板：
+    - 优先显示当前会话内最近一次 `update-all` 结果
+    - 若当前会话没有结果，则回退显示 `aggregates_update_all` 审计记录
+    - blocked / failed group 可点击定位到对应 install-unit/source 详情
 - 当前完整回归结果已更新：
-  - `pytest -q` -> `177 passed`
+  - `pytest -q` -> `178 passed`
 
 - WebUI 已接入回滚审计轨迹面板：从 `/api/skills/audit?action=rollback` 拉取记录并在当前聚合与全局最近回滚之间自动切换展示。
 - 回滚流程已支持“按 source_id 选择子集回滚”，避免对整个聚合盲目全量回滚。

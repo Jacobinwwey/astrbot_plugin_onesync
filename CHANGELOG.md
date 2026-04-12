@@ -16,6 +16,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Added batch-local source-sync cache keys so repeated repo metadata lookups inside one aggregate update run are reused instead of hitting the same upstream repo multiple times.
 - Added a specialized Compound Engineering registry update command so `npm:@every-env/compound-plugin` now runs a real Codex install/update action instead of invoking the package CLI without a subcommand.
 - Added cache-aware aggregate update reporting in the WebUI summary so `source_sync_cache_hit_total` is surfaced to operators instead of staying backend-only.
+- Added a persistent aggregate update report panel in the Utility Inspector that replays the latest live result first and falls back to `aggregates_update_all` audit history when the session cache is empty.
 
 ### Fixed
 - WebUI API request fallback now retries relative path when absolute `/api/...` returns `404`, reducing route-mount mismatch issues.
@@ -27,12 +28,13 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Repeated repo-metadata fallback sources in `update-all` now reuse batch-local sync records, which reduced live fallback churn and brought the latest live batch back to `source_sync_failed = 0`.
 - Compound Engineering update plans no longer execute the invalid bare command `bunx @every-env/compound-plugin`; they now run the explicit `install compound-engineering --to codex --codexHome ...` flow, and fallback attempts no longer count as failures once a later registry runner succeeds.
 - After the Compound Engineering command fix, the latest live `update-all` run has converged to `failure_count = 0`, leaving only explicit `manual_managed` blocked units in the aggregate summary.
+- Aggregate update execution is no longer only visible through transient alerts; the panel now retains a structured, clickable execution report in the Utility Inspector.
 
 ### Documentation
 - Added troubleshooting steps for `Failed to load config: 404 Not Found` in both Chinese and English docs.
 - Clarified WebUI access path and hard-refresh guidance for stale frontend cache.
 - Added copy-ready AI prompt templates in README and install/config docs for one-click config bootstrap, incremental target merge, and diagnostics.
-- Updated status/docs/changelog to reflect the 2026-04-12 live runtime state (`update-all`, cache-aware aggregate UI summary, Compound Engineering specialized update command, `8099` recovery, and `pytest -q -> 177 passed`).
+- Updated status/docs/changelog to reflect the 2026-04-12 live runtime state (`update-all`, aggregate update report panel, cache-aware aggregate UI summary, Compound Engineering specialized update command, `8099` recovery, and `pytest -q -> 178 passed`).
 
 ## [v0.2.0] - 2026-03-17
 

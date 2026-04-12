@@ -244,8 +244,12 @@ To call the feature "complete", the next implementation steps should be:
   - `source_sync_cache_hit_total` is now surfaced in the frontend summary instead of remaining backend-only:
     - the current “Update All Aggregates” summary now shows `Source sync cache reuses: {count}`
     - the matching debug log line now includes `sync_cache_hits=...`
+  - The Utility Inspector now includes a dedicated “Aggregate Update Report” panel:
+    - it prefers the latest in-session `update-all` result
+    - it falls back to `aggregates_update_all` audit history when no live session result is cached
+    - blocked / failed groups can be clicked to focus the related install-unit/source detail
 - Full regression result is now:
-  - `pytest -q` -> `177 passed`
+  - `pytest -q` -> `178 passed`
 
 - WebUI now renders a rollback audit trail panel backed by `/api/skills/audit?action=rollback`, with automatic switching between current-aggregate scope and global recent records.
 - Rollback flow now supports selective rollback by `source_id`, so operators can scope blast radius instead of always rolling back the full aggregate.
