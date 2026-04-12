@@ -241,6 +241,9 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
     - `skipped_install_unit_total = 7`
     - `failure_taxonomy.failed_install_unit_total = 0`
     - `failure_taxonomy.blocked_reason_groups[0] = manual_managed:7`
+  - `source_sync_cache_hit_total` 现已从后端指标提升到前端摘要可见项：
+    - 当前 “更新全部聚合” 提示会显示 `Source Sync 结果复用 {count} 次`
+    - 对应 debug log 也会显示 `sync_cache_hits=...`
 - 当前完整回归结果已更新：
   - `pytest -q` -> `177 passed`
 

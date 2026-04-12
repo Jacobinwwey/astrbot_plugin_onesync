@@ -241,6 +241,9 @@ To call the feature "complete", the next implementation steps should be:
     - `skipped_install_unit_total = 7`
     - `failure_taxonomy.failed_install_unit_total = 0`
     - `failure_taxonomy.blocked_reason_groups[0] = manual_managed:7`
+  - `source_sync_cache_hit_total` is now surfaced in the frontend summary instead of remaining backend-only:
+    - the current “Update All Aggregates” summary now shows `Source sync cache reuses: {count}`
+    - the matching debug log line now includes `sync_cache_hits=...`
 - Full regression result is now:
   - `pytest -q` -> `177 passed`
 
