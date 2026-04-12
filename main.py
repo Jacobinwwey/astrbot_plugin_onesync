@@ -418,6 +418,7 @@ class OneSyncPlugin(Star):
         self._webui_server: OneSyncWebUIServer | None = None
         self._web_jobs: dict[str, dict[str, Any]] = {}
         self._web_job_tasks: dict[str, asyncio.Task] = {}
+        self._git_checkout_prewarm_tasks: dict[str, asyncio.Task] = {}
         self._max_web_jobs = 40
         self._debug_logs: list[dict[str, Any]] = []
         self._debug_log_seq = 0
@@ -466,6 +467,15 @@ class OneSyncPlugin(Star):
         if web_tasks:
             await asyncio.gather(*web_tasks, return_exceptions=True)
         self._web_job_tasks.clear()
+
+        git_checkout_tasks = list(self._git_checkout_prewarm_tasks.values())
+        for task in git_checkout_tasks:
+            if task.done():
+                continue
+            task.cancel()
+        if git_checkout_tasks:
+            await asyncio.gather(*git_checkout_tasks, return_exceptions=True)
+        self._git_checkout_prewarm_tasks.clear()
 
         if self._worker_task and not self._worker_task.done():
             self._worker_task.cancel()
@@ -1232,6 +1242,333 @@ class OneSyncPlugin(Star):
         )
         return ok
 
+    def _git_remote_origin_url(self, checkout_path: str | Path) -> str:
+        ok, output = self._run_git_probe(
+            ["remote", "get-url", "origin"],
+            cwd=checkout_path,
+            timeout_s=15,
+        )
+        return output.strip() if ok else ""
+
+    def _resolve_preferred_git_remote_locator(
+        self,
+        locator: str,
+        *,
+        current_origin: str = "",
+    ) -> str:
+        normalized_locator = str(locator or "").strip()
+        candidates = self._candidate_git_clone_locators(normalized_locator)
+        ordered_candidates: list[str] = []
+        current_origin_text = str(current_origin or "").strip()
+        if current_origin_text and current_origin_text in candidates:
+            ordered_candidates.append(current_origin_text)
+        for candidate in candidates:
+            if candidate and candidate not in ordered_candidates:
+                ordered_candidates.append(candidate)
+        if not ordered_candidates and normalized_locator:
+            ordered_candidates.append(normalized_locator)
+
+        for candidate in ordered_candidates:
+            ok, _ = self._run_git_probe(
+                ["ls-remote", candidate, "HEAD"],
+                timeout_s=20,
+            )
+            if ok:
+                return candidate
+        return ordered_candidates[0] if ordered_candidates else normalized_locator
+
+    def _align_managed_git_checkout_remote(
+        self,
+        checkout_path: str | Path,
+        locator: str,
+        *,
+        preferred_locator: str = "",
+    ) -> dict[str, Any]:
+        checkout_dir = Path(checkout_path)
+        if not checkout_dir.exists() or not self._path_is_git_worktree(checkout_dir):
+            return {
+                "ok": False,
+                "message": f"managed checkout path is not a git worktree: {checkout_dir}",
+                "error_code": "git_checkout_invalid",
+                "remote_locator": "",
+            }
+
+        locator_text = str(locator or "").strip()
+        if not locator_text:
+            return {
+                "ok": False,
+                "message": "git repo locator is unavailable",
+                "error_code": "git_repo_locator_missing",
+                "remote_locator": "",
+            }
+
+        current_origin = self._git_remote_origin_url(checkout_dir)
+        target_origin = str(preferred_locator or "").strip() or self._resolve_preferred_git_remote_locator(
+            locator_text,
+            current_origin=current_origin,
+        )
+        if not target_origin:
+            return {
+                "ok": False,
+                "message": "preferred git remote locator could not be resolved",
+                "error_code": "git_remote_locator_unresolved",
+                "remote_locator": "",
+            }
+
+        if current_origin == target_origin:
+            return {
+                "ok": True,
+                "message": f"managed git remote already aligned: {target_origin}",
+                "error_code": "",
+                "remote_locator": target_origin,
+            }
+
+        if current_origin:
+            ok, output = self._run_git_probe(
+                ["remote", "set-url", "origin", target_origin],
+                cwd=checkout_dir,
+                timeout_s=20,
+            )
+        else:
+            ok, output = self._run_git_probe(
+                ["remote", "add", "origin", target_origin],
+                cwd=checkout_dir,
+                timeout_s=20,
+            )
+        if not ok:
+            return {
+                "ok": False,
+                "message": output or f"failed to align git remote for {checkout_dir}",
+                "error_code": "git_remote_align_failed",
+                "remote_locator": current_origin,
+            }
+
+        return {
+            "ok": True,
+            "message": f"managed git remote aligned to {target_origin}",
+            "error_code": "",
+            "remote_locator": target_origin,
+        }
+
+    def _supports_managed_git_checkout(self, source_row: dict[str, Any] | None) -> bool:
+        row = source_row if isinstance(source_row, dict) else {}
+        spec = self._resolve_source_git_checkout_spec(row)
+        locator = str(spec.get("locator") or "").strip()
+        if not locator:
+            return False
+        manager = str(
+            row.get("install_manager")
+            or row.get("managed_by")
+            or row.get("registry_package_manager")
+            or ""
+        ).strip().lower()
+        return manager in {"git", "github"}
+
+    def _git_checkout_prewarm_key(self, source_row: dict[str, Any] | None) -> str:
+        row = source_row if isinstance(source_row, dict) else {}
+        spec = self._resolve_source_git_checkout_spec(row)
+        locator = str(spec.get("locator") or "").strip()
+        if locator:
+            return locator
+        source_id = _normalize_inventory_id(row.get("source_id", ""), default="")
+        return source_id
+
+    def _iter_git_checkout_prewarm_candidates(
+        self,
+        source_rows: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
+        seen_keys: set[str] = set()
+        for row in source_rows or []:
+            if not isinstance(row, dict) or not self._supports_managed_git_checkout(row):
+                continue
+            prewarm_key = self._git_checkout_prewarm_key(row)
+            if not prewarm_key or prewarm_key in seen_keys:
+                continue
+            seen_keys.add(prewarm_key)
+            candidates.append(dict(row))
+        return candidates
+
+    def _apply_git_checkout_metadata_to_cached_snapshot(
+        self,
+        source_ids: list[str],
+        source_payload_by_id: dict[str, dict[str, Any]],
+    ) -> None:
+        normalized_source_ids = {
+            _normalize_inventory_id(item, default="")
+            for item in source_ids
+            if _normalize_inventory_id(item, default="")
+        }
+        if not normalized_source_ids or not isinstance(source_payload_by_id, dict):
+            return
+
+        skills_state = self._skills_state()
+        snapshot = skills_state.get("last_overview", {})
+        if not isinstance(snapshot, dict) or not snapshot:
+            return
+
+        registry = snapshot.get("registry", {})
+        if isinstance(registry, dict):
+            registry_sources = registry.get("sources", [])
+            if isinstance(registry_sources, list):
+                for index, item in enumerate(registry_sources):
+                    if not isinstance(item, dict):
+                        continue
+                    source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+                    if source_id not in normalized_source_ids:
+                        continue
+                    payload = source_payload_by_id.get(source_id)
+                    if isinstance(payload, dict):
+                        registry_sources[index] = payload
+
+        snapshot_source_rows = snapshot.get("source_rows", [])
+        if isinstance(snapshot_source_rows, list):
+            for item in snapshot_source_rows:
+                if not isinstance(item, dict):
+                    continue
+                source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+                if source_id not in normalized_source_ids:
+                    continue
+                payload = source_payload_by_id.get(source_id)
+                if not isinstance(payload, dict):
+                    continue
+                for key in (
+                    "git_checkout_path",
+                    "git_checkout_managed",
+                    "git_checkout_error",
+                    "last_refresh_at",
+                ):
+                    item[key] = payload.get(key)
+        skills_state["last_overview"] = snapshot
+
+    def _persist_git_checkout_metadata_for_locator(
+        self,
+        locator: str,
+        source_payload: dict[str, Any],
+    ) -> None:
+        locator_text = str(locator or "").strip()
+        if not locator_text or not isinstance(source_payload, dict):
+            return
+
+        current_registry = self._load_saved_skills_registry()
+        registry_sources = current_registry.get("sources", [])
+        updated_registry = current_registry
+        updated_source_ids: list[str] = []
+
+        for item in registry_sources:
+            if not isinstance(item, dict) or not self._supports_managed_git_checkout(item):
+                continue
+            spec = self._resolve_source_git_checkout_spec(item)
+            item_locator = str(spec.get("locator") or "").strip()
+            if item_locator != locator_text:
+                continue
+            source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+            if not source_id:
+                continue
+            merged_source_payload = {
+                **item,
+                **source_payload,
+                "source_id": source_id,
+            }
+            updated_registry = refresh_registry_source(
+                updated_registry,
+                source_id,
+                merged_source_payload,
+                generated_at=_now_iso(),
+            )
+            updated_source_ids.append(source_id)
+
+        if not updated_source_ids:
+            return
+
+        saved_registry = self._save_skills_registry(updated_registry)
+        payload_by_id: dict[str, dict[str, Any]] = {}
+        for item in saved_registry.get("sources", []):
+            if not isinstance(item, dict):
+                continue
+            source_id = _normalize_inventory_id(item.get("source_id", ""), default="")
+            if source_id in updated_source_ids:
+                payload_by_id[source_id] = item
+                if source_id:
+                    self._write_json_file(self.skills_sources_dir / f"{source_id}.json", item)
+
+        self._apply_git_checkout_metadata_to_cached_snapshot(updated_source_ids, payload_by_id)
+
+    async def _run_git_checkout_prewarm(self, source_row: dict[str, Any]) -> None:
+        row = dict(source_row) if isinstance(source_row, dict) else {}
+        if not row:
+            return
+
+        source_id = _normalize_inventory_id(row.get("source_id", ""), default="")
+        spec = self._resolve_source_git_checkout_spec(row)
+        locator = str(spec.get("locator") or "").strip()
+        if not locator:
+            return
+
+        try:
+            ensure_result = await asyncio.to_thread(self._ensure_source_git_checkout, row)
+        except Exception as exc:  # pragma: no cover - defensive branch
+            self._push_debug_log(
+                "warn",
+                f"git checkout prewarm failed: source={source_id or locator} error={exc}",
+                source="skills",
+            )
+            return
+
+        next_row = dict(row)
+        if ensure_result.get("ok"):
+            next_row["git_checkout_path"] = str(ensure_result.get("checkout_path") or "").strip()
+            next_row["git_checkout_managed"] = _to_bool(ensure_result.get("managed", False), False)
+            next_row["git_checkout_error"] = ""
+        else:
+            next_row["git_checkout_path"] = ""
+            next_row["git_checkout_managed"] = True
+            next_row["git_checkout_error"] = str(ensure_result.get("message") or "").strip()
+
+        self._persist_git_checkout_metadata_for_locator(locator, next_row)
+        self._push_debug_log(
+            "info" if ensure_result.get("ok") else "warn",
+            (
+                "git checkout prewarm finished: "
+                f"source={source_id or locator} ok={bool(ensure_result.get('ok'))} "
+                f"path={next_row.get('git_checkout_path') or '-'}"
+            ),
+            source="skills",
+        )
+
+    def _schedule_git_checkout_prewarm(self, source_rows: list[dict[str, Any]] | None) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        for row in self._iter_git_checkout_prewarm_candidates(source_rows):
+            prewarm_key = self._git_checkout_prewarm_key(row)
+            if not prewarm_key:
+                continue
+            existing_task = self._git_checkout_prewarm_tasks.get(prewarm_key)
+            if existing_task and not existing_task.done():
+                continue
+
+            task = loop.create_task(
+                self._run_git_checkout_prewarm(row),
+                name=f"onesync-git-checkout-prewarm-{_normalize_inventory_id(prewarm_key, default='source')}",
+            )
+            self._git_checkout_prewarm_tasks[prewarm_key] = task
+
+            def _cleanup(done_task: asyncio.Task, *, task_key: str = prewarm_key) -> None:
+                current_task = self._git_checkout_prewarm_tasks.get(task_key)
+                if current_task is done_task:
+                    self._git_checkout_prewarm_tasks.pop(task_key, None)
+                try:
+                    done_task.result()
+                except asyncio.CancelledError:
+                    pass
+                except Exception as exc:  # pragma: no cover - defensive branch
+                    logger.warning("[onesync] git checkout prewarm task failed: %s", exc)
+
+            task.add_done_callback(_cleanup)
+
     def _resolve_source_git_checkout_spec(self, source_row: dict[str, Any] | None) -> dict[str, Any]:
         row = source_row if isinstance(source_row, dict) else {}
         candidates = [
@@ -1307,6 +1644,7 @@ class OneSyncPlugin(Star):
         if checkout_dir.exists() and not self._path_is_git_worktree(checkout_dir):
             shutil.rmtree(checkout_dir, ignore_errors=True)
 
+        clone_locator_used = ""
         if not checkout_dir.exists():
             clone_errors: list[str] = []
             clone_candidates = self._candidate_git_clone_locators(locator)
@@ -1326,6 +1664,7 @@ class OneSyncPlugin(Star):
                     timeout_s=60,
                 )
                 if ok_clone:
+                    clone_locator_used = clone_locator
                     break
                 clone_errors.append(f"{clone_locator}: {clone_output}")
                 if checkout_dir.exists() and not self._path_is_git_worktree(checkout_dir):
@@ -1347,13 +1686,19 @@ class OneSyncPlugin(Star):
                 "error_code": "git_checkout_invalid",
             }
 
-        preferred_locator = next(iter(self._candidate_git_clone_locators(locator)), locator)
-        if preferred_locator:
-            self._run_git_probe(
-                ["remote", "set-url", "origin", preferred_locator],
-                cwd=checkout_dir,
-                timeout_s=20,
-            )
+        remote_result = self._align_managed_git_checkout_remote(
+            checkout_dir,
+            locator,
+            preferred_locator=clone_locator_used,
+        )
+        if not remote_result.get("ok"):
+            return {
+                "ok": False,
+                "checkout_path": "",
+                "managed": True,
+                "message": str(remote_result.get("message") or "").strip() or f"git remote alignment failed for {checkout_dir}",
+                "error_code": str(remote_result.get("error_code") or "git_remote_align_failed").strip(),
+            }
 
         return {
             "ok": True,
@@ -1372,6 +1717,13 @@ class OneSyncPlugin(Star):
 
         existing_checkout_path = str(row.get("git_checkout_path") or "").strip()
         if existing_checkout_path and self._path_is_git_worktree(existing_checkout_path):
+            spec = self._resolve_source_git_checkout_spec(row)
+            locator = str(spec.get("locator") or "").strip()
+            if locator and _to_bool(row.get("git_checkout_managed", False), False):
+                align_result = self._align_managed_git_checkout_remote(existing_checkout_path, locator)
+                if not align_result.get("ok"):
+                    row["git_checkout_error"] = str(align_result.get("message") or "").strip()
+                    return row
             row["git_checkout_path"] = existing_checkout_path
             row["git_checkout_managed"] = _to_bool(row.get("git_checkout_managed", False), False)
             row["git_checkout_error"] = ""
@@ -1718,6 +2070,7 @@ class OneSyncPlugin(Star):
             if isinstance(last_overview, dict) and last_overview:
                 self._augment_skills_runtime_health(last_overview)
                 self._skills_state()["last_overview"] = last_overview
+                self._schedule_git_checkout_prewarm(last_overview.get("source_rows", []))
         return snapshot
 
     def webui_get_inventory_payload(self) -> dict[str, Any]:
@@ -5386,7 +5739,7 @@ class OneSyncPlugin(Star):
             return {}
 
         source_row = source_payload if isinstance(source_payload, dict) else {}
-        sync_row = sync_payload if isinstance(sync_payload, dict) else {}
+        sync_row = sync_payload if isinstance(sync_payload, dict) and sync_payload else None
         current_registry = self._load_saved_skills_registry()
         registry_source = next(
             (
@@ -5416,7 +5769,7 @@ class OneSyncPlugin(Star):
             "update_policy": str(source_row.get("update_policy") or ""),
             "source_exists": _to_bool(source_row.get("source_exists", False), False),
             "last_seen_at": str(source_row.get("last_seen_at") or ""),
-            "last_refresh_at": str(sync_row.get("sync_checked_at") or _now_iso()),
+            "last_refresh_at": str((sync_row or {}).get("sync_checked_at") or _now_iso()),
             "source_age_days": source_row.get("source_age_days"),
             "freshness_status": str(source_row.get("freshness_status") or "missing"),
             "registry_package_name": str(source_row.get("registry_package_name") or ""),
@@ -5427,24 +5780,48 @@ class OneSyncPlugin(Star):
             "compatible_software_ids": _to_str_list(source_row.get("compatible_software_ids", [])),
             "compatible_software_families": _to_str_list(source_row.get("compatible_software_families", [])),
             "tags": _to_str_list(source_row.get("tags", [])),
-            "sync_status": str(sync_row.get("sync_status") or ""),
-            "sync_checked_at": str(sync_row.get("sync_checked_at") or ""),
-            "sync_kind": str(sync_row.get("sync_kind") or ""),
-            "sync_message": str(sync_row.get("sync_message") or ""),
-            "sync_local_revision": str(sync_row.get("sync_local_revision") or ""),
-            "sync_remote_revision": str(sync_row.get("sync_remote_revision") or ""),
-            "sync_resolved_revision": str(sync_row.get("sync_resolved_revision") or ""),
-            "sync_branch": str(sync_row.get("sync_branch") or ""),
-            "sync_dirty": _to_bool(sync_row.get("sync_dirty", False), False),
-            "sync_error_code": str(sync_row.get("sync_error_code") or ""),
+            "sync_status": str((sync_row or {}).get("sync_status") or ""),
+            "sync_checked_at": str((sync_row or {}).get("sync_checked_at") or ""),
+            "sync_kind": str((sync_row or {}).get("sync_kind") or ""),
+            "sync_message": str((sync_row or {}).get("sync_message") or ""),
+            "sync_local_revision": str((sync_row or {}).get("sync_local_revision") or ""),
+            "sync_remote_revision": str((sync_row or {}).get("sync_remote_revision") or ""),
+            "sync_resolved_revision": str((sync_row or {}).get("sync_resolved_revision") or ""),
+            "sync_branch": str((sync_row or {}).get("sync_branch") or ""),
+            "sync_dirty": _to_bool((sync_row or {}).get("sync_dirty", False), False),
+            "sync_error_code": str((sync_row or {}).get("sync_error_code") or ""),
             "git_checkout_path": str(source_row.get("git_checkout_path") or ""),
             "git_checkout_managed": _to_bool(source_row.get("git_checkout_managed", False), False),
             "git_checkout_error": str(source_row.get("git_checkout_error") or ""),
-            "registry_latest_version": str(sync_row.get("registry_latest_version") or ""),
-            "registry_published_at": str(sync_row.get("registry_published_at") or ""),
-            "registry_homepage": str(sync_row.get("registry_homepage") or ""),
-            "registry_description": str(sync_row.get("registry_description") or ""),
+            "registry_latest_version": str((sync_row or {}).get("registry_latest_version") or ""),
+            "registry_published_at": str((sync_row or {}).get("registry_published_at") or ""),
+            "registry_homepage": str((sync_row or {}).get("registry_homepage") or ""),
+            "registry_description": str((sync_row or {}).get("registry_description") or ""),
         }
+
+        if sync_row is None and isinstance(registry_source, dict):
+            for key in (
+                "sync_status",
+                "sync_checked_at",
+                "sync_kind",
+                "sync_message",
+                "sync_local_revision",
+                "sync_remote_revision",
+                "sync_resolved_revision",
+                "sync_branch",
+                "sync_dirty",
+                "sync_error_code",
+                "registry_latest_version",
+                "registry_published_at",
+                "registry_homepage",
+                "registry_description",
+            ):
+                merged_fields[key] = registry_source.get(key)
+            merged_fields["last_refresh_at"] = str(
+                source_row.get("last_refresh_at")
+                or registry_source.get("last_refresh_at")
+                or _now_iso()
+            )
 
         if isinstance(registry_source, dict):
             updated_registry = refresh_registry_source(

@@ -168,6 +168,14 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
   - 当前受管 checkout 目录形态：
     - `/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-55d42a13a220`
     - `/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-7d7c7a8d88f1`
+- 受管 git checkout 预热队列已落地：
+  - `_refresh_inventory_snapshot()` 在生成最新 skills snapshot 后，会后台调度 git-backed source 的 checkout prewarm，不再要求首个 sync/update 请求同步承担 bootstrap 延迟。
+  - 当前 8099 live debug log 已可见预热完成记录：
+    - `git checkout prewarm finished: source=npx_global_find_skills ...`
+    - `git checkout prewarm finished: source=npx_global_frontend_design ...`
+- 已有受管 checkout 的 remote 对齐已增强：
+  - 对已经存在的 `git_checkout_path`，系统现在会在 detail/sync/update 前执行一次 remote 对齐，不再只在首次 clone 后设置 `origin`。
+  - 若当前 remote 不可达，会自动回退到可达 candidate；若当前 remote 仍可用，则保持当前 origin，避免无谓切换。
 - sync 元数据写回已修正：
   - `saved_registry` 现在是 sync 字段的权威来源，成功 update 后不会再残留旧的 `sync_error_code`。
 - `synthetic_single:*` 无真实包边界聚合已收敛为 `manual_only`：
@@ -188,8 +196,16 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
   - `success_count = 8`
   - `failure_count = 2`
   - `precheck_failure_count = 0`
+- 8099 live 当前启动与校验结果：
+  - WebUI 已恢复监听：`http://127.0.0.1:8099`
+  - `find-skills` 单项 install-unit update 再次实测成功：
+    - `success_count = 3`
+    - `failure_count = 0`
+    - `precheck_failure_count = 0`
+  - `find-skills` 当前 update 已稳定走受管 checkout：
+    - `git -C /root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-55d42a13a220 pull --ff-only`
 - 当前完整回归结果已更新：
-  - `pytest -q` -> `164 passed`
+  - `pytest -q` -> `168 passed`
 
 - WebUI 已接入回滚审计轨迹面板：从 `/api/skills/audit?action=rollback` 拉取记录并在当前聚合与全局最近回滚之间自动切换展示。
 - 回滚流程已支持“按 source_id 选择子集回滚”，避免对整个聚合盲目全量回滚。

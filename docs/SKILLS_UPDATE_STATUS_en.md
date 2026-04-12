@@ -168,6 +168,14 @@ To call the feature "complete", the next implementation steps should be:
   - Current managed checkout directories include:
     - `/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-55d42a13a220`
     - `/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-7d7c7a8d88f1`
+- Managed git checkout prewarm queue is now live:
+  - `_refresh_inventory_snapshot()` now schedules background prewarm for git-backed sources after the latest skills snapshot is built, so the first sync/update request no longer absorbs checkout bootstrap latency on the critical path.
+  - The live 8099 debug log now shows prewarm completion entries such as:
+    - `git checkout prewarm finished: source=npx_global_find_skills ...`
+    - `git checkout prewarm finished: source=npx_global_frontend_design ...`
+- Existing managed checkout remote alignment is now hardened:
+  - When a `git_checkout_path` already exists, OneSync now re-aligns the checkout remote before detail/sync/update flows instead of only setting `origin` during the first clone.
+  - If the current remote becomes unreachable, OneSync falls back to a reachable candidate; if the current remote is still healthy, it is preserved to avoid unnecessary churn.
 - Sync metadata writeback is now authoritative:
   - `saved_registry` is treated as the authority for sync fields, so successful sync/update no longer leaves stale error codes behind.
 - `synthetic_single:*` no-package-boundary aggregates are now stabilized as `manual_only`:
@@ -188,8 +196,16 @@ To call the feature "complete", the next implementation steps should be:
   - `success_count = 8`
   - `failure_count = 2`
   - `precheck_failure_count = 0`
+- Current live 8099 startup and verification status:
+  - WebUI is listening again at `http://127.0.0.1:8099`
+  - Single install-unit update for `find-skills` succeeded again:
+    - `success_count = 3`
+    - `failure_count = 0`
+    - `precheck_failure_count = 0`
+  - `find-skills` update is now stably executed through the managed checkout path:
+    - `git -C /root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-55d42a13a220 pull --ff-only`
 - Full regression result is now:
-  - `pytest -q` -> `164 passed`
+  - `pytest -q` -> `168 passed`
 
 - WebUI now renders a rollback audit trail panel backed by `/api/skills/audit?action=rollback`, with automatic switching between current-aggregate scope and global recent records.
 - Rollback flow now supports selective rollback by `source_id`, so operators can scope blast radius instead of always rolling back the full aggregate.

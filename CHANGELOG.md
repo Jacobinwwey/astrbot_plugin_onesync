@@ -11,18 +11,20 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Supports prompt scenarios: bootstrap apply, incremental target merge, and diagnose/repair.
 - Added aggregate-wide skills update route `POST /api/skills/aggregates/update-all` and matching WebUI action `Update All Aggregates`.
 - Added managed git checkout bootstrap for git-backed `skill_lock` / repo-derived skill sources under `plugin_data/.../skills/git_repos`.
+- Added background managed git checkout prewarm after snapshot refresh so git-backed sources can bootstrap before the first operator-triggered sync/update call.
 
 ### Fixed
 - WebUI API request fallback now retries relative path when absolute `/api/...` returns `404`, reducing route-mount mismatch issues.
 - `synthetic_single:*` skill aggregates without a real package boundary are now stabilized as `manual_only` instead of generating bogus `npx npx_global_*` update commands.
 - Git-backed skill updates no longer require the leaf skill directory itself to be a git worktree; OneSync now bootstraps and reuses a managed checkout.
 - Sync metadata writeback now treats saved registry sync fields as authoritative, preventing stale `sync_error_code` values from surviving after a successful sync/update.
+- Existing managed git checkouts are now re-aligned before runtime detail/sync/update flows, and the live 8099 runtime was restored after syncing the missing AstrBot skill adapter modules needed by the new mainline.
 
 ### Documentation
 - Added troubleshooting steps for `Failed to load config: 404 Not Found` in both Chinese and English docs.
 - Clarified WebUI access path and hard-refresh guidance for stale frontend cache.
 - Added copy-ready AI prompt templates in README and install/config docs for one-click config bootstrap, incremental target merge, and diagnostics.
-- Updated README, status docs, operations docs, and implementation logs to reflect the 2026-04-12 live runtime state (`update-all`, managed git checkout bootstrap, and current support boundaries).
+- Updated status/docs/changelog to reflect the 2026-04-12 live runtime state (`update-all`, background prewarm, managed checkout remote alignment, `8099` recovery, and `pytest -q -> 168 passed`).
 
 ## [v0.2.0] - 2026-03-17
 
