@@ -129,6 +129,29 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("blocked_reason_groups", html)
         self.assertIn("source_sync_cache_hit_total", html)
 
+    def test_inventory_panel_exposes_aggregate_update_report_hooks(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventoryAggregateUpdateReport"', html)
+        self.assertIn('id="inventoryAggregateUpdateReportTitle"', html)
+        self.assertIn('id="inventoryAggregateUpdateReportNote"', html)
+        self.assertIn('id="inventoryAggregateUpdateReportRows"', html)
+        self.assertIn("inventory_aggregate_update_report_title", html)
+        self.assertIn("inventory_aggregate_update_report_waiting", html)
+        self.assertIn("inventory_aggregate_update_report_empty", html)
+        self.assertIn("inventory_aggregate_update_report_summary", html)
+        self.assertIn("inventory_aggregate_update_report_failures", html)
+        self.assertIn("inventory_aggregate_update_report_blocked", html)
+        self.assertIn("inventory_aggregate_update_report_cache_hits", html)
+        self.assertIn("inventory_aggregate_update_guidance_manual_managed", html)
+        self.assertIn("function normalizeInventoryAggregateUpdateReport(", html)
+        self.assertIn("function normalizeInventoryAggregateUpdateAuditRows(", html)
+        self.assertIn("function loadAggregateUpdateAuditTrail(", html)
+        self.assertIn("function renderInventoryAggregateUpdateReportPanel(", html)
+        self.assertIn("inventoryAggregateUpdateReportRows", html)
+        self.assertIn("inventoryAggregateUpdateAuditRows", html)
+        self.assertIn("/api/skills/audit?limit=40&action=aggregates_update_all", html)
+
     def test_inventory_panel_exposes_install_unit_drilldown_panel(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

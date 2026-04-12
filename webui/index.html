@@ -2858,6 +2858,17 @@
                 </div>
                 <div class="skills-subpanel inventory-inspector-card">
                   <div class="skills-subhead">
+                    <p class="inventory-quick-title" id="inventoryAggregateUpdateReportTitle">聚合更新报告</p>
+                  </div>
+                  <p class="inventory-doctor-note" id="inventoryAggregateUpdateReportNote">等待聚合更新结果...</p>
+                  <div class="inventory-target-drift" id="inventoryAggregateUpdateReport">
+                    <div class="inventory-target-drift-list" id="inventoryAggregateUpdateReportRows">
+                      <div class="debug-empty" id="inventoryAggregateUpdateReportRowsEmpty">暂无聚合更新报告。</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="skills-subpanel inventory-inspector-card">
+                  <div class="skills-subhead">
                     <p class="inventory-quick-title" id="inventoryInstallAtomTitle">Install Atom 账本</p>
                     <div class="skills-subhead-tools">
                       <div class="inventory-segment-block">
@@ -3466,6 +3477,9 @@
       inventoryAstrbotLastActionNote: "",
       inventoryRollbackBeforeRevisionsByAggregateId: {},
       inventoryLastUpdateByAggregateId: {},
+      inventoryAggregateUpdateReport: null,
+      inventoryAggregateUpdateAuditRows: [],
+      inventoryAggregateUpdateAuditLoading: false,
       inventoryRollbackAuditRows: [],
       inventoryRollbackAuditLoading: false,
       inventoryRepairing: false,
@@ -3846,6 +3860,20 @@
         inventory_last_update_group_summary: "{code} · {count} 单元",
         inventory_last_update_group_item: "{installUnit}: {reason}",
         inventory_last_update_reason_unknown: "unknown",
+        inventory_aggregate_update_report_title: "聚合更新报告",
+        inventory_aggregate_update_report_waiting: "等待聚合更新报告...",
+        inventory_aggregate_update_report_empty: "暂无聚合更新报告。",
+        inventory_aggregate_update_report_scope_live: "当前会话",
+        inventory_aggregate_update_report_scope_audit: "最近审计",
+        inventory_aggregate_update_report_summary: "执行 {executed} · 失败 {failed} · 跳过 {skipped}",
+        inventory_aggregate_update_report_failures: "失败分组",
+        inventory_aggregate_update_report_blocked: "受阻分组",
+        inventory_aggregate_update_report_cache_hits: "Source Sync 结果复用 {count} 次",
+        inventory_aggregate_update_report_at: "完成时间: {time}",
+        inventory_aggregate_update_guidance_manual_managed: "该分组属于手工维护边界。请改走原生安装/同步流程，或手工维护对应技能目录。",
+        inventory_aggregate_update_guidance_non_syncable_sources_present: "该分组内存在没有 sync adapter 的成员。请先检查 install-unit 详情，再决定是否手工维护。",
+        inventory_aggregate_update_guidance_update_failed: "自动更新命令执行失败。请检查 manager/runtime 环境与命令语义是否匹配。",
+        inventory_aggregate_update_guidance_default: "查看对应 install-unit/source 详情，确认 manager、policy 与 blocked reason。",
         inventory_install_unit_title: "当前聚合运维",
         inventory_install_unit_note_idle: "围绕真实 install unit 或 collection group 执行 refresh / sync / update / deploy，而不是对每条 leaf skill 分别操作。",
         inventory_install_unit_note_ready: "当前将操作 install unit {installUnit}（直接维护边界），目标宿主 {target}。",
@@ -4481,6 +4509,20 @@
         inventory_last_update_group_summary: "{code} · {count} units",
         inventory_last_update_group_item: "{installUnit}: {reason}",
         inventory_last_update_reason_unknown: "unknown",
+        inventory_aggregate_update_report_title: "Aggregate Update Report",
+        inventory_aggregate_update_report_waiting: "Waiting for aggregate update reports...",
+        inventory_aggregate_update_report_empty: "No aggregate update report is available yet.",
+        inventory_aggregate_update_report_scope_live: "Current Session",
+        inventory_aggregate_update_report_scope_audit: "Latest Audit",
+        inventory_aggregate_update_report_summary: "Executed {executed} · Failed {failed} · Skipped {skipped}",
+        inventory_aggregate_update_report_failures: "Failure Groups",
+        inventory_aggregate_update_report_blocked: "Blocked Groups",
+        inventory_aggregate_update_report_cache_hits: "Source sync cache reuses: {count}",
+        inventory_aggregate_update_report_at: "Completed at: {time}",
+        inventory_aggregate_update_guidance_manual_managed: "This group is intentionally manual-managed. Use the native install/sync workflow or maintain the skill directory directly.",
+        inventory_aggregate_update_guidance_non_syncable_sources_present: "This group contains members without a sync adapter. Review the install-unit detail before deciding on manual maintenance.",
+        inventory_aggregate_update_guidance_update_failed: "The automatic update command failed. Check manager/runtime availability and whether the generated command matches the package semantics.",
+        inventory_aggregate_update_guidance_default: "Review the install-unit/source detail to confirm manager, policy, and blocked reason.",
         inventory_install_unit_title: "Current Aggregate Operations",
         inventory_install_unit_note_idle: "Operate on real install units or collection groups for refresh, sync, update, and deploy instead of touching every leaf skill separately.",
         inventory_install_unit_note_ready: "Current action scope: install unit {installUnit} targeting {target}; this is the direct maintenance boundary.",
@@ -5284,6 +5326,8 @@
       $("inventoryDeployInstallAll").textContent = t("inventory_deploy_install_all");
       $("inventoryDoctorBtn").textContent = t("inventory_doctor");
       $("inventoryDoctorSummary").textContent = t("inventory_doctor_waiting");
+      $("inventoryAggregateUpdateReportTitle").textContent = t("inventory_aggregate_update_report_title");
+      $("inventoryAggregateUpdateReportNote").textContent = t("inventory_aggregate_update_report_waiting");
       $("inventoryInstallAtomTitle").textContent = t("inventory_install_atom_title");
       $("inventoryInstallAtomSummary").textContent = t("inventory_install_atom_waiting");
       $("inventoryInstallAtomFilterLabel").textContent = t("inventory_install_atom_filter_label");
@@ -5313,6 +5357,10 @@
       const inventoryInstallAtomRowsEmptyEl = $("inventoryInstallAtomRowsEmpty");
       if (inventoryInstallAtomRowsEmptyEl) {
         inventoryInstallAtomRowsEmptyEl.textContent = t("inventory_install_atom_empty");
+      }
+      const inventoryAggregateUpdateReportRowsEmptyEl = $("inventoryAggregateUpdateReportRowsEmpty");
+      if (inventoryAggregateUpdateReportRowsEmptyEl) {
+        inventoryAggregateUpdateReportRowsEmptyEl.textContent = t("inventory_aggregate_update_report_empty");
       }
       $("inventorySourceDetailScopeTitle").textContent = t("inventory_detail_scope_title");
       $("inventorySourceDetailScopeCollection").textContent = t("inventory_detail_scope_collection");
@@ -7906,12 +7954,236 @@
         updated_at: new Date().toISOString(),
         success_count: Number(update.success_count) || 0,
         failure_count: Number(update.failure_count) || 0,
+        source_sync_cache_hit_total: Number(update.source_sync_cache_hit_total || 0) || 0,
         executed_install_unit_ids: executedInstallUnitIds,
         source_sync_install_unit_ids: sourceSyncInstallUnitIds,
         skipped_install_unit_ids: skippedInstallUnitIds,
         skipped_manual_only_install_unit_ids: skippedManualOnlyInstallUnitIds,
         blocked_rows: blockedRows,
       };
+    }
+
+    function normalizeInventoryAggregateUpdateAuditRows(rows) {
+      const normalizedRows = [];
+      (Array.isArray(rows) ? rows : []).forEach((item) => {
+        if (!item || typeof item !== "object") return;
+        const action = String(item.action || "").trim().toLowerCase();
+        if (action !== "aggregates_update_all") return;
+        const payload = item.payload && typeof item.payload === "object" ? item.payload : {};
+        normalizedRows.push({
+          timestamp: String(item.timestamp || "").trim(),
+          action,
+          source_id: String(item.source_id || "").trim(),
+          candidate_install_unit_total: Number(payload.candidate_install_unit_total || 0) || 0,
+          planned_install_unit_total: Number(payload.planned_install_unit_total || 0) || 0,
+          executed_install_unit_ids: dedupeInventorySourceIds(payload.executed_install_unit_ids),
+          success_count: Number(payload.success_count || 0) || 0,
+          failure_count: Number(payload.failure_count || 0) || 0,
+          skipped_install_unit_total: Number(payload.skipped_install_unit_total || 0) || 0,
+          source_sync_success_count: Number(payload.source_sync_success_count || 0) || 0,
+          source_sync_failure_count: Number(payload.source_sync_failure_count || 0) || 0,
+          source_sync_cache_hit_total: Number(payload.source_sync_cache_hit_total || 0) || 0,
+          failure_taxonomy: payload.failure_taxonomy && typeof payload.failure_taxonomy === "object"
+            ? payload.failure_taxonomy
+            : {},
+          payload,
+        });
+      });
+      return normalizedRows;
+    }
+
+    function inventoryAggregateUpdateGuidance(reasonCode) {
+      const normalized = String(reasonCode || "").trim().toLowerCase();
+      if (normalized === "manual_managed") {
+        return t("inventory_aggregate_update_guidance_manual_managed");
+      }
+      if (normalized === "non_syncable_sources_present") {
+        return t("inventory_aggregate_update_guidance_non_syncable_sources_present");
+      }
+      if (normalized === "update_failed") {
+        return t("inventory_aggregate_update_guidance_update_failed");
+      }
+      return t("inventory_aggregate_update_guidance_default");
+    }
+
+    function normalizeInventoryAggregateUpdateReport(payload) {
+      const root = payload && typeof payload === "object" ? payload : {};
+      const update = root.update && typeof root.update === "object" ? root.update : root;
+      if (!update || typeof update !== "object" || !Object.keys(update).length) {
+        return null;
+      }
+      const failureTaxonomy = update.failure_taxonomy && typeof update.failure_taxonomy === "object"
+        ? update.failure_taxonomy
+        : {};
+      return {
+        source: String(root.source || update.source || "live").trim().toLowerCase() || "live",
+        updated_at: String(root.updated_at || root.timestamp || update.updated_at || "").trim()
+          || new Date().toISOString(),
+        message: String(update.message || "").trim(),
+        candidate_install_unit_total: Number(update.candidate_install_unit_total || 0) || 0,
+        planned_install_unit_total: Number(update.planned_install_unit_total || 0) || 0,
+        executed_install_unit_total: Number(
+          update.executed_install_unit_total
+          || (Array.isArray(update.executed_install_unit_ids) ? update.executed_install_unit_ids.length : 0),
+        ) || 0,
+        success_count: Number(update.success_count || 0) || 0,
+        failure_count: Number(update.failure_count || 0) || 0,
+        skipped_install_unit_total: Number(
+          update.skipped_install_unit_total
+          ?? update.unsupported_install_unit_total
+          ?? 0,
+        ) || 0,
+        source_sync_install_unit_total: Number(update.source_sync_install_unit_total || 0) || 0,
+        source_sync_cache_hit_total: Number(update.source_sync_cache_hit_total || 0) || 0,
+        blocked_reason_groups: Array.isArray(failureTaxonomy.blocked_reason_groups)
+          ? failureTaxonomy.blocked_reason_groups.filter((item) => item && typeof item === "object")
+          : [],
+        failed_reason_groups: Array.isArray(failureTaxonomy.failed_install_unit_reason_groups)
+          ? failureTaxonomy.failed_install_unit_reason_groups.filter((item) => item && typeof item === "object")
+          : [],
+        failure_taxonomy: failureTaxonomy,
+      };
+    }
+
+    async function loadAggregateUpdateAuditTrail({ silent = true } = {}) {
+      if (state.inventoryAggregateUpdateAuditLoading) {
+        return normalizeInventoryAggregateUpdateAuditRows(state.inventoryAggregateUpdateAuditRows);
+      }
+      state.inventoryAggregateUpdateAuditLoading = true;
+      if (!silent) {
+        renderInventoryPanel();
+      }
+      try {
+        const payload = await api("/api/skills/audit?limit=40&action=aggregates_update_all");
+        state.inventoryAggregateUpdateAuditRows = normalizeInventoryAggregateUpdateAuditRows(payload && payload.items);
+      } catch (_err) {
+        if (!Array.isArray(state.inventoryAggregateUpdateAuditRows)) {
+          state.inventoryAggregateUpdateAuditRows = [];
+        }
+      } finally {
+        state.inventoryAggregateUpdateAuditLoading = false;
+        if (!silent) {
+          renderInventoryPanel();
+        }
+      }
+      return normalizeInventoryAggregateUpdateAuditRows(state.inventoryAggregateUpdateAuditRows);
+    }
+
+    function renderInventoryAggregateUpdateReportPanel() {
+      const titleEl = $("inventoryAggregateUpdateReportTitle");
+      const noteEl = $("inventoryAggregateUpdateReportNote");
+      const rowsEl = $("inventoryAggregateUpdateReportRows");
+      if (!titleEl || !noteEl || !rowsEl) {
+        return null;
+      }
+      titleEl.textContent = t("inventory_aggregate_update_report_title");
+
+      const auditRows = normalizeInventoryAggregateUpdateAuditRows(state.inventoryAggregateUpdateAuditRows);
+      const liveReport = normalizeInventoryAggregateUpdateReport(state.inventoryAggregateUpdateReport);
+      const report = liveReport || (auditRows.length
+        ? normalizeInventoryAggregateUpdateReport({
+          ...auditRows[0],
+          source: "audit",
+          update: {
+            ...auditRows[0].payload,
+            failure_taxonomy: auditRows[0].failure_taxonomy,
+          },
+          timestamp: auditRows[0].timestamp,
+        })
+        : null);
+      if (state.inventoryAggregateUpdateAuditLoading && !report) {
+        noteEl.textContent = t("inventory_aggregate_update_report_waiting");
+        rowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_aggregate_update_report_waiting"))}</div>`;
+        return null;
+      }
+      if (!report) {
+        noteEl.textContent = t("inventory_aggregate_update_report_empty");
+        rowsEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("inventory_aggregate_update_report_empty"))}</div>`;
+        return null;
+      }
+
+      const updatedAtText = String(report.updated_at || "").trim()
+        ? toLocalTime(String(report.updated_at || "").trim())
+        : "-";
+      const scopeLabel = t(
+        String(report.source || "").trim().toLowerCase() === "live"
+          ? "inventory_aggregate_update_report_scope_live"
+          : "inventory_aggregate_update_report_scope_audit",
+      );
+      noteEl.textContent = [
+        scopeLabel,
+        t("inventory_aggregate_update_report_summary", {
+          executed: Number(report.executed_install_unit_total || 0) || 0,
+          failed: Number(report.failure_count || 0) || 0,
+          skipped: Number(report.skipped_install_unit_total || 0) || 0,
+        }),
+        t("inventory_aggregate_update_report_at", { time: updatedAtText }),
+      ].join(" · ");
+
+      const failedGroups = Array.isArray(report.failed_reason_groups) ? report.failed_reason_groups : [];
+      const blockedGroups = Array.isArray(report.blocked_reason_groups) ? report.blocked_reason_groups : [];
+      const renderGroupSection = (titleKey, groups, keyName, dataAttrName = "") => {
+        if (!groups.length) return "";
+        return `
+          <div class="inventory-last-update-groups">
+            <div class="meta">${escapeHtml(t(titleKey))}</div>
+            ${groups.map((group) => {
+              const installUnitIds = dedupeInventorySourceIds(group.install_unit_ids);
+              const primaryInstallUnitId = installUnitIds[0] || "";
+              const codeValue = String(group[keyName] || "unknown").trim() || "unknown";
+              const countValue = Number(group.count || 0) || 0;
+              const guidance = titleKey === "inventory_aggregate_update_report_blocked"
+                ? inventoryAggregateUpdateGuidance(codeValue)
+                : inventoryAggregateUpdateGuidance(codeValue);
+              return `
+                <details>
+                  <summary ${primaryInstallUnitId && dataAttrName ? `${dataAttrName}="${escapeHtml(primaryInstallUnitId)}"` : ""}>${escapeHtml(t("inventory_last_update_group_summary", {
+                    code: codeValue,
+                    count: countValue,
+                  }))}</summary>
+                  <div class="inventory-last-update-group-list">
+                    <div class="inventory-last-update-group-item">${escapeHtml(guidance)}</div>
+                    ${installUnitIds.map((installUnitId) => `
+                      <div class="inventory-last-update-group-item" ${primaryInstallUnitId && dataAttrName ? `${dataAttrName}="${escapeHtml(installUnitId)}"` : ""}>${escapeHtml(installUnitId)}</div>
+                    `).join("")}
+                  </div>
+                </details>
+              `;
+            }).join("")}
+          </div>
+        `;
+      };
+
+      rowsEl.innerHTML = `
+        <div class="inventory-last-update-summary">
+          <div class="meta">${escapeHtml(t("inventory_aggregate_update_report_summary", {
+            executed: Number(report.executed_install_unit_total || 0) || 0,
+            failed: Number(report.failure_count || 0) || 0,
+            skipped: Number(report.skipped_install_unit_total || 0) || 0,
+          }))}</div>
+          <div class="meta">${escapeHtml(t("inventory_aggregate_update_all_source_sync", {
+            count: Number(report.source_sync_install_unit_total || 0) || 0,
+          }))}</div>
+          ${Number(report.source_sync_cache_hit_total || 0) > 0 ? `
+            <div class="meta">${escapeHtml(t("inventory_aggregate_update_report_cache_hits", {
+              count: Number(report.source_sync_cache_hit_total || 0) || 0,
+            }))}</div>
+          ` : ""}
+          ${renderGroupSection(
+            "inventory_aggregate_update_report_failures",
+            failedGroups,
+            "failure_reason",
+            'data-inventory-aggregate-report-install-unit-id',
+          )}
+          ${renderGroupSection(
+            "inventory_aggregate_update_report_blocked",
+            blockedGroups,
+            "reason_code",
+            'data-inventory-aggregate-report-install-unit-id',
+          )}
+        </div>
+      `;
+      return report;
     }
 
     function getInventoryLastUpdateForAggregate(aggregateContext) {
@@ -8616,6 +8888,7 @@
         await refreshSelectedDeployTargetDetail();
         const update = result.update && typeof result.update === "object" ? result.update : {};
         const sourceSyncInstallUnitTotal = Number(update.source_sync_install_unit_total) || 0;
+        const sourceSyncCacheHitTotal = Number(update.source_sync_cache_hit_total) || 0;
         const skippedInstallUnitTotal = Number(
           update.skipped_install_unit_total ?? update.unsupported_install_unit_total,
         ) || 0;
@@ -8682,7 +8955,13 @@
         }
         const updateMessage = String(update.message || "").trim();
         const mergedSummary = summaryLines.join("\n");
+        state.inventoryAggregateUpdateReport = normalizeInventoryAggregateUpdateReport({
+          source: "live",
+          updated_at: new Date().toISOString(),
+          update,
+        });
         alert(updateMessage ? `${mergedSummary}\n\n${updateMessage}` : mergedSummary);
+        renderInventoryPanel();
         return result;
       } finally {
         state.inventoryUpdatingAllAggregates = false;
@@ -9694,6 +9973,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
         : `<div class="debug-empty">${t(deployRows.length ? "inventory_deploy_empty_filtered" : "inventory_deploy_empty")}</div>`;
 
       doctorSummaryEl.textContent = inventoryDoctorSummaryText(doctor);
+      renderInventoryAggregateUpdateReportPanel();
       installAtomSummaryEl.textContent = t("inventory_install_atom_summary", {
         total: installAtomCounts.total || 0,
         resolved: installAtomCounts.resolved || 0,
@@ -10443,10 +10723,11 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
     async function loadInventory({ force = false } = {}) {
       const endpoint = force ? "/api/skills/import" : "/api/skills/overview";
       const options = force ? { method: "POST", body: JSON.stringify({}) } : {};
-      const [data, installAtomPayload, rollbackAuditPayload] = await Promise.all([
+      const [data, installAtomPayload, rollbackAuditPayload, aggregateUpdateAuditPayload] = await Promise.all([
         api(endpoint, options),
         api("/api/skills/install-atoms").catch(() => null),
         api("/api/skills/audit?limit=120&action=rollback").catch(() => null),
+        api("/api/skills/audit?limit=40&action=aggregates_update_all").catch(() => null),
       ]);
       state.inventoryOverview = data.skills || data.inventory || data;
       if (installAtomPayload && typeof installAtomPayload === "object") {
@@ -10461,6 +10742,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       }
       if (rollbackAuditPayload && typeof rollbackAuditPayload === "object") {
         state.inventoryRollbackAuditRows = normalizeInventoryRollbackAuditRows(rollbackAuditPayload.items);
+      }
+      if (aggregateUpdateAuditPayload && typeof aggregateUpdateAuditPayload === "object") {
+        state.inventoryAggregateUpdateAuditRows = normalizeInventoryAggregateUpdateAuditRows(aggregateUpdateAuditPayload.items);
       }
       state.inventoryTargetDetail = null;
       state.inventorySourceDetail = null;
@@ -12349,6 +12633,20 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           : null;
         if (!rowEl) return;
         const installUnitId = String(rowEl.getAttribute("data-inventory-atom-report-install-unit-id") || "").trim();
+        if (!installUnitId) return;
+        try {
+          await focusInventorySourceByInstallUnit(installUnitId, { silent: false });
+        } catch (err) {
+          alert(err && err.message ? err.message : t("inventory_install_atom_locate_error", { installUnit: installUnitId }));
+        }
+      });
+
+      $("inventoryAggregateUpdateReportRows").addEventListener("click", async (evt) => {
+        const rowEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-aggregate-report-install-unit-id]")
+          : null;
+        if (!rowEl) return;
+        const installUnitId = String(rowEl.getAttribute("data-inventory-aggregate-report-install-unit-id") || "").trim();
         if (!installUnitId) return;
         try {
           await focusInventorySourceByInstallUnit(installUnitId, { silent: false });
