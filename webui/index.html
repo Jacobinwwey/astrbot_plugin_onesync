@@ -3873,6 +3873,7 @@
         inventory_aggregate_update_all_confirm: "即将更新全部聚合\n\n候选 Install Unit: {total}\n该操作会批量执行所有可执行的聚合更新计划，并自动跳过 manual-only / 不可执行项。",
         inventory_aggregate_update_all_success: "全部聚合更新完成: 成功 {count} 条命令，失败 {failed} 条，实际执行聚合 {executed} 个，受阻聚合 {unsupported} 个。",
         inventory_aggregate_update_all_source_sync: "Source Sync 执行单元 {count} 个。",
+        inventory_aggregate_update_all_source_sync_cache_hits: "Source Sync 结果复用 {count} 次。",
         inventory_aggregate_update_all_skipped: "跳过受阻聚合 {count} 个。",
         inventory_aggregate_update_all_deduped: "已去重重复聚合 {count} 个。",
         inventory_aggregate_update_all_failure_reasons: "主要失败原因: {summary}",
@@ -4507,6 +4508,7 @@
         inventory_aggregate_update_all_confirm: "You are about to update all aggregates.\n\nCandidate install units: {total}\nThis will batch-run every actionable aggregate update plan and skip manual-only or blocked entries automatically.",
         inventory_aggregate_update_all_success: "All aggregate updates finished: {count} commands succeeded, {failed} failed, {executed} aggregates executed, {unsupported} blocked.",
         inventory_aggregate_update_all_source_sync: "Source sync units executed: {count}.",
+        inventory_aggregate_update_all_source_sync_cache_hits: "Source sync cache reuses: {count}.",
         inventory_aggregate_update_all_skipped: "Blocked aggregates skipped: {count}.",
         inventory_aggregate_update_all_deduped: "Duplicate aggregates deduplicated: {count}.",
         inventory_aggregate_update_all_failure_reasons: "Top failure reasons: {summary}",
@@ -8543,6 +8545,7 @@
         await refreshSelectedDeployTargetDetail();
         const update = result.update && typeof result.update === "object" ? result.update : {};
         const sourceSyncInstallUnitTotal = Number(update.source_sync_install_unit_total) || 0;
+        const sourceSyncCacheHitTotal = Number(update.source_sync_cache_hit_total) || 0;
         const skippedInstallUnitTotal = Number(
           update.skipped_install_unit_total ?? update.unsupported_install_unit_total,
         ) || 0;
@@ -8638,6 +8641,11 @@
         if (sourceSyncInstallUnitTotal > 0) {
           summaryLines.push(
             t("inventory_aggregate_update_all_source_sync", { count: sourceSyncInstallUnitTotal }),
+          );
+        }
+        if (sourceSyncCacheHitTotal > 0) {
+          summaryLines.push(
+            t("inventory_aggregate_update_all_source_sync_cache_hits", { count: sourceSyncCacheHitTotal }),
           );
         }
         if (skippedInstallUnitTotal > 0) {

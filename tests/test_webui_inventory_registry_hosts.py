@@ -124,8 +124,10 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
 
         self.assertIn("inventory_aggregate_update_all_failure_reasons", html)
         self.assertIn("inventory_aggregate_update_all_blocked_reasons", html)
+        self.assertIn("inventory_aggregate_update_all_source_sync_cache_hits", html)
         self.assertIn("failed_install_unit_reason_groups", html)
         self.assertIn("blocked_reason_groups", html)
+        self.assertIn("source_sync_cache_hit_total", html)
 
     def test_inventory_panel_exposes_install_unit_drilldown_panel(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")

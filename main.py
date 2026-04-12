@@ -4956,6 +4956,7 @@ class OneSyncPlugin(Star):
                 "failure_count": execution.get("failure_count", 0),
                 "source_sync_success_count": execution.get("source_sync_success_count", 0),
                 "source_sync_failure_count": execution.get("source_sync_failure_count", 0),
+                "source_sync_cache_hit_total": execution.get("source_sync_cache_hit_total", 0),
                 "skipped_install_unit_total": len(skipped_install_unit_ids),
                 "failure_taxonomy": failure_taxonomy,
             },
@@ -4989,6 +4990,7 @@ class OneSyncPlugin(Star):
                 f"failed={execution.get('failure_count', 0)} "
                 f"sync_ok={execution.get('source_sync_success_count', 0)} "
                 f"sync_failed={execution.get('source_sync_failure_count', 0)} "
+                f"sync_cache_hits={execution.get('source_sync_cache_hit_total', 0)} "
                 f"skipped={len(skipped_install_unit_ids)} "
                 f"deduped={len(duplicate_install_unit_ids)} "
                 f"failed_reasons=[{failed_reason_tail or '-'}] "
@@ -5007,6 +5009,7 @@ class OneSyncPlugin(Star):
             "failure_count": execution.get("failure_count", 0),
             "precheck_failure_count": execution.get("precheck_failure_count", 0),
             "skipped_install_unit_total": len(skipped_install_unit_ids),
+            "source_sync_cache_hit_total": execution.get("source_sync_cache_hit_total", 0),
             "failure_taxonomy": failure_taxonomy,
             "updated_install_unit_ids": executed_install_unit_ids,
             "failed_install_units": execution.get("failed_install_units", []),

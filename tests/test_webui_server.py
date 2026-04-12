@@ -491,6 +491,7 @@ class _FakePlugin:
             "failure_count": 0,
             "precheck_failure_count": 0,
             "skipped_install_unit_total": 0,
+            "source_sync_cache_hit_total": 0,
             "failure_taxonomy": {
                 "failed_install_unit_total": 0,
                 "failed_install_unit_reason_groups": [],
@@ -510,6 +511,7 @@ class _FakePlugin:
                 "source_sync_install_unit_total": 0,
                 "skipped_install_unit_total": 0,
                 "executed_install_unit_total": 1,
+                "source_sync_cache_hit_total": 0,
                 "failure_taxonomy": {
                     "failed_install_unit_total": 0,
                     "failed_install_unit_reason_groups": [],
