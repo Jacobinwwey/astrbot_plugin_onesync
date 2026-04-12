@@ -473,3 +473,83 @@ class OneSyncPluginGitCheckoutPrewarmTests(unittest.IsolatedAsyncioTestCase):
 
         gate.set()
         await asyncio.gather(*list(plugin._git_checkout_prewarm_tasks.values()), return_exceptions=True)
+
+    async def test_execute_install_unit_source_sync_plans_reuses_repo_metadata_sync_records(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin._augment_source_row_with_git_checkout = lambda source: dict(source)
+        plugin._update_saved_registry_source_metadata = lambda **kwargs: {}
+
+        source_rows = [
+            {
+                "source_id": "npx_global_javascript_pro",
+                "install_unit_id": "repo:https://github.com/AndyAnh174/wellness.git#skills/javascript-pro",
+                "source_path": "/root/.codex/skills/javascript-pro",
+                "locator": "/root/.codex/skills/javascript-pro",
+                "install_ref": "https://github.com/AndyAnh174/wellness.git#.agent/skills/javascript-pro",
+                "install_manager": "manual",
+                "update_policy": "registry",
+            },
+            {
+                "source_id": "npx_global_javascript_mastery",
+                "install_unit_id": "repo:https://github.com/AndyAnh174/wellness.git#skills/javascript-mastery",
+                "source_path": "/root/.codex/skills/javascript-mastery",
+                "locator": "/root/.codex/skills/javascript-mastery",
+                "install_ref": "https://github.com/AndyAnh174/wellness.git#.agent/skills/javascript-mastery",
+                "install_manager": "manual",
+                "update_policy": "registry",
+            },
+        ]
+        plans = [
+            {
+                "install_unit_id": "repo:https://github.com/AndyAnh174/wellness.git#skills/javascript-pro",
+                "display_name": "AndyAnh174/wellness :: javascript-pro",
+                "manager": "manual",
+                "policy": "source_sync",
+                "source_ids": ["npx_global_javascript_pro"],
+            },
+            {
+                "install_unit_id": "repo:https://github.com/AndyAnh174/wellness.git#skills/javascript-mastery",
+                "display_name": "AndyAnh174/wellness :: javascript-mastery",
+                "manager": "manual",
+                "policy": "source_sync",
+                "source_ids": ["npx_global_javascript_mastery"],
+            },
+        ]
+
+        original_builder = MAIN_MODULE.build_source_sync_record
+        call_count = {"value": 0}
+
+        def _fake_build_source_sync_record(source_row, *, checked_at=None, urlopen=None, git_runner=None, timeout_s=8):
+            _ = checked_at, urlopen, git_runner, timeout_s
+            call_count["value"] += 1
+            return {
+                "ok": True,
+                "sync_status": "ok",
+                "sync_kind": "repo_metadata_github",
+                "sync_message": f"fetched github repository metadata for {source_row.get('source_id')}",
+                "sync_local_revision": "",
+                "sync_remote_revision": "rev-demo",
+                "sync_resolved_revision": "rev-demo",
+                "sync_branch": "",
+                "sync_dirty": False,
+                "sync_error_code": "",
+                "registry_latest_version": "rev-demo",
+                "registry_published_at": "",
+                "registry_homepage": "https://github.com/AndyAnh174/wellness",
+                "registry_description": "demo",
+            }
+
+        MAIN_MODULE.build_source_sync_record = _fake_build_source_sync_record
+        try:
+            result = OneSyncPlugin._execute_install_unit_source_sync_plans(
+                plugin,
+                plans,
+                source_rows,
+            )
+        finally:
+            MAIN_MODULE.build_source_sync_record = original_builder
+
+        self.assertEqual(1, call_count["value"])
+        self.assertEqual(2, result["source_sync_success_count"])
+        self.assertEqual(0, result["source_sync_failure_count"])
+        self.assertEqual(1, result["source_sync_cache_hit_total"])

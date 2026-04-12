@@ -182,6 +182,9 @@ To call the feature "complete", the next implementation steps should be:
     - `https://gh.llkk.cc/https://github.com/anthropics/skills.git`
 - Sync metadata writeback is now authoritative:
   - `saved_registry` is treated as the authority for sync fields, so successful sync/update no longer leaves stale error codes behind.
+- Batch-local repo metadata dedupe is now live for source-sync fallback:
+  - When multiple fallback sources in one `update-all` run point at the same upstream repo, OneSync now reuses a single repo metadata sync record instead of repeatedly querying the same upstream.
+  - In the current runtime, the 5 fallback sources pointing at `sickn33/antigravity-awesome-skills` can now share one batch sync result.
 - `synthetic_single:*` no-package-boundary aggregates are now stabilized as `manual_only`:
   - bogus commands like `npx npx_global_*` are no longer generated
   - the stable skipped set now includes:
@@ -221,8 +224,13 @@ To call the feature "complete", the next implementation steps should be:
     - `failure_taxonomy.blocked_reason_groups[0] = non_syncable_sources_present:6`
   - Debug logs now include failed/blocking reason tails:
     - `failed_reasons=[update_failed:1] blocked_reasons=[non_syncable_sources_present:6]`
+  - After introducing repo metadata batch dedupe, the latest live `update-all` is back to:
+    - `success_count = 19`
+    - `failure_count = 2`
+    - `failure_taxonomy.failed_source_total = 0`
+    - `update.source_sync_cache_hit_total = 4`
 - Full regression result is now:
-  - `pytest -q` -> `172 passed`
+  - `pytest -q` -> `175 passed`
 
 - WebUI now renders a rollback audit trail panel backed by `/api/skills/audit?action=rollback`, with automatic switching between current-aggregate scope and global recent records.
 - Rollback flow now supports selective rollback by `source_id`, so operators can scope blast radius instead of always rolling back the full aggregate.

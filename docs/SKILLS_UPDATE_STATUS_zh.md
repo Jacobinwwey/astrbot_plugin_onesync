@@ -182,6 +182,9 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
     - `https://gh.llkk.cc/https://github.com/anthropics/skills.git`
 - sync 元数据写回已修正：
   - `saved_registry` 现在是 sync 字段的权威来源，成功 update 后不会再残留旧的 `sync_error_code`。
+- source-sync fallback 的批次内 repo metadata 去重已落地：
+  - 对同一轮 `update-all` 中多个指向同一 upstream repo 的 fallback source，不再重复请求同一份 repo metadata。
+  - 当前运行态中，5 条 `sickn33/antigravity-awesome-skills` fallback source 已可复用同一批次 sync 结果。
 - `synthetic_single:*` 无真实包边界聚合已收敛为 `manual_only`：
   - 不再生成伪命令 `npx npx_global_*`
   - 当前 stable skipped 集合包括：
@@ -221,8 +224,13 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
     - `failure_taxonomy.blocked_reason_groups[0] = non_syncable_sources_present:6`
   - debug log 也已带上失败/受阻摘要：
     - `failed_reasons=[update_failed:1] blocked_reasons=[non_syncable_sources_present:6]`
+  - 在引入 repo metadata 批次去重后，最新 live `update-all` 已恢复为：
+    - `success_count = 19`
+    - `failure_count = 2`
+    - `failure_taxonomy.failed_source_total = 0`
+    - `update.source_sync_cache_hit_total = 4`
 - 当前完整回归结果已更新：
-  - `pytest -q` -> `172 passed`
+  - `pytest -q` -> `175 passed`
 
 - WebUI 已接入回滚审计轨迹面板：从 `/api/skills/audit?action=rollback` 拉取记录并在当前聚合与全局最近回滚之间自动切换展示。
 - 回滚流程已支持“按 source_id 选择子集回滚”，避免对整个聚合盲目全量回滚。

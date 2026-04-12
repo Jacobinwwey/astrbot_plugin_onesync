@@ -376,6 +376,45 @@ def is_source_syncable(source: dict[str, Any] | None) -> bool:
     return False
 
 
+def build_source_sync_cache_key(source: dict[str, Any] | None) -> str:
+    source_row = source if isinstance(source, dict) else {}
+    package_name = _normalize_text(source_row.get("registry_package_name"))
+    package_manager = _normalize_manager(source_row.get("registry_package_manager"))
+    if package_name and package_manager == "npm":
+        return f"npm_registry:{package_name}"
+
+    if _is_git_syncable(source_row):
+        checkout_path = _normalize_text(source_row.get("git_checkout_path")) or _normalize_text(source_row.get("source_path"))
+        locator = _normalize_text(source_row.get("locator"))
+        if checkout_path:
+            return f"git_checkout:{checkout_path}"
+        if locator:
+            return f"git_remote:{locator}"
+        return ""
+
+    repo_target = _resolve_repo_metadata_target(source_row)
+    if repo_target:
+        provider = _normalize_text(repo_target.get("provider")).lower() or "repo"
+        if provider == "github":
+            owner = _normalize_text(repo_target.get("owner"))
+            repo = _normalize_text(repo_target.get("repo"))
+            if owner and repo:
+                return f"repo_metadata:github:{owner}/{repo}"
+        if provider == "gitlab":
+            namespace = _normalize_text(repo_target.get("namespace"))
+            if namespace:
+                return f"repo_metadata:gitlab:{namespace}"
+        if provider == "bitbucket":
+            workspace = _normalize_text(repo_target.get("workspace"))
+            repo = _normalize_text(repo_target.get("repo"))
+            if workspace and repo:
+                return f"repo_metadata:bitbucket:{workspace}/{repo}"
+        homepage = _normalize_text(repo_target.get("homepage"))
+        if homepage:
+            return f"repo_metadata:{provider}:{homepage}"
+    return ""
+
+
 def _run_git_command(
     args: list[str],
     *,

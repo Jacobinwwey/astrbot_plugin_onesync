@@ -58,7 +58,7 @@ from .skills_astrbot_actions_core import (
     set_astrbot_skill_active,
 )
 from .skills_astrbot_state_core import resolve_astrbot_host_layout
-from .source_sync_core import build_source_sync_record, is_source_syncable
+from .source_sync_core import build_source_sync_cache_key, build_source_sync_record, is_source_syncable
 from .updater_core import (
     CheckResult,
     CommandRunner,
@@ -3495,6 +3495,7 @@ class OneSyncPlugin(Star):
             "source_sync_install_unit_total": 0,
             "source_sync_success_count": 0,
             "source_sync_failure_count": 0,
+            "source_sync_cache_hit_total": 0,
         }
 
     def _merge_install_unit_execution_summaries(
@@ -3545,6 +3546,7 @@ class OneSyncPlugin(Star):
                 "source_sync_install_unit_total",
                 "source_sync_success_count",
                 "source_sync_failure_count",
+                "source_sync_cache_hit_total",
             ):
                 merged[numeric_key] = int(merged.get(numeric_key, 0) or 0) + int(summary.get(numeric_key, 0) or 0)
 
@@ -3707,6 +3709,9 @@ class OneSyncPlugin(Star):
         failed_install_units: list[dict[str, Any]] = []
         synced_source_ids: list[str] = []
         failed_sources: list[dict[str, Any]] = []
+        source_sync_record_cache: dict[str, dict[str, Any]] = {}
+        source_sync_cache_hit_total = 0
+        batch_checked_at = _now_iso()
 
         for plan in plans:
             install_unit_id = str(plan.get("install_unit_id") or "").strip()
@@ -3773,7 +3778,17 @@ class OneSyncPlugin(Star):
                 if not source_id:
                     continue
                 source_with_checkout = self._augment_source_row_with_git_checkout(source)
-                sync_record = build_source_sync_record(source_with_checkout)
+                cache_key = build_source_sync_cache_key(source_with_checkout)
+                sync_record = source_sync_record_cache.get(cache_key) if cache_key else None
+                if isinstance(sync_record, dict):
+                    source_sync_cache_hit_total += 1
+                else:
+                    sync_record = build_source_sync_record(
+                        source_with_checkout,
+                        checked_at=batch_checked_at,
+                    )
+                    if cache_key:
+                        source_sync_record_cache[cache_key] = dict(sync_record)
                 self._update_saved_registry_source_metadata(
                     source_id=source_id,
                     source_payload=source_with_checkout,
@@ -3892,6 +3907,7 @@ class OneSyncPlugin(Star):
             "source_sync_install_unit_total": len(install_unit_results),
             "source_sync_success_count": source_sync_success_count,
             "source_sync_failure_count": source_sync_failure_count,
+            "source_sync_cache_hit_total": source_sync_cache_hit_total,
         }
 
     def _capture_git_revisions_for_sources(

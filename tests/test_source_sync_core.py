@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from source_sync_core import (
+    build_source_sync_cache_key,
     build_source_sync_record,
     fetch_npm_registry_package_summary,
     is_source_syncable,
@@ -33,6 +34,48 @@ class _FakeResponse:
 
 
 class SourceSyncCoreTests(unittest.TestCase):
+    def test_build_source_sync_cache_key_uses_repo_root_for_repo_metadata_sources(self) -> None:
+        key_a = build_source_sync_cache_key(
+            {
+                "source_id": "javascript_pro",
+                "source_path": "/root/.codex/skills/javascript-pro",
+                "locator": "/root/.codex/skills/javascript-pro",
+                "install_ref": "https://github.com/AndyAnh174/wellness.git#.agent/skills/javascript-pro",
+                "install_manager": "manual",
+                "update_policy": "registry",
+            },
+        )
+        key_b = build_source_sync_cache_key(
+            {
+                "source_id": "javascript_mastery",
+                "source_path": "/root/.codex/skills/javascript-mastery",
+                "locator": "/root/.codex/skills/javascript-mastery",
+                "install_ref": "https://github.com/AndyAnh174/wellness.git#.agent/skills/javascript-mastery",
+                "install_manager": "manual",
+                "update_policy": "registry",
+            },
+        )
+
+        self.assertEqual("repo_metadata:github:AndyAnh174/wellness", key_a)
+        self.assertEqual(key_a, key_b)
+
+    def test_build_source_sync_cache_key_prefers_git_checkout_path(self) -> None:
+        key = build_source_sync_cache_key(
+            {
+                "source_id": "find_skills",
+                "source_path": "/root/.agents/skills/find-skills",
+                "git_checkout_path": "/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-123",
+                "managed_by": "github",
+                "update_policy": "source_sync",
+                "locator": "https://github.com/vercel-labs/skills.git",
+            },
+        )
+
+        self.assertEqual(
+            "git_checkout:/root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-123",
+            key,
+        )
+
     def test_fetch_npm_registry_package_summary(self) -> None:
         def _fake_urlopen(url: str, timeout: int = 0):
             self.assertIn("%40every-env%2Fcompound-plugin", url)

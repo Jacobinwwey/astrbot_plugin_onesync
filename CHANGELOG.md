@@ -13,6 +13,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Added managed git checkout bootstrap for git-backed `skill_lock` / repo-derived skill sources under `plugin_data/.../skills/git_repos`.
 - Added background managed git checkout prewarm after snapshot refresh so git-backed sources can bootstrap before the first operator-triggered sync/update call.
 - Added structured `update-all` failure taxonomy and top-level summary fields so operators can consume major failed/blocking reasons without parsing the nested `update` object.
+- Added batch-local source-sync cache keys so repeated repo metadata lookups inside one aggregate update run are reused instead of hitting the same upstream repo multiple times.
 
 ### Fixed
 - WebUI API request fallback now retries relative path when absolute `/api/...` returns `404`, reducing route-mount mismatch issues.
@@ -21,12 +22,13 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Sync metadata writeback now treats saved registry sync fields as authoritative, preventing stale `sync_error_code` values from surviving after a successful sync/update.
 - Existing managed git checkouts are now re-aligned before runtime detail/sync/update flows, and the live 8099 runtime was restored after syncing the missing AstrBot skill adapter modules needed by the new mainline.
 - Managed checkout remote selection is now probe-based and mirror-aware instead of only preserving the current reachable origin, and `update-all` taxonomy now keeps failed install-unit reasons instead of collapsing them to `unknown`.
+- Repeated repo-metadata fallback sources in `update-all` now reuse batch-local sync records, which reduced live fallback churn and brought the latest live batch back to `source_sync_failed = 0`.
 
 ### Documentation
 - Added troubleshooting steps for `Failed to load config: 404 Not Found` in both Chinese and English docs.
 - Clarified WebUI access path and hard-refresh guidance for stale frontend cache.
 - Added copy-ready AI prompt templates in README and install/config docs for one-click config bootstrap, incremental target merge, and diagnostics.
-- Updated status/docs/changelog to reflect the 2026-04-12 live runtime state (`update-all`, failure taxonomy, mirror-aware remote selection, `8099` recovery, and `pytest -q -> 172 passed`).
+- Updated status/docs/changelog to reflect the 2026-04-12 live runtime state (`update-all`, failure taxonomy, repo metadata batch cache, mirror-aware remote selection, `8099` recovery, and `pytest -q -> 175 passed`).
 
 ## [v0.2.0] - 2026-03-17
 
