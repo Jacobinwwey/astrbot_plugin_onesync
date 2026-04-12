@@ -176,6 +176,10 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 - 已有受管 checkout 的 remote 对齐已增强：
   - 对已经存在的 `git_checkout_path`，系统现在会在 detail/sync/update 前执行一次 remote 对齐，不再只在首次 clone 后设置 `origin`。
   - 若当前 remote 不可达，会自动回退到可达 candidate；若当前 remote 仍可用，则保持当前 origin，避免无谓切换。
+- 受管 checkout remote 选择已进一步升级为 mirror-aware preferred remote：
+  - 现在会对 candidate remotes 做 probe，并在健康候选中择优，而不是只沿用“当前 origin 只要可达就一直保留”的策略。
+  - live 实测中，`frontend-design` 的 managed checkout remote 已发生自动重选，当前已切换到：
+    - `https://gh.llkk.cc/https://github.com/anthropics/skills.git`
 - sync 元数据写回已修正：
   - `saved_registry` 现在是 sync 字段的权威来源，成功 update 后不会再残留旧的 `sync_error_code`。
 - `synthetic_single:*` 无真实包边界聚合已收敛为 `manual_only`：
@@ -204,8 +208,21 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
     - `precheck_failure_count = 0`
   - `find-skills` 当前 update 已稳定走受管 checkout：
     - `git -C /root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-55d42a13a220 pull --ff-only`
+  - `update-all` 顶层返回已补齐 summary 字段：
+    - `candidate_install_unit_total`
+    - `planned_install_unit_total`
+    - `executed_install_unit_total`
+    - `success_count`
+    - `failure_count`
+    - `precheck_failure_count`
+    - `skipped_install_unit_total`
+  - `update-all` 结构化失败分层已可直接读取：
+    - `failure_taxonomy.failed_install_unit_reason_groups[0] = update_failed:1`
+    - `failure_taxonomy.blocked_reason_groups[0] = non_syncable_sources_present:6`
+  - debug log 也已带上失败/受阻摘要：
+    - `failed_reasons=[update_failed:1] blocked_reasons=[non_syncable_sources_present:6]`
 - 当前完整回归结果已更新：
-  - `pytest -q` -> `168 passed`
+  - `pytest -q` -> `172 passed`
 
 - WebUI 已接入回滚审计轨迹面板：从 `/api/skills/audit?action=rollback` 拉取记录并在当前聚合与全局最近回滚之间自动切换展示。
 - 回滚流程已支持“按 source_id 选择子集回滚”，避免对整个聚合盲目全量回滚。

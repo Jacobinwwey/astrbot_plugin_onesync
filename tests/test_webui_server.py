@@ -484,6 +484,22 @@ class _FakePlugin:
             return {"ok": False, "message": "aggregate update-all failed"}
         return {
             "ok": True,
+            "candidate_install_unit_total": 1,
+            "planned_install_unit_total": 1,
+            "executed_install_unit_total": 1,
+            "success_count": 1,
+            "failure_count": 0,
+            "precheck_failure_count": 0,
+            "skipped_install_unit_total": 0,
+            "failure_taxonomy": {
+                "failed_install_unit_total": 0,
+                "failed_install_unit_reason_groups": [],
+                "failed_install_unit_manager_groups": [],
+                "blocked_install_unit_total": 0,
+                "blocked_reason_groups": [],
+                "failed_source_total": 0,
+                "failed_source_sync_error_groups": [],
+            },
             "update": {
                 "supported": True,
                 "actionable": True,
@@ -494,6 +510,15 @@ class _FakePlugin:
                 "source_sync_install_unit_total": 0,
                 "skipped_install_unit_total": 0,
                 "executed_install_unit_total": 1,
+                "failure_taxonomy": {
+                    "failed_install_unit_total": 0,
+                    "failed_install_unit_reason_groups": [],
+                    "failed_install_unit_manager_groups": [],
+                    "blocked_install_unit_total": 0,
+                    "blocked_reason_groups": [],
+                    "failed_source_total": 0,
+                    "failed_source_sync_error_groups": [],
+                },
                 "success_count": 1,
                 "failure_count": 0,
                 "message": "aggregate update-all finished",
@@ -1301,6 +1326,9 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual(200, update_all_resp.status_code)
         self.assertTrue(update_all_resp.json()["ok"])
         self.assertEqual(1, update_all_resp.json()["update"]["planned_install_unit_total"])
+        self.assertEqual(1, update_all_resp.json()["planned_install_unit_total"])
+        self.assertEqual(1, update_all_resp.json()["success_count"])
+        self.assertEqual([], update_all_resp.json()["failure_taxonomy"]["blocked_reason_groups"])
         self.assertEqual(["install:skill_cli"], update_all_resp.json()["updated_install_unit_ids"])
 
         astrbot_toggle_resp = self.client.post(

@@ -150,6 +150,53 @@ OneSyncPlugin = MAIN_MODULE.OneSyncPlugin
 
 
 class OneSyncPluginGitCheckoutTests(unittest.TestCase):
+    def test_resolve_preferred_git_remote_locator_prefers_faster_candidate(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+
+        plugin._candidate_git_clone_locators = lambda _locator: [
+            "https://github.com/vercel-labs/skills.git",
+            "https://edgeone.gh-proxy.com/https://github.com/vercel-labs/skills.git",
+        ]
+        plugin._probe_git_remote_candidate = lambda locator, timeout_s=20: {
+            "locator": locator,
+            "ok": True,
+            "message": "",
+            "duration_ms": 420 if locator.startswith("https://github.com/") else 120,
+        }
+
+        selected = OneSyncPlugin._resolve_preferred_git_remote_locator(
+            plugin,
+            "https://github.com/vercel-labs/skills.git",
+            current_origin="https://github.com/vercel-labs/skills.git",
+        )
+
+        self.assertEqual(
+            "https://edgeone.gh-proxy.com/https://github.com/vercel-labs/skills.git",
+            selected,
+        )
+
+    def test_resolve_preferred_git_remote_locator_keeps_current_when_latency_gap_is_small(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+
+        plugin._candidate_git_clone_locators = lambda _locator: [
+            "https://github.com/vercel-labs/skills.git",
+            "https://edgeone.gh-proxy.com/https://github.com/vercel-labs/skills.git",
+        ]
+        plugin._probe_git_remote_candidate = lambda locator, timeout_s=20: {
+            "locator": locator,
+            "ok": True,
+            "message": "",
+            "duration_ms": 190 if locator.startswith("https://github.com/") else 120,
+        }
+
+        selected = OneSyncPlugin._resolve_preferred_git_remote_locator(
+            plugin,
+            "https://github.com/vercel-labs/skills.git",
+            current_origin="https://github.com/vercel-labs/skills.git",
+        )
+
+        self.assertEqual("https://github.com/vercel-labs/skills.git", selected)
+
     def test_align_managed_git_checkout_remote_uses_reachable_candidate(self) -> None:
         plugin = object.__new__(OneSyncPlugin)
 
@@ -301,6 +348,93 @@ class OneSyncPluginGitCheckoutTests(unittest.TestCase):
         self.assertEqual("git_checkout", updated_row["sync_kind"])
         self.assertEqual("def", updated_row["registry_latest_version"])
         self.assertEqual("/new/checkout", updated_row["git_checkout_path"])
+
+    def test_summarize_update_all_failure_taxonomy_groups_failed_and_blocked_units(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+
+        taxonomy = OneSyncPlugin._summarize_update_all_failure_taxonomy(
+            plugin,
+            failed_install_units=[
+                {
+                    "install_unit_id": "git:one",
+                    "display_name": "Git One",
+                    "manager": "git",
+                    "policy": "source_sync",
+                    "reason_code": "precheck_failed",
+                },
+                {
+                    "install_unit_id": "git:two",
+                    "display_name": "Git Two",
+                    "manager": "git",
+                    "policy": "source_sync",
+                    "reason_code": "precheck_failed",
+                },
+                {
+                    "install_unit_id": "npm:three",
+                    "display_name": "Npm Three",
+                    "manager": "bunx",
+                    "policy": "registry",
+                    "reason_code": "update_failed",
+                },
+            ],
+            install_unit_results=[
+                {
+                    "install_unit_id": "git:one",
+                    "display_name": "Git One",
+                    "manager": "git",
+                    "policy": "source_sync",
+                    "ok": False,
+                    "failure_reason": "precheck_failed",
+                },
+                {
+                    "install_unit_id": "git:two",
+                    "display_name": "Git Two",
+                    "manager": "git",
+                    "policy": "source_sync",
+                    "ok": False,
+                    "failure_reason": "precheck_failed",
+                },
+                {
+                    "install_unit_id": "npm:three",
+                    "display_name": "Npm Three",
+                    "manager": "bunx",
+                    "policy": "registry",
+                    "ok": False,
+                    "failure_reason": "update_failed",
+                },
+            ],
+            blocked_unit_plans=[
+                {
+                    "install_unit_id": "manual:one",
+                    "display_name": "Manual One",
+                    "reason_code": "manual_managed",
+                },
+                {
+                    "install_unit_id": "manual:two",
+                    "display_name": "Manual Two",
+                    "reason_code": "manual_managed",
+                },
+            ],
+            failed_sources=[
+                {
+                    "install_unit_id": "git:one",
+                    "display_name": "Git One",
+                    "source_id": "src:one",
+                    "sync_status": "error",
+                    "sync_error_code": "git_remote_align_failed",
+                }
+            ],
+        )
+
+        self.assertEqual(3, taxonomy["failed_install_unit_total"])
+        self.assertEqual("precheck_failed", taxonomy["failed_install_unit_reason_groups"][0]["failure_reason"])
+        self.assertEqual(2, taxonomy["failed_install_unit_reason_groups"][0]["count"])
+        self.assertEqual("git", taxonomy["failed_install_unit_manager_groups"][0]["manager"])
+        self.assertEqual(2, taxonomy["failed_install_unit_manager_groups"][0]["count"])
+        self.assertEqual("manual_managed", taxonomy["blocked_reason_groups"][0]["reason_code"])
+        self.assertEqual(2, taxonomy["blocked_reason_groups"][0]["count"])
+        self.assertEqual("git_remote_align_failed", taxonomy["failed_source_sync_error_groups"][0]["sync_error_code"])
+        self.assertEqual(1, taxonomy["failed_source_sync_error_groups"][0]["count"])
 
 
 class OneSyncPluginGitCheckoutPrewarmTests(unittest.IsolatedAsyncioTestCase):

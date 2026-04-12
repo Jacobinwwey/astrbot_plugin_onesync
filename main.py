@@ -9,6 +9,7 @@ import secrets
 import shlex
 import shutil
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -1250,6 +1251,26 @@ class OneSyncPlugin(Star):
         )
         return output.strip() if ok else ""
 
+    def _probe_git_remote_candidate(
+        self,
+        locator: str,
+        *,
+        timeout_s: int = 20,
+    ) -> dict[str, Any]:
+        locator_text = str(locator or "").strip()
+        started_at = time.monotonic()
+        ok, output = self._run_git_probe(
+            ["ls-remote", locator_text, "HEAD"],
+            timeout_s=timeout_s,
+        )
+        duration_ms = int(round((time.monotonic() - started_at) * 1000))
+        return {
+            "locator": locator_text,
+            "ok": ok,
+            "message": output,
+            "duration_ms": duration_ms,
+        }
+
     def _resolve_preferred_git_remote_locator(
         self,
         locator: str,
@@ -1267,15 +1288,42 @@ class OneSyncPlugin(Star):
                 ordered_candidates.append(candidate)
         if not ordered_candidates and normalized_locator:
             ordered_candidates.append(normalized_locator)
+        probe_results: list[dict[str, Any]] = []
+        for index, candidate in enumerate(ordered_candidates):
+            result = self._probe_git_remote_candidate(candidate, timeout_s=20)
+            result["index"] = index
+            probe_results.append(result)
 
-        for candidate in ordered_candidates:
-            ok, _ = self._run_git_probe(
-                ["ls-remote", candidate, "HEAD"],
-                timeout_s=20,
-            )
-            if ok:
-                return candidate
-        return ordered_candidates[0] if ordered_candidates else normalized_locator
+        reachable_results = [
+            item
+            for item in probe_results
+            if _to_bool(item.get("ok", False), False)
+        ]
+        if not reachable_results:
+            return ordered_candidates[0] if ordered_candidates else normalized_locator
+
+        reachable_results.sort(
+            key=lambda item: (
+                _to_int(item.get("duration_ms", 0), 0, 0),
+                _to_int(item.get("index", 0), 0, 0),
+            ),
+        )
+        best_result = reachable_results[0]
+        current_result = next(
+            (
+                item
+                for item in reachable_results
+                if str(item.get("locator") or "").strip() == current_origin_text
+            ),
+            None,
+        )
+        # Keep the current origin when it is still healthy and not materially slower.
+        if current_result and (
+            _to_int(current_result.get("duration_ms", 0), 0, 0)
+            <= _to_int(best_result.get("duration_ms", 0), 0, 0) + 150
+        ):
+            return current_origin_text
+        return str(best_result.get("locator") or "").strip() or normalized_locator
 
     def _align_managed_git_checkout_remote(
         self,
@@ -3502,6 +3550,147 @@ class OneSyncPlugin(Star):
 
         return merged
 
+    @staticmethod
+    def _build_update_all_grouped_count_rows(
+        rows: list[dict[str, Any]] | None,
+        *,
+        group_key: str,
+        id_key: str = "install_unit_id",
+        name_key: str = "display_name",
+        fallback_value: str = "unknown",
+    ) -> list[dict[str, Any]]:
+        buckets: dict[str, dict[str, Any]] = {}
+        for item in rows or []:
+            if not isinstance(item, dict):
+                continue
+            raw_value = str(item.get(group_key) or "").strip().lower()
+            bucket_key = raw_value or fallback_value
+            bucket = buckets.setdefault(
+                bucket_key,
+                {
+                    group_key: bucket_key,
+                    "count": 0,
+                    "install_unit_ids": [],
+                    "display_names": [],
+                },
+            )
+            bucket["count"] = int(bucket.get("count", 0) or 0) + 1
+            install_unit_id = str(item.get(id_key) or "").strip()
+            display_name = str(item.get(name_key) or install_unit_id or "").strip()
+            if install_unit_id:
+                bucket["install_unit_ids"] = _dedupe_keep_order(
+                    _to_str_list(bucket.get("install_unit_ids", [])) + [install_unit_id],
+                )
+            if display_name:
+                bucket["display_names"] = _dedupe_keep_order(
+                    _to_str_list(bucket.get("display_names", [])) + [display_name],
+                )
+        return sorted(
+            list(buckets.values()),
+            key=lambda item: (
+                -_to_int(item.get("count", 0), 0, 0),
+                str(item.get(group_key) or "").strip(),
+            ),
+        )
+
+    def _summarize_update_all_failure_taxonomy(
+        self,
+        *,
+        failed_install_units: list[dict[str, Any]] | None,
+        install_unit_results: list[dict[str, Any]] | None,
+        blocked_unit_plans: list[dict[str, Any]] | None,
+        failed_sources: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        failed_install_unit_index: dict[str, dict[str, Any]] = {}
+        for item in failed_install_units or []:
+            if not isinstance(item, dict):
+                continue
+            install_unit_id = str(item.get("install_unit_id") or "").strip()
+            if install_unit_id:
+                failed_install_unit_index[install_unit_id] = item
+
+        failed_install_unit_rows = [
+            {
+                "install_unit_id": install_unit_id,
+                "display_name": str(
+                    item.get("display_name")
+                    or failed_install_unit_index.get(install_unit_id, {}).get("display_name")
+                    or item.get("install_unit_id")
+                    or "install unit"
+                ).strip(),
+                "manager": str(
+                    item.get("manager")
+                    or failed_install_unit_index.get(install_unit_id, {}).get("manager")
+                    or ""
+                ).strip().lower()
+                or "unknown",
+                "policy": str(
+                    item.get("policy")
+                    or failed_install_unit_index.get(install_unit_id, {}).get("policy")
+                    or ""
+                ).strip().lower()
+                or "unknown",
+                "failure_reason": str(
+                    item.get("failure_reason")
+                    or failed_install_unit_index.get(install_unit_id, {}).get("reason_code")
+                    or failed_install_unit_index.get(install_unit_id, {}).get("reason")
+                    or ""
+                ).strip().lower()
+                or "unknown",
+            }
+            for item in (install_unit_results or [])
+            if isinstance(item, dict)
+            and not _to_bool(item.get("ok", False), False)
+            and str(item.get("install_unit_id") or "").strip()
+            for install_unit_id in [str(item.get("install_unit_id") or "").strip()]
+        ]
+        blocked_rows = [
+            {
+                "install_unit_id": str(item.get("install_unit_id") or "").strip(),
+                "display_name": str(
+                    item.get("display_name")
+                    or item.get("install_unit_display_name")
+                    or item.get("install_unit_id")
+                    or "install unit"
+                ).strip(),
+                "reason_code": str(item.get("reason_code") or "").strip().lower() or "unknown",
+            }
+            for item in (blocked_unit_plans or [])
+            if isinstance(item, dict)
+        ]
+        failed_source_rows = [
+            {
+                "install_unit_id": str(item.get("install_unit_id") or "").strip(),
+                "display_name": str(item.get("display_name") or item.get("source_id") or "source").strip(),
+                "sync_error_code": str(item.get("sync_error_code") or "").strip().lower()
+                or str(item.get("sync_status") or "").strip().lower()
+                or "unknown",
+            }
+            for item in (failed_sources or [])
+            if isinstance(item, dict)
+        ]
+        return {
+            "failed_install_unit_total": len(failed_install_unit_rows),
+            "failed_install_unit_reason_groups": self._build_update_all_grouped_count_rows(
+                failed_install_unit_rows,
+                group_key="failure_reason",
+            ),
+            "failed_install_unit_manager_groups": self._build_update_all_grouped_count_rows(
+                failed_install_unit_rows,
+                group_key="manager",
+            ),
+            "blocked_install_unit_total": len(blocked_rows),
+            "blocked_reason_groups": self._build_update_all_grouped_count_rows(
+                blocked_rows,
+                group_key="reason_code",
+            ),
+            "failed_source_total": len(failed_source_rows),
+            "failed_source_sync_error_groups": self._build_update_all_grouped_count_rows(
+                failed_source_rows,
+                group_key="sync_error_code",
+            ),
+        }
+
     def _execute_install_unit_source_sync_plans(
         self,
         update_plans: list[dict[str, Any]] | None,
@@ -3530,6 +3719,10 @@ class OneSyncPlugin(Star):
                     {
                         "install_unit_id": install_unit_id,
                         "reason": "source_sync_rows_missing",
+                        "reason_code": "source_sync_rows_missing",
+                        "display_name": display_name,
+                        "manager": str(plan.get("manager") or "").strip(),
+                        "policy": str(plan.get("policy") or "").strip(),
                         "message": f"source sync failed for {install_unit_id or 'install unit'}: no source members",
                     },
                 )
@@ -3610,8 +3803,11 @@ class OneSyncPlugin(Star):
                     synced_source_ids.append(source_id)
                     continue
                 failed_payload = {
+                    "install_unit_id": install_unit_id,
+                    "display_name": display_name,
                     "source_id": source_id,
                     "sync_status": sync_status,
+                    "sync_error_code": str(sync_record.get("sync_error_code") or "").strip(),
                     "sync_message": sync_message,
                 }
                 unit_failed_sources.append(failed_payload)
@@ -3662,6 +3858,10 @@ class OneSyncPlugin(Star):
                     {
                         "install_unit_id": install_unit_id,
                         "reason": "source_sync_failed",
+                        "reason_code": "source_sync_failed",
+                        "display_name": display_name,
+                        "manager": str(plan.get("manager") or "").strip(),
+                        "policy": str(plan.get("policy") or "").strip(),
                         "message": f"source sync failed for {install_unit_id or 'install unit'}",
                     },
                 )
@@ -4111,6 +4311,10 @@ class OneSyncPlugin(Star):
                     {
                         "install_unit_id": install_unit_id,
                         "reason": failure_reason,
+                        "reason_code": failure_reason,
+                        "display_name": str(plan.get("display_name") or install_unit_id or "").strip(),
+                        "manager": str(plan.get("manager") or "").strip(),
+                        "policy": str(plan.get("policy") or "").strip(),
                         "message": failed_message,
                     },
                 )
@@ -4612,6 +4816,13 @@ class OneSyncPlugin(Star):
         else:
             update_mode = "manual_only"
 
+        failure_taxonomy = self._summarize_update_all_failure_taxonomy(
+            failed_install_units=execution.get("failed_install_units", []),
+            install_unit_results=execution.get("install_unit_results", []),
+            blocked_unit_plans=blocked_unit_plans,
+            failed_sources=execution.get("failed_sources", []),
+        )
+
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         await self._save_state()
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
@@ -4650,6 +4861,7 @@ class OneSyncPlugin(Star):
             "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
             "executed_install_unit_ids": executed_install_unit_ids,
             "executed_install_unit_total": len(executed_install_unit_ids),
+            "failure_taxonomy": failure_taxonomy,
             **execution,
             "message": (
                 "aggregate update-all finished: "
@@ -4674,7 +4886,20 @@ class OneSyncPlugin(Star):
                 "source_sync_success_count": execution.get("source_sync_success_count", 0),
                 "source_sync_failure_count": execution.get("source_sync_failure_count", 0),
                 "skipped_install_unit_total": len(skipped_install_unit_ids),
+                "failure_taxonomy": failure_taxonomy,
             },
+        )
+        blocked_reason_groups = failure_taxonomy.get("blocked_reason_groups", [])
+        failed_reason_groups = failure_taxonomy.get("failed_install_unit_reason_groups", [])
+        blocked_reason_tail = ", ".join(
+            f"{str(item.get('reason_code') or '')}:{int(item.get('count', 0) or 0)}"
+            for item in blocked_reason_groups[:3]
+            if isinstance(item, dict)
+        )
+        failed_reason_tail = ", ".join(
+            f"{str(item.get('failure_reason') or '')}:{int(item.get('count', 0) or 0)}"
+            for item in failed_reason_groups[:3]
+            if isinstance(item, dict)
         )
         self._push_debug_log(
             (
@@ -4694,7 +4919,9 @@ class OneSyncPlugin(Star):
                 f"sync_ok={execution.get('source_sync_success_count', 0)} "
                 f"sync_failed={execution.get('source_sync_failure_count', 0)} "
                 f"skipped={len(skipped_install_unit_ids)} "
-                f"deduped={len(duplicate_install_unit_ids)}"
+                f"deduped={len(duplicate_install_unit_ids)} "
+                f"failed_reasons=[{failed_reason_tail or '-'}] "
+                f"blocked_reasons=[{blocked_reason_tail or '-'}]"
             ),
             source="webui",
         )
@@ -4702,6 +4929,14 @@ class OneSyncPlugin(Star):
             "ok": True,
             "generated_at": refreshed_skills_snapshot.get("generated_at", skills_snapshot.get("generated_at")),
             "update": update_summary,
+            "candidate_install_unit_total": len(install_unit_rows),
+            "planned_install_unit_total": len(all_plans),
+            "executed_install_unit_total": len(executed_install_unit_ids),
+            "success_count": execution.get("success_count", 0),
+            "failure_count": execution.get("failure_count", 0),
+            "precheck_failure_count": execution.get("precheck_failure_count", 0),
+            "skipped_install_unit_total": len(skipped_install_unit_ids),
+            "failure_taxonomy": failure_taxonomy,
             "updated_install_unit_ids": executed_install_unit_ids,
             "failed_install_units": execution.get("failed_install_units", []),
             "unsupported_install_units": unsupported_install_units,

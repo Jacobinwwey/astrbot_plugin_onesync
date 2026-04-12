@@ -176,6 +176,10 @@ To call the feature "complete", the next implementation steps should be:
 - Existing managed checkout remote alignment is now hardened:
   - When a `git_checkout_path` already exists, OneSync now re-aligns the checkout remote before detail/sync/update flows instead of only setting `origin` during the first clone.
   - If the current remote becomes unreachable, OneSync falls back to a reachable candidate; if the current remote is still healthy, it is preserved to avoid unnecessary churn.
+- Managed checkout remote selection has now been upgraded to mirror-aware preferred-remote probing:
+  - OneSync now probes candidate remotes and picks a healthy preferred remote instead of only keeping the current reachable origin forever.
+  - In live runtime verification, the managed checkout for `frontend-design` was automatically reselected to:
+    - `https://gh.llkk.cc/https://github.com/anthropics/skills.git`
 - Sync metadata writeback is now authoritative:
   - `saved_registry` is treated as the authority for sync fields, so successful sync/update no longer leaves stale error codes behind.
 - `synthetic_single:*` no-package-boundary aggregates are now stabilized as `manual_only`:
@@ -204,8 +208,21 @@ To call the feature "complete", the next implementation steps should be:
     - `precheck_failure_count = 0`
   - `find-skills` update is now stably executed through the managed checkout path:
     - `git -C /root/astrbot/data/plugin_data/astrbot_plugin_onesync/skills/git_repos/skills-55d42a13a220 pull --ff-only`
+  - `update-all` now exposes top-level summary fields directly:
+    - `candidate_install_unit_total`
+    - `planned_install_unit_total`
+    - `executed_install_unit_total`
+    - `success_count`
+    - `failure_count`
+    - `precheck_failure_count`
+    - `skipped_install_unit_total`
+  - `update-all` structured failure taxonomy is now directly consumable:
+    - `failure_taxonomy.failed_install_unit_reason_groups[0] = update_failed:1`
+    - `failure_taxonomy.blocked_reason_groups[0] = non_syncable_sources_present:6`
+  - Debug logs now include failed/blocking reason tails:
+    - `failed_reasons=[update_failed:1] blocked_reasons=[non_syncable_sources_present:6]`
 - Full regression result is now:
-  - `pytest -q` -> `168 passed`
+  - `pytest -q` -> `172 passed`
 
 - WebUI now renders a rollback audit trail panel backed by `/api/skills/audit?action=rollback`, with automatic switching between current-aggregate scope and global recent records.
 - Rollback flow now supports selective rollback by `source_id`, so operators can scope blast radius instead of always rolling back the full aggregate.

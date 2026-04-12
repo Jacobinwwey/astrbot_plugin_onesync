@@ -119,6 +119,14 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("扇出", html)
         self.assertIn("subpathCount", html)
 
+    def test_inventory_panel_exposes_update_all_failure_taxonomy_strings(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("inventory_aggregate_update_all_failure_reasons", html)
+        self.assertIn("inventory_aggregate_update_all_blocked_reasons", html)
+        self.assertIn("failed_install_unit_reason_groups", html)
+        self.assertIn("blocked_reason_groups", html)
+
     def test_inventory_panel_exposes_install_unit_drilldown_panel(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

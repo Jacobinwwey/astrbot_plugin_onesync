@@ -3875,6 +3875,8 @@
         inventory_aggregate_update_all_source_sync: "Source Sync 执行单元 {count} 个。",
         inventory_aggregate_update_all_skipped: "跳过受阻聚合 {count} 个。",
         inventory_aggregate_update_all_deduped: "已去重重复聚合 {count} 个。",
+        inventory_aggregate_update_all_failure_reasons: "主要失败原因: {summary}",
+        inventory_aggregate_update_all_blocked_reasons: "主要受阻原因: {summary}",
         inventory_aggregate_update_all_error: "批量更新全部聚合失败: {msg}",
         inventory_install_unit_repair: "修复当前聚合",
         inventory_install_unit_repairing: "修复中",
@@ -4507,6 +4509,8 @@
         inventory_aggregate_update_all_source_sync: "Source sync units executed: {count}.",
         inventory_aggregate_update_all_skipped: "Blocked aggregates skipped: {count}.",
         inventory_aggregate_update_all_deduped: "Duplicate aggregates deduplicated: {count}.",
+        inventory_aggregate_update_all_failure_reasons: "Top failure reasons: {summary}",
+        inventory_aggregate_update_all_blocked_reasons: "Top blocked reasons: {summary}",
         inventory_aggregate_update_all_error: "Failed to update all aggregates: {msg}",
         inventory_install_unit_repair: "Repair Aggregate",
         inventory_install_unit_repairing: "Repairing",
@@ -8614,6 +8618,15 @@
         ) || 0;
         const deduplicatedInstallUnitTotal = Number(update.deduplicated_install_unit_total) || 0;
         const executedInstallUnitTotal = Number(update.executed_install_unit_total) || 0;
+        const failureTaxonomy = update.failure_taxonomy && typeof update.failure_taxonomy === "object"
+          ? update.failure_taxonomy
+          : {};
+        const failedReasonGroups = Array.isArray(failureTaxonomy.failed_install_unit_reason_groups)
+          ? failureTaxonomy.failed_install_unit_reason_groups.filter((item) => item && typeof item === "object")
+          : [];
+        const blockedReasonGroups = Array.isArray(failureTaxonomy.blocked_reason_groups)
+          ? failureTaxonomy.blocked_reason_groups.filter((item) => item && typeof item === "object")
+          : [];
         const summaryLines = [
           t("inventory_aggregate_update_all_success", {
             count: Number(update.success_count) || 0,
@@ -8636,6 +8649,28 @@
           summaryLines.push(
             t("inventory_aggregate_update_all_deduped", { count: deduplicatedInstallUnitTotal }),
           );
+        }
+        if (failedReasonGroups.length > 0) {
+          const failureReasonSummary = failedReasonGroups
+            .slice(0, 3)
+            .map((item) => `${String(item.failure_reason || "unknown")}:${Number(item.count) || 0}`)
+            .join(", ");
+          if (failureReasonSummary) {
+            summaryLines.push(
+              t("inventory_aggregate_update_all_failure_reasons", { summary: failureReasonSummary }),
+            );
+          }
+        }
+        if (blockedReasonGroups.length > 0) {
+          const blockedReasonSummary = blockedReasonGroups
+            .slice(0, 3)
+            .map((item) => `${String(item.reason_code || "unknown")}:${Number(item.count) || 0}`)
+            .join(", ");
+          if (blockedReasonSummary) {
+            summaryLines.push(
+              t("inventory_aggregate_update_all_blocked_reasons", { summary: blockedReasonSummary }),
+            );
+          }
         }
         const updateMessage = String(update.message || "").trim();
         const mergedSummary = summaryLines.join("\n");
