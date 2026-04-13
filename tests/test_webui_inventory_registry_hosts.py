@@ -428,6 +428,19 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
             re.compile(r'<details class="inventory-collapsible">\s*<summary id="inventorySourceStructureSummary">', re.S),
         )
 
+    def test_inventory_source_hero_sections_default_to_collapsed_details(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("inventorySourceHeroSectionOpen: {}", html)
+        self.assertIn("function renderInventoryTargetSection(", html)
+        self.assertIn('data-inventory-hero-section="${escapeHtml(normalizedKey)}"', html)
+        self.assertIn('renderInventoryTargetSection("boundary"', html)
+        self.assertIn('renderInventoryTargetSection("members"', html)
+        self.assertIn('renderInventoryTargetSection("provenance"', html)
+        self.assertIn('renderInventoryTargetSection("mechanism"', html)
+        self.assertIn('renderInventoryTargetSection("deploy_notes"', html)
+        self.assertIn('$("inventorySourceHero").addEventListener("toggle"', html)
+
 
     def test_inventory_panel_exposes_update_plan_support_and_confirmation_hooks(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")

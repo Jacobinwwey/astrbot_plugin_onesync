@@ -1608,6 +1608,60 @@
       background: color-mix(in srgb, var(--panel) 86%, transparent);
     }
 
+    .inventory-target-sections {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .inventory-target-section {
+      border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
+      overflow: hidden;
+    }
+
+    .inventory-target-section > summary {
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .inventory-target-section > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .inventory-target-section > summary::before {
+      content: "▸";
+      color: var(--muted);
+      font-size: 11px;
+      transform: translateY(-0.5px);
+    }
+
+    .inventory-target-section[open] > summary {
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+      background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+    }
+
+    .inventory-target-section[open] > summary::before {
+      content: "▾";
+    }
+
+    .inventory-target-section-body {
+      padding: 10px 12px 12px;
+      display: grid;
+      gap: 8px;
+    }
+
     .inventory-skill-list {
       border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
       border-radius: 12px;
@@ -2697,8 +2751,9 @@
     }
 
     .inventory-shell {
+      position: relative;
       display: grid;
-      grid-template-columns: minmax(0, 1.6fr) minmax(360px, 0.88fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 14px;
       align-items: start;
     }
@@ -2755,6 +2810,27 @@
       max-width: 760px;
     }
 
+    .inventory-workspace-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+
+    .inventory-inspector-state {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      max-width: 320px;
+    }
+
+    .inventory-inspector-toggle {
+      min-width: 150px;
+      justify-content: center;
+      font-weight: 700;
+    }
+
     .inventory-workspace-actions {
       gap: 8px;
       margin: 14px 0 10px;
@@ -2792,9 +2868,55 @@
     }
 
     .inventory-inspector {
-      display: grid;
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      bottom: 14px;
+      width: min(620px, calc(100vw - 28px));
+      z-index: 78;
+      display: flex;
+      flex-direction: column;
       gap: 12px;
       min-width: 0;
+      padding: 14px;
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      border-radius: 22px;
+      background:
+        radial-gradient(320px 200px at 100% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 66%),
+        linear-gradient(175deg, color-mix(in srgb, var(--panel-soft) 95%, transparent), color-mix(in srgb, var(--panel-strong) 90%, transparent));
+      box-shadow: 0 30px 86px rgba(15, 23, 42, 0.26);
+      overflow: auto;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(calc(100% + 24px));
+      transition: transform 0.26s ease, opacity 0.22s ease;
+    }
+
+    .inventory-inspector.is-open {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    .inventory-inspector-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 76;
+      border: 0;
+      margin: 0;
+      padding: 0;
+      background: rgba(8, 15, 28, 0.32);
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+
+    .inventory-inspector-backdrop.is-open {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     .inventory-inspector-head {
@@ -2803,12 +2925,7 @@
       justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
-      padding: 14px;
-      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-      border-radius: 20px;
-      background:
-        radial-gradient(220px 130px at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 64%),
-        linear-gradient(170deg, color-mix(in srgb, var(--panel-soft) 94%, transparent), color-mix(in srgb, var(--panel) 84%, transparent));
+      padding: 0;
     }
 
     .inventory-inspector-copy {
@@ -2837,6 +2954,20 @@
       gap: 12px;
       min-height: 0;
       align-content: start;
+    }
+
+    .inventory-inspector-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .inventory-inspector-close {
+      min-width: 110px;
+      justify-content: center;
+      font-weight: 700;
     }
 
     .inventory-inspector-card {
@@ -2941,12 +3072,8 @@
         grid-template-columns: 1fr;
       }
 
-      .inventory-inspector {
-        position: static;
-      }
-
-      .inventory-inspector-panel {
-        max-height: none;
+      .inventory-inspector-state {
+        max-width: 100%;
       }
     }
 
@@ -2987,6 +3114,14 @@
       }
       .inventory-target-title {
         font-size: 20px;
+      }
+      .inventory-inspector {
+        top: 8px;
+        right: 8px;
+        bottom: 8px;
+        width: calc(100vw - 16px);
+        border-radius: 16px;
+        padding: 12px;
       }
     }
   </style>
@@ -3173,6 +3308,10 @@
                     <h3 class="inventory-workspace-title">技能选择与绑定</h3>
                     <p class="inventory-workspace-note">围绕当前宿主软件完成 bundle 选择、绑定保存与漂移修复。Source / Deploy 的深入细节已移到右侧检查器，配置与导入则统一通过抽屉处理。</p>
                   </div>
+                  <div class="inventory-workspace-tools">
+                    <button id="inventoryInspectorToggleBtn" class="primary inventory-inspector-toggle" type="button" aria-expanded="false">打开右侧检查器</button>
+                    <span class="inventory-inspector-state" id="inventoryInspectorStateHint">默认收起，按需打开 Source / Deploy / Utility 抽屉。</span>
+                  </div>
                 </div>
                 <div class="inventory-target-hero" id="inventoryTargetHero">
                   <div class="debug-empty" id="inventoryTargetHeroEmpty">等待选择宿主软件...</div>
@@ -3203,16 +3342,19 @@
                 </div>
               </div>
             </div>
-            <aside class="inventory-inspector">
+            <aside class="inventory-inspector" id="inventoryInspector" aria-hidden="true">
               <div class="inventory-inspector-head">
                 <div class="inventory-inspector-copy">
                   <p class="inventory-inspector-kicker">Inspector</p>
                   <p class="inventory-inspector-title">右侧检查器</p>
                 </div>
-                <div class="inventory-segmented" id="inventoryInspectorTabs">
-                  <button type="button" id="inventoryInspectorTabSource" data-inventory-inspector="source">Source</button>
-                  <button type="button" id="inventoryInspectorTabDeploy" data-inventory-inspector="deploy">Deploy</button>
-                  <button type="button" id="inventoryInspectorTabUtility" data-inventory-inspector="utility">Utility</button>
+                <div class="inventory-inspector-toolbar">
+                  <div class="inventory-segmented" id="inventoryInspectorTabs">
+                    <button type="button" id="inventoryInspectorTabSource" data-inventory-inspector="source">Source</button>
+                    <button type="button" id="inventoryInspectorTabDeploy" data-inventory-inspector="deploy">Deploy</button>
+                    <button type="button" id="inventoryInspectorTabUtility" data-inventory-inspector="utility">Utility</button>
+                  </div>
+                  <button type="button" id="inventoryInspectorCloseBtn" class="inventory-inspector-close">收起</button>
                 </div>
               </div>
               <div class="inventory-inspector-panel" id="inventoryInspectorSourcePanel">
@@ -3575,9 +3717,10 @@
                 </div>
               </div>
             </aside>
-          </div>
+            <button type="button" class="inventory-inspector-backdrop" id="inventoryInspectorBackdrop" aria-hidden="true"></button>
           </div>
         </div>
+      </div>
 
         <div class="debug-panel" id="sectionDebug">
           <div class="debug-head">
@@ -4165,6 +4308,8 @@
       inventoryKindFilter: "all",
       inventoryShowUninstalled: false,
       inventoryInspectorTab: "source",
+      inventoryInspectorOpen: false,
+      inventorySourceHeroSectionOpen: {},
       inventoryDraftSkillIds: [],
       inventoryVisibleCompatibleSkillIds: [],
       inventoryVisibleDiscoveredSkillIds: [],
@@ -4401,7 +4546,7 @@
         ops_nav_debug: "调试日志",
         ops_nav_nodes: "节点",
         ops_deploy: "部署更新",
-        global_shortcuts_hint: "快捷键: Alt+A 打开 AI 助手 / Alt+H 打开使用指引 / Esc 关闭弹窗",
+        global_shortcuts_hint: "快捷键: Alt+A 打开 AI 助手 / Alt+H 打开使用指引 / Esc 关闭弹窗或检查器",
         ai_modal_title: "OneSync AI 配置助手",
         ai_generate: "生成 Prompt",
         ai_copy: "复制输出",
@@ -4516,6 +4661,10 @@
         inventory_panel_collapse_hint: "默认收起，需要时再展开 Skills 运维台。",
         inventory_toggle_expand: "展开 Skills管理",
         inventory_toggle_collapse: "收起 Skills管理",
+        inventory_inspector_open: "打开右侧检查器",
+        inventory_inspector_close: "收起右侧检查器",
+        inventory_inspector_state_closed: "默认收起，按需打开 Source / Deploy / Utility 抽屉。",
+        inventory_inspector_state_open: "检查器已展开，可随时切换 Source / Deploy / Utility。",
         inventory_command_title: "核心运维动作",
         inventory_command_note: "主按钮会先补齐可改善原子，再批量更新聚合；其余操作作为按需运维入口保留。",
         inventory_improve_all_skills: "一键完善 Skills",
@@ -5247,7 +5396,7 @@
         ops_nav_debug: "Debug Log",
         ops_nav_nodes: "Nodes",
         ops_deploy: "Deploy Update",
-        global_shortcuts_hint: "Shortcuts: Alt+A open AI Assistant / Alt+H open Guide / Esc close modal",
+        global_shortcuts_hint: "Shortcuts: Alt+A open AI Assistant / Alt+H open Guide / Esc close modal or inspector",
         ai_modal_title: "OneSync AI Config Assistant",
         ai_generate: "Generate Prompt",
         ai_copy: "Copy Output",
@@ -5362,6 +5511,10 @@
         inventory_panel_collapse_hint: "Collapsed by default so software operators can expand the skills console only when needed.",
         inventory_toggle_expand: "Expand Skills Management",
         inventory_toggle_collapse: "Collapse Skills Management",
+        inventory_inspector_open: "Open Inspector Drawer",
+        inventory_inspector_close: "Close Inspector Drawer",
+        inventory_inspector_state_closed: "Hidden by default. Open on demand for Source / Deploy / Utility details.",
+        inventory_inspector_state_open: "Inspector drawer is open. Switch between Source / Deploy / Utility as needed.",
         inventory_command_title: "Core Operations",
         inventory_command_note: "The primary action first improves actionable atoms, then batch-updates aggregates. Other controls stay available as targeted operator tools.",
         inventory_improve_all_skills: "Improve All Skills",
@@ -6487,6 +6640,73 @@
       return ["source", "deploy", "utility"].includes(text) ? text : "source";
     }
 
+    function normalizeInventorySourceHeroSectionKey(value) {
+      const key = String(value || "").trim().toLowerCase();
+      return [
+        "boundary",
+        "members",
+        "provenance",
+        "mechanism",
+        "deploy_notes",
+        "neo_remote",
+        "neo_activity",
+      ].includes(key) ? key : "";
+    }
+
+    function normalizeInventorySourceHeroSectionState(value) {
+      const normalized = {};
+      const input = value && typeof value === "object" ? value : {};
+      [
+        "boundary",
+        "members",
+        "provenance",
+        "mechanism",
+        "deploy_notes",
+        "neo_remote",
+        "neo_activity",
+      ].forEach((key) => {
+        normalized[key] = Boolean(input[key]);
+      });
+      return normalized;
+    }
+
+    function inventorySourceHeroSectionOpen(sectionKey) {
+      const normalizedKey = normalizeInventorySourceHeroSectionKey(sectionKey);
+      if (!normalizedKey) return false;
+      const sectionState = normalizeInventorySourceHeroSectionState(state.inventorySourceHeroSectionOpen);
+      return Boolean(sectionState[normalizedKey]);
+    }
+
+    function setInventorySourceHeroSectionOpen(sectionKey, isOpen) {
+      const normalizedKey = normalizeInventorySourceHeroSectionKey(sectionKey);
+      if (!normalizedKey) return;
+      const sectionState = normalizeInventorySourceHeroSectionState(state.inventorySourceHeroSectionOpen);
+      sectionState[normalizedKey] = Boolean(isOpen);
+      state.inventorySourceHeroSectionOpen = sectionState;
+    }
+
+    function renderInventoryTargetSection(sectionKey, title, rows, emptyText) {
+      const normalizedKey = normalizeInventorySourceHeroSectionKey(sectionKey);
+      if (!normalizedKey) return "";
+      const items = Array.isArray(rows)
+        ? rows.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const openAttr = inventorySourceHeroSectionOpen(normalizedKey) ? " open" : "";
+      const fallback = String(emptyText || "").trim() || "-";
+      return `
+        <details class="inventory-target-section" data-inventory-hero-section="${escapeHtml(normalizedKey)}"${openAttr}>
+          <summary>${escapeHtml(title)}</summary>
+          <div class="inventory-target-section-body">
+            <div class="inventory-target-drift-list">
+              ${items.length
+                ? items.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">${escapeHtml(fallback)}</div>`}
+            </div>
+          </div>
+        </details>
+      `;
+    }
+
     function syncInventoryInspectorTabs() {
       const activeTab = normalizeInventoryInspectorTab(state.inventoryInspectorTab);
       document.querySelectorAll("#inventoryInspectorTabs [data-inventory-inspector]").forEach((el) => {
@@ -6496,6 +6716,27 @@
       $("inventoryInspectorSourcePanel").classList.toggle("hidden", activeTab !== "source");
       $("inventoryInspectorDeployPanel").classList.toggle("hidden", activeTab !== "deploy");
       $("inventoryInspectorUtilityPanel").classList.toggle("hidden", activeTab !== "utility");
+    }
+
+    function syncInventoryInspectorDrawer() {
+      const inspectorOpen = Boolean(state.inventoryInspectorOpen);
+      const inspectorEl = $("inventoryInspector");
+      const backdropEl = $("inventoryInspectorBackdrop");
+      const toggleBtn = $("inventoryInspectorToggleBtn");
+      const closeBtn = $("inventoryInspectorCloseBtn");
+      const hintEl = $("inventoryInspectorStateHint");
+      inspectorEl.classList.toggle("is-open", inspectorOpen);
+      inspectorEl.setAttribute("aria-hidden", inspectorOpen ? "false" : "true");
+      backdropEl.classList.toggle("is-open", inspectorOpen);
+      backdropEl.setAttribute("aria-hidden", inspectorOpen ? "false" : "true");
+      toggleBtn.setAttribute("aria-expanded", inspectorOpen ? "true" : "false");
+      toggleBtn.textContent = inspectorOpen
+        ? t("inventory_inspector_close")
+        : t("inventory_inspector_open");
+      closeBtn.textContent = t("inventory_inspector_close");
+      hintEl.textContent = inspectorOpen
+        ? t("inventory_inspector_state_open")
+        : t("inventory_inspector_state_closed");
     }
 
     function syncInventorySourceDetailScopeTabs() {
@@ -6635,6 +6876,12 @@
         if (typeof parsed.inventoryShowUninstalled === "boolean") {
           state.inventoryShowUninstalled = parsed.inventoryShowUninstalled;
         }
+        if (typeof parsed.inventoryInspectorOpen === "boolean") {
+          state.inventoryInspectorOpen = parsed.inventoryInspectorOpen;
+        }
+        if (parsed.inventorySourceHeroSectionOpen && typeof parsed.inventorySourceHeroSectionOpen === "object") {
+          state.inventorySourceHeroSectionOpen = normalizeInventorySourceHeroSectionState(parsed.inventorySourceHeroSectionOpen);
+        }
         if (typeof parsed.inventoryInstallAtomFilter === "string") {
           state.inventoryInstallAtomFilter = normalizeInventoryInstallAtomFilter(parsed.inventoryInstallAtomFilter);
         }
@@ -6671,6 +6918,8 @@
         inventoryDeployInstallFilter: normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter),
         inventoryKindFilter: normalizeInventoryKindFilter(state.inventoryKindFilter),
         inventoryShowUninstalled: Boolean(state.inventoryShowUninstalled),
+        inventoryInspectorOpen: Boolean(state.inventoryInspectorOpen),
+        inventorySourceHeroSectionOpen: normalizeInventorySourceHeroSectionState(state.inventorySourceHeroSectionOpen),
         inventoryInstallAtomFilter: normalizeInventoryInstallAtomFilter(state.inventoryInstallAtomFilter),
         inventoryInstallAtomRefreshStrategy: normalizeInventoryInstallAtomRefreshStrategy(state.inventoryInstallAtomRefreshStrategy),
       };
@@ -6721,6 +6970,14 @@
       $("inventoryToggleBtn").textContent = state.inventoryPanelExpanded
         ? t("inventory_toggle_collapse")
         : t("inventory_toggle_expand");
+      $("inventoryInspectorToggleBtn").textContent = state.inventoryInspectorOpen
+        ? t("inventory_inspector_close")
+        : t("inventory_inspector_open");
+      $("inventoryInspectorCloseBtn").textContent = t("inventory_inspector_close");
+      $("inventoryInspectorStateHint").textContent = state.inventoryInspectorOpen
+        ? t("inventory_inspector_state_open")
+        : t("inventory_inspector_state_closed");
+      $("inventoryInspectorBackdrop").setAttribute("aria-label", t("inventory_inspector_close"));
       $("inventoryRefreshBtn").textContent = t("inventory_refresh");
       $("inventoryImportSourceBtn").textContent = t("inventory_import_open");
       $("inventorySyncAllBtn").textContent = state.inventorySyncAllRunning
@@ -11887,6 +12144,9 @@
 
     function renderInventoryPanel() {
       const inventoryPanelExpanded = Boolean(state.inventoryPanelExpanded);
+      if (!inventoryPanelExpanded && state.inventoryInspectorOpen) {
+        state.inventoryInspectorOpen = false;
+      }
       $("sectionInventory").classList.toggle("inventory-panel-collapsed", !inventoryPanelExpanded);
       $("inventoryPanelBody").classList.toggle("hidden", !inventoryPanelExpanded);
       $("inventoryToggleBtn").setAttribute("aria-expanded", inventoryPanelExpanded ? "true" : "false");
@@ -11989,6 +12249,8 @@
       const executionHistoryMode = normalizeInventoryExecutionHistoryMode(state.inventoryExecutionHistoryMode);
       const showUninstalled = Boolean(state.inventoryShowUninstalled);
       const inspectorTab = normalizeInventoryInspectorTab(state.inventoryInspectorTab);
+      const inspectorOpen = Boolean(state.inventoryInspectorOpen);
+      const sourceHeroSectionState = normalizeInventorySourceHeroSectionState(state.inventorySourceHeroSectionOpen);
       state.inventorySelectedScope = bindingScope;
       state.inventorySourceCardView = sourceCardView;
       state.inventorySourceCardFontSize = sourceCardFontSize;
@@ -12006,6 +12268,8 @@
       state.inventoryExecutionHistoryMode = executionHistoryMode;
       state.inventoryShowUninstalled = showUninstalled;
       state.inventoryInspectorTab = inspectorTab;
+      state.inventoryInspectorOpen = inspectorOpen;
+      state.inventorySourceHeroSectionOpen = sourceHeroSectionState;
       if (scopeEl && scopeEl.value !== bindingScope) {
         scopeEl.value = bindingScope;
       }
@@ -12042,6 +12306,7 @@
       syncInventoryInstallAtomRefreshStrategyTabs();
       syncInventoryExecutionHistoryTabs();
       syncInventoryInspectorTabs();
+      syncInventoryInspectorDrawer();
       sourceDetailScopeTitleEl.textContent = t("inventory_detail_scope_title");
       fanoutPreviewTitleEl.textContent = t("inventory_fanout_preview_title");
       operationPlanTitleEl.textContent = t("inventory_operation_plan_title");
@@ -12838,64 +13103,19 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
               <div class="value">${escapeHtml(toLocalTime(checkedAt))}</div>
             </div>
           </div>
-          <div class="inventory-target-drift">
-            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_boundary_title"))}</div>
-            <div class="inventory-target-drift-list">
-              ${boundaryNotes.length
-                ? boundaryNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
-                : `<div class="inventory-target-drift-empty">No boundary notes yet.</div>`}
-            </div>
+          <div class="inventory-target-sections">
+            ${renderInventoryTargetSection("boundary", t("inventory_boundary_title"), boundaryNotes, "No boundary notes yet.")}
+            ${renderInventoryTargetSection("members", t("inventory_target_section_members"), memberPreview, "No member preview yet.")}
+            ${renderInventoryTargetSection("provenance", t("inventory_target_section_provenance"), provenanceNotes, "No provenance notes yet.")}
+            ${renderInventoryTargetSection("mechanism", t("inventory_target_section_update_mechanism"), updateMechanismNotes, "No update mechanism notes yet.")}
+            ${renderInventoryTargetSection("deploy_notes", t("inventory_target_section_deploy_notes"), deployAndNoteItems, "No deploy targets linked.")}
+            ${neoDetail
+              ? renderInventoryTargetSection("neo_remote", t("inventory_neo_remote_title"), neoRemoteNotes, t("inventory_neo_remote_empty"))
+              : ""}
+            ${neoDetail
+              ? renderInventoryTargetSection("neo_activity", t("inventory_neo_activity_title"), neoActivityNotes, t("inventory_neo_activity_empty"))
+              : ""}
           </div>
-          <div class="inventory-target-drift">
-            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_members"))}</div>
-            <div class="inventory-target-drift-list">
-              ${memberPreview.length
-                ? memberPreview.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
-                : `<div class="inventory-target-drift-empty">No member preview yet.</div>`}
-            </div>
-          </div>
-          <div class="inventory-target-drift">
-            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_provenance"))}</div>
-            <div class="inventory-target-drift-list">
-              ${provenanceNotes.length
-                ? provenanceNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
-                : `<div class="inventory-target-drift-empty">No provenance notes yet.</div>`}
-            </div>
-          </div>
-          <div class="inventory-target-drift">
-            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_update_mechanism"))}</div>
-            <div class="inventory-target-drift-list">
-              ${updateMechanismNotes.length
-                ? updateMechanismNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
-                : `<div class="inventory-target-drift-empty">No update mechanism notes yet.</div>`}
-            </div>
-          </div>
-          <div class="inventory-target-drift">
-            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_deploy_notes"))}</div>
-            <div class="inventory-target-drift-list">
-              ${deployAndNoteItems.length
-                ? deployAndNoteItems.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
-                : `<div class="inventory-target-drift-empty">No deploy targets linked.</div>`}
-            </div>
-          </div>
-          ${neoDetail ? `
-            <div class="inventory-target-drift">
-              <div class="inventory-target-drift-title">${escapeHtml(t("inventory_neo_remote_title"))}</div>
-              <div class="inventory-target-drift-list">
-                ${neoRemoteNotes.length
-                  ? neoRemoteNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
-                  : `<div class="inventory-target-drift-empty">${escapeHtml(t("inventory_neo_remote_empty"))}</div>`}
-              </div>
-            </div>
-            <div class="inventory-target-drift">
-              <div class="inventory-target-drift-title">${escapeHtml(t("inventory_neo_activity_title"))}</div>
-              <div class="inventory-target-drift-list">
-                ${neoActivityNotes.length
-                  ? neoActivityNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
-                  : `<div class="inventory-target-drift-empty">${escapeHtml(t("inventory_neo_activity_empty"))}</div>`}
-              </div>
-            </div>
-          ` : ""}
         `;
       }
       syncInventorySourceDetailScopeTabs();
@@ -15285,6 +15505,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
         if (!$("configModal").classList.contains("hidden")) {
           closeConfigModal();
+          return;
+        }
+        if (state.inventoryInspectorOpen) {
+          state.inventoryInspectorOpen = false;
+          persistPreferences();
+          renderInventoryPanel();
         }
       });
     }
@@ -15987,6 +16213,26 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         renderInventoryPanel();
       });
 
+      $("inventoryInspectorToggleBtn").addEventListener("click", () => {
+        state.inventoryInspectorOpen = !state.inventoryInspectorOpen;
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryInspectorCloseBtn").addEventListener("click", () => {
+        if (!state.inventoryInspectorOpen) return;
+        state.inventoryInspectorOpen = false;
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
+      $("inventoryInspectorBackdrop").addEventListener("click", () => {
+        if (!state.inventoryInspectorOpen) return;
+        state.inventoryInspectorOpen = false;
+        persistPreferences();
+        renderInventoryPanel();
+      });
+
       $("inventoryRefreshBtn").addEventListener("click", async () => {
         try {
           await loadInventory({ force: true });
@@ -16319,6 +16565,17 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           alert(t("inventory_sync_error", { msg: err.message }));
         }
       });
+
+      $("inventorySourceHero").addEventListener("toggle", (evt) => {
+        const detailsEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-hero-section]")
+          : null;
+        if (!detailsEl) return;
+        const sectionKey = String(detailsEl.getAttribute("data-inventory-hero-section") || "").trim();
+        if (!sectionKey) return;
+        setInventorySourceHeroSectionOpen(sectionKey, Boolean(detailsEl.open));
+        persistPreferences();
+      }, true);
 
       $("inventoryInstallAtomRows").addEventListener("click", async (evt) => {
         const rowEl = evt.target && typeof evt.target.closest === "function"

@@ -22,6 +22,9 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
         self.assertIn('inventoryPanelExpanded: false,', html)
         self.assertIn('parsed.inventoryPanelExpanded', html)
         self.assertIn('inventoryPanelExpanded: Boolean(state.inventoryPanelExpanded)', html)
+        self.assertIn('inventoryInspectorOpen: false,', html)
+        self.assertIn('parsed.inventoryInspectorOpen', html)
+        self.assertIn('inventoryInspectorOpen: Boolean(state.inventoryInspectorOpen)', html)
 
     def test_inventory_panel_toggle_updates_visibility_and_button_state(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
@@ -31,6 +34,13 @@ class WebUIInventoryLayoutControlsTests(unittest.TestCase):
         self.assertIn('$("inventoryPanelBody").classList.toggle("hidden", !inventoryPanelExpanded);', html)
         self.assertIn('$("inventoryToggleBtn").setAttribute("aria-expanded", inventoryPanelExpanded ? "true" : "false");', html)
         self.assertIn('$("inventoryToggleBtn").addEventListener("click"', html)
+        self.assertIn('id="inventoryInspectorToggleBtn"', html)
+        self.assertIn('id="inventoryInspectorCloseBtn"', html)
+        self.assertIn('id="inventoryInspectorBackdrop"', html)
+        self.assertIn('function syncInventoryInspectorDrawer()', html)
+        self.assertIn('$("inventoryInspectorToggleBtn").addEventListener("click"', html)
+        self.assertIn('$("inventoryInspectorCloseBtn").addEventListener("click"', html)
+        self.assertIn('$("inventoryInspectorBackdrop").addEventListener("click"', html)
 
     def test_inventory_panel_exposes_independent_source_and_deploy_layout_controls(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
