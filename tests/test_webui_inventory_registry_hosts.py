@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -34,6 +35,10 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
     def test_inventory_panel_exposes_install_atom_evidence_helpers(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
+        self.assertIn("inventory_improve_all_skills", html)
+        self.assertIn("inventory_improve_all_skills_running", html)
+        self.assertIn("inventory_improve_all_skills_confirm", html)
+        self.assertIn("inventory_improve_all_skills_success", html)
         self.assertIn("inventory_skill_meta_evidence", html)
         self.assertIn("inventory_skill_meta_resolution", html)
         self.assertIn("inventory_skill_meta_resolver", html)
@@ -44,10 +49,14 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_install_atom_strategy_label", html)
         self.assertIn("inventory_install_atom_strategy_high_confidence", html)
         self.assertIn("inventory_install_atom_refresh_unresolved", html)
+        self.assertIn("inventory_install_atom_refresh_done_rich", html)
         self.assertIn("inventory_install_atom_retry_failed", html)
         self.assertIn("inventory_install_atom_retry_noop", html)
         self.assertIn("inventory_install_atom_refresh_report_title", html)
         self.assertIn("inventory_install_atom_refresh_report_group", html)
+        self.assertIn("inventory_install_atom_refresh_report_nochange", html)
+        self.assertIn("inventory_install_atom_non_actionable_root_only", html)
+        self.assertIn("inventory_aggregation_badge_root_only", html)
         self.assertIn('id="inventoryInstallAtomSummary"', html)
         self.assertIn('id="inventoryInstallAtomRows"', html)
         self.assertIn('id="inventoryInstallAtomFilterTabs"', html)
@@ -67,9 +76,16 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("syncInventoryInstallAtomRefreshStrategyTabs(", html)
         self.assertIn("function inventoryInstallAtomRefreshCandidates(", html)
         self.assertIn("function inventoryFailedInstallUnitIdsFromRefreshReport(", html)
+        self.assertIn("function inventoryInstallAtomIsActionable(", html)
+        self.assertIn("function inventoryInstallAtomActionHint(", html)
+        self.assertIn("function inventoryInstallAtomResolutionRank(", html)
+        self.assertIn("function inventoryInstallAtomEvidenceRank(", html)
+        self.assertIn("function inventoryInstallAtomRowByInstallUnitId(", html)
+        self.assertIn("function inventoryInstallAtomRefreshImproved(", html)
         self.assertIn("runInstallAtomAggregateRefresh(", html)
         self.assertIn("retryFailedInstallAtomAggregates(", html)
         self.assertIn("refreshUnresolvedInstallAtomAggregates(", html)
+        self.assertIn("improveAllSkills()", html)
         self.assertIn("unresolvedInstallAtomUnitIds(", html)
         self.assertIn("inventoryInstallAtomRefreshReportRows", html)
         self.assertIn("data-inventory-atom-install-unit-id", html)
@@ -129,6 +145,129 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("blocked_reason_groups", html)
         self.assertIn("source_sync_cache_hit_total", html)
 
+    def test_inventory_panel_exposes_primary_command_rail_and_progress(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventoryCommandTitle"', html)
+        self.assertIn('id="inventoryCommandNote"', html)
+        self.assertIn('id="inventoryUpdateAllAggregatesPrimaryBtn"', html)
+        self.assertIn('id="inventoryAggregateProgress"', html)
+        self.assertIn('id="inventoryAggregateProgressTitle"', html)
+        self.assertIn('id="inventoryAggregateProgressNote"', html)
+        self.assertIn('id="inventoryAggregateProgressMeta"', html)
+        self.assertIn("inventory_command_title", html)
+        self.assertIn("inventory_command_note", html)
+        self.assertIn("inventory_aggregate_progress_title", html)
+        self.assertIn("inventory_aggregate_progress_note", html)
+        self.assertIn("inventory_aggregate_progress_meta", html)
+        self.assertIn("inventory_aggregate_progress_phase_planning", html)
+        self.assertIn("inventory_aggregate_progress_phase_executing", html)
+        self.assertIn("inventory_aggregate_progress_phase_executing_command", html)
+        self.assertIn("inventory_aggregate_progress_phase_executing_source_sync", html)
+        self.assertIn("inventory_aggregate_progress_phase_refreshing", html)
+        self.assertIn("inventory_aggregate_progress_phase_refreshing_snapshot", html)
+        self.assertIn("inventory_aggregate_progress_phase_done", html)
+        self.assertIn("inventory_aggregate_progress_phase_failed", html)
+        self.assertIn("inventory_aggregate_progress_meta_runtime", html)
+        self.assertIn("inventory-command-deck", html)
+        self.assertIn("inventory-command-bar", html)
+        self.assertIn("inventory-aggregate-progress-track", html)
+        self.assertIn('id="inventoryAggregateProgressFill"', html)
+        self.assertIn('id="inventoryAggregateProgressBadge"', html)
+        self.assertIn("inventory-progress-slide", html)
+        self.assertIn("/api/skills/aggregates/update-all/progress", html)
+        self.assertIn("function inventoryAggregateProgressIsActiveStatus(", html)
+        self.assertIn("function normalizeInventoryAggregateProgress(", html)
+        self.assertIn("function applyInventoryAggregateProgressSnapshot(", html)
+        self.assertIn("function loadInventoryAggregateProgress(", html)
+        self.assertIn("function inventoryAggregateProgressPhaseLabel(", html)
+        self.assertIn("function beginInventoryAggregateProgress(", html)
+        self.assertIn("function setInventoryAggregateProgressPhase(", html)
+        self.assertIn("function finishInventoryAggregateProgress(", html)
+
+    def test_inventory_display_settings_live_in_utility_panel(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventoryUtilityDrawersTitle"', html)
+        self.assertIn('id="inventoryUtilityDrawersNote"', html)
+        self.assertIn('id="inventoryUtilitySettingsTitle"', html)
+        self.assertIn('id="inventoryUtilitySettingsNote"', html)
+        self.assertIn('id="inventoryUtilitySummaryTitle"', html)
+        self.assertIn('id="inventoryUtilitySummaryNote"', html)
+        self.assertIn('id="inventoryUtilitySummary"', html)
+        self.assertIn('id="inventoryUtilityHealthTitle"', html)
+        self.assertIn("inventory_utility_drawers_title", html)
+        self.assertIn("inventory_utility_drawers_note", html)
+        self.assertIn("inventory_utility_settings_title", html)
+        self.assertIn("inventory_utility_settings_note", html)
+        self.assertIn("inventory_utility_summary_title", html)
+        self.assertIn("inventory_utility_summary_note", html)
+        self.assertIn("inventory_utility_health_title", html)
+        self.assertLess(
+            html.index('id="inventoryInspectorUtilityPanel"'),
+            html.index('id="inventoryDisplaySettings"'),
+        )
+        self.assertRegex(
+            html,
+            re.compile(r'id="inventoryInspectorUtilityPanel".*id="inventoryDisplaySettings"', re.S),
+        )
+
+    def test_inventory_utility_panel_groups_low_frequency_areas_into_collapsible_sections(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventoryUtilityHealthSection"', html)
+        self.assertIn('id="inventoryUtilityHealthSummary"', html)
+        self.assertIn('id="inventoryUtilityHistorySection"', html)
+        self.assertIn('id="inventoryUtilityHistorySummary"', html)
+        self.assertIn('id="inventoryUtilityInstallAtomSection"', html)
+        self.assertIn('id="inventoryUtilityInstallAtomSectionSummary"', html)
+        self.assertIn('id="inventoryUtilityAstrbotSection"', html)
+        self.assertIn('id="inventoryUtilityAstrbotSummary"', html)
+        self.assertLess(
+            html.index('id="inventoryUtilityHistorySection"'),
+            html.index('id="inventoryAggregateUpdateReportRows"'),
+        )
+        self.assertLess(
+            html.index('id="inventoryUtilityInstallAtomSection"'),
+            html.index('id="inventoryInstallAtomRows"'),
+        )
+        self.assertLess(
+            html.index('id="inventoryUtilityAstrbotSection"'),
+            html.index('id="inventoryAstrbotRuntimeSummary"'),
+        )
+
+    def test_inventory_panel_uses_compact_main_summary_and_full_utility_summary(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("inventory_summary_compact_scope", html)
+        self.assertIn("inventory_summary_compact_software", html)
+        self.assertIn("inventory_summary_compact_sources", html)
+        self.assertIn("inventory_summary_compact_aggregates", html)
+        self.assertIn("inventory_summary_compact_freshness", html)
+        self.assertIn("inventory_summary_compact_alerts", html)
+        self.assertIn("inventory_summary_compact_hidden", html)
+        self.assertIn('const utilitySummaryEl = $("inventoryUtilitySummary");', html)
+        self.assertIn('summaryEl.textContent = compactSummaryParts.join(" · ");', html)
+        self.assertIn('utilitySummaryEl.textContent = detailedSummary;', html)
+        self.assertIn('summaryEl.title = detailedSummary;', html)
+
+    def test_inventory_improve_all_skills_exposes_continuous_progress_contract(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("inventory_improve_all_skills_progress_title", html)
+        self.assertIn("inventory_improve_all_skills_progress_note_atoms", html)
+        self.assertIn("inventory_improve_all_skills_progress_note_aggregates", html)
+        self.assertIn("inventory_improve_all_skills_progress_meta_atoms", html)
+        self.assertIn("inventory_aggregate_progress_phase_improving_atoms_planning", html)
+        self.assertIn("inventory_aggregate_progress_phase_improving_atoms_refreshing", html)
+        self.assertIn("inventoryAggregateProgressAtomImprovedCount", html)
+        self.assertIn("inventoryAggregateProgressAtomUnchangedCount", html)
+        self.assertIn("inventoryAggregateProgressWorkflowKind", html)
+        self.assertIn("function inventoryAggregateProgressIsImprovePhase(", html)
+        self.assertIn("function beginInventoryImproveSkillsAtomProgress(", html)
+        self.assertIn("function updateInventoryImproveSkillsAtomProgress(", html)
+        self.assertIn("/api/skills/improve-all", html)
+
     def test_inventory_panel_exposes_aggregate_update_report_hooks(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 
@@ -136,21 +275,56 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn('id="inventoryAggregateUpdateReportTitle"', html)
         self.assertIn('id="inventoryAggregateUpdateReportNote"', html)
         self.assertIn('id="inventoryAggregateUpdateReportRows"', html)
+        self.assertIn('id="inventoryExecutionHistoryModeLabel"', html)
+        self.assertIn('id="inventoryExecutionHistoryTabs"', html)
+        self.assertIn('id="inventoryExecutionHistoryBatch"', html)
+        self.assertIn('id="inventoryExecutionHistoryCurrent"', html)
+        self.assertIn('id="inventoryExecutionHistoryRollback"', html)
+        self.assertIn('data-inventory-history="batch"', html)
+        self.assertIn('data-inventory-history="current"', html)
+        self.assertIn('data-inventory-history="rollback"', html)
+        self.assertIn("inventory_execution_history_title", html)
+        self.assertIn("inventory_execution_history_mode_label", html)
+        self.assertIn("inventory_execution_history_batch", html)
+        self.assertIn("inventory_execution_history_current", html)
+        self.assertIn("inventory_execution_history_rollback", html)
+        self.assertIn("inventory_execution_history_waiting", html)
+        self.assertIn("inventory_execution_history_empty", html)
+        self.assertIn("inventory_execution_history_current_scope", html)
+        self.assertIn("inventory_execution_history_current_select", html)
+        self.assertIn("inventory_execution_history_rollback_scope", html)
+        self.assertIn("inventory_aggregate_update_report_workflow_update_all", html)
+        self.assertIn("inventory_aggregate_update_report_workflow_improve_all", html)
+        self.assertIn("inventory_aggregate_update_report_atom_summary", html)
         self.assertIn("inventory_aggregate_update_report_title", html)
         self.assertIn("inventory_aggregate_update_report_waiting", html)
         self.assertIn("inventory_aggregate_update_report_empty", html)
         self.assertIn("inventory_aggregate_update_report_summary", html)
         self.assertIn("inventory_aggregate_update_report_failures", html)
         self.assertIn("inventory_aggregate_update_report_blocked", html)
+        self.assertIn("inventory_aggregate_update_report_managers", html)
         self.assertIn("inventory_aggregate_update_report_cache_hits", html)
+        self.assertIn("inventory_aggregate_update_group_meta", html)
         self.assertIn("inventory_aggregate_update_guidance_manual_managed", html)
+        self.assertIn("inventory_aggregate_update_guidance_manual_git", html)
+        self.assertIn("/api/skills/aggregates/update-all/history", html)
+        self.assertIn("inventory_aggregate_update_guidance_manual_local", html)
+        self.assertIn("inventory_aggregate_update_guidance_mixed_sources", html)
+        self.assertIn("inventory_aggregate_update_guidance_registry_runtime", html)
+        self.assertIn("inventory_aggregate_update_guidance_git_runtime", html)
+        self.assertIn("function normalizeInventoryExecutionHistoryMode(", html)
+        self.assertIn("function syncInventoryExecutionHistoryTabs(", html)
         self.assertIn("function normalizeInventoryAggregateUpdateReport(", html)
         self.assertIn("function normalizeInventoryAggregateUpdateAuditRows(", html)
         self.assertIn("function loadAggregateUpdateAuditTrail(", html)
+        self.assertIn("function describeInventoryAggregateUpdateReportView(", html)
+        self.assertIn("function describeInventoryCurrentUpdateView(", html)
+        self.assertIn("function describeInventoryRollbackAuditView(", html)
+        self.assertIn("function renderInventoryExecutionHistoryPanel(", html)
         self.assertIn("function renderInventoryAggregateUpdateReportPanel(", html)
         self.assertIn("inventoryAggregateUpdateReportRows", html)
         self.assertIn("inventoryAggregateUpdateAuditRows", html)
-        self.assertIn("/api/skills/audit?limit=40&action=aggregates_update_all", html)
+        self.assertIn("/api/skills/aggregates/update-all/history", html)
 
     def test_inventory_panel_exposes_install_unit_drilldown_panel(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
@@ -210,6 +384,21 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_last_update_group_item", html)
         self.assertIn("renderInventoryOperationPlan(", html)
         self.assertIn("renderInventoryLastUpdatePanel(", html)
+
+    def test_inventory_panel_exposes_collapsible_source_details_and_compact_skill_details(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn('id="inventorySourceStructureSummary"', html)
+        self.assertIn('id="inventorySourceExecutionSummary"', html)
+        self.assertIn("inventory_source_structure_summary", html)
+        self.assertIn("inventory_source_execution_summary", html)
+        self.assertIn("inventory_target_details_title", html)
+        self.assertIn("inventory_skill_more_details", html)
+        self.assertIn("inventory-collapsible", html)
+        self.assertIn("inventory-skill-extra", html)
+        self.assertIn("inventory-skill-primary", html)
+        self.assertIn("inventory-skill-secondary", html)
+
 
     def test_inventory_panel_exposes_update_plan_support_and_confirmation_hooks(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")

@@ -61,7 +61,7 @@
 在插件仓库目录执行：
 
 ```bash
-./scripts/release.sh v0.1.1
+./scripts/release.sh v0.2.1
 ```
 
 该脚本会自动：
@@ -73,13 +73,19 @@
 ### 4.2 本地演练（不推送）
 
 ```bash
-NO_PUSH=1 ./scripts/release.sh v0.1.1
+NO_PUSH=1 ./scripts/release.sh v0.2.1
 ```
 
 ### 4.3 版本策略建议
 
 - 功能新增：`MINOR` 递增（例如 `v0.2.0`）
 - 兼容性修复：`PATCH` 递增（例如 `v0.1.1`）
+
+### 4.4 当前仓库基线
+
+- `metadata.yaml` 当前版本：`v0.2.1`
+- 内置 WebUI OpenAPI 版本：`0.2.1`
+- 当前完整回归基线：`pytest -q -> 191 passed`
 
 ## 5. 代码同步流程（本地 -> GitHub）
 
@@ -106,6 +112,7 @@ git push origin main --tags
 - `docs/` 是否包含维护文档
 - `_conf_schema.json` 是否可被 JSON 解析
 - Python 文件是否通过语法检查
+- `pytest -q` 是否在推送前通过
 - WebUI 路由是否可用（至少校验 `/api/health` 与 `/api/config`）
 
 ### 5.4 文档同步建议
@@ -138,6 +145,8 @@ git push origin main --tags
   - git remote/head 或本地 checkout 元数据
   - GitHub / GitLab / Bitbucket repo metadata
 - install unit update 取决于 `update_plan` 的真实执行能力，而不是 `source_kind` 名称。
+- 绑定保存现已直接基于 persisted `manifest` 与最新 skills snapshot 生成投影，维护者不应再假设“保存绑定后必须重扫 inventory 才会生效”。
+- 命令更新成功后，freshness anchor 会回写到 saved registry；下一次 overview 重建应立即消除错误的 `AGING` 状态。
 - git-backed `skill_lock` / repo 来源现在支持“受管 checkout 自动补齐”：
   - 若叶子 skill 目录不是 git 仓库，OneSync 会在 `plugin_data/.../skills/git_repos/` 下自动物化受管 checkout。
   - 后续 `sync/update` 均优先走该 checkout。

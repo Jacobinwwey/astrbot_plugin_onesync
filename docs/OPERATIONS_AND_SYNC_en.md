@@ -59,7 +59,7 @@ Recommendations:
 Run in the plugin repository:
 
 ```bash
-./scripts/release.sh v0.1.1
+./scripts/release.sh v0.2.1
 ```
 
 This script will:
@@ -71,13 +71,19 @@ This script will:
 ### 4.2 Local dry run (no push)
 
 ```bash
-NO_PUSH=1 ./scripts/release.sh v0.1.1
+NO_PUSH=1 ./scripts/release.sh v0.2.1
 ```
 
 ### 4.3 Versioning strategy
 
 - New features: bump `MINOR` (for example `v0.2.0`)
 - Bugfix/compatibility: bump `PATCH` (for example `v0.1.1`)
+
+### 4.4 Current repository baseline
+
+- `metadata.yaml` version: `v0.2.1`
+- Embedded WebUI OpenAPI version: `0.2.1`
+- Current full regression baseline: `pytest -q -> 191 passed`
 
 ## 5. Code Sync Workflow (Local -> GitHub)
 
@@ -104,6 +110,7 @@ Before pushing, verify:
 - `docs/` includes maintainer documentation in both zh/en
 - `_conf_schema.json` is valid JSON
 - Python files pass syntax checks
+- `pytest -q` passes before remote sync
 - WebUI JavaScript has no syntax errors
 - WebUI routes are reachable (`/api/health` and `/api/config`)
 
@@ -137,6 +144,8 @@ Current implementation status:
   - git remote/head or local checkout metadata
   - GitHub / GitLab / Bitbucket repo metadata
 - Install-unit update is governed by the effective `update_plan`, not by `source_kind` labels alone.
+- Inventory binding saves now project from persisted `manifest` plus the latest skills snapshot; maintainers should no longer assume that “save bindings” must trigger an inventory rescan to become visible.
+- Successful command updates now write freshness anchors back to saved registry rows, so a completed update should immediately clear false `AGING` state on the next overview rebuild.
 - Git-backed `skill_lock` / repo-derived sources now support managed checkout bootstrap:
   - if the leaf skill directory is not a git worktree, OneSync materializes a managed checkout under `plugin_data/.../skills/git_repos/`
   - later `sync/update` paths prefer that checkout

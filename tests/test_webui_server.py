@@ -223,6 +223,30 @@ class _FakePlugin:
         self.last_astrbot_delete_payload = None
         self.last_astrbot_sync_payload = None
         self.last_astrbot_neo_sync_payload = None
+        self.update_all_progress_snapshot = {
+            "run_id": "",
+            "status": "idle",
+            "workflow_kind": "aggregate_update_all",
+            "active": False,
+            "candidate_install_unit_total": 0,
+            "planned_install_unit_total": 0,
+            "actionable_install_unit_total": 0,
+            "command_install_unit_total": 0,
+            "source_sync_install_unit_total": 0,
+            "completed_command_install_unit_total": 0,
+            "completed_source_sync_install_unit_total": 0,
+            "completed_install_unit_total": 0,
+            "skipped_install_unit_total": 0,
+            "failure_count": 0,
+            "success_count": 0,
+            "source_sync_cache_hit_total": 0,
+            "atom_candidate_install_unit_total": 0,
+            "atom_improved_count": 0,
+            "atom_unchanged_count": 0,
+            "started_at": "",
+            "updated_at": "2026-04-06T08:00:00+00:00",
+            "message": "",
+        }
 
     def _get_install_unit_row(self, install_unit_id: str) -> dict | None:
         for row in self.skills_snapshot["install_unit_rows"]:
@@ -482,8 +506,34 @@ class _FakePlugin:
         body = payload if isinstance(payload, dict) else {}
         if body.get("force_fail"):
             return {"ok": False, "message": "aggregate update-all failed"}
+        self.update_all_progress_snapshot = {
+            "run_id": "run-demo-001",
+            "status": "completed",
+            "workflow_kind": "aggregate_update_all",
+            "active": False,
+            "candidate_install_unit_total": 1,
+            "planned_install_unit_total": 1,
+            "actionable_install_unit_total": 1,
+            "command_install_unit_total": 1,
+            "source_sync_install_unit_total": 0,
+            "completed_command_install_unit_total": 1,
+            "completed_source_sync_install_unit_total": 0,
+            "completed_install_unit_total": 1,
+            "skipped_install_unit_total": 0,
+            "failure_count": 0,
+            "success_count": 1,
+            "source_sync_cache_hit_total": 0,
+            "atom_candidate_install_unit_total": 0,
+            "atom_improved_count": 0,
+            "atom_unchanged_count": 0,
+            "started_at": "2026-04-06T08:10:00+00:00",
+            "updated_at": "2026-04-06T08:10:10+00:00",
+            "message": "aggregate update-all finished",
+        }
         return {
             "ok": True,
+            "run_id": "run-demo-001",
+            "progress": dict(self.update_all_progress_snapshot),
             "candidate_install_unit_total": 1,
             "planned_install_unit_total": 1,
             "executed_install_unit_total": 1,
@@ -532,6 +582,165 @@ class _FakePlugin:
             "deduplicated_install_unit_ids": ["npm:@every-env/compound-plugin"],
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
+        }
+
+    async def webui_improve_all_skills(self, payload: dict | None = None) -> dict:
+        body = payload if isinstance(payload, dict) else {}
+        if body.get("force_fail"):
+            return {"ok": False, "message": "skills improve-all failed"}
+        self.update_all_progress_snapshot = {
+            "run_id": "run-demo-improve-001",
+            "status": "completed",
+            "workflow_kind": "improve_all",
+            "active": False,
+            "candidate_install_unit_total": 1,
+            "planned_install_unit_total": 1,
+            "actionable_install_unit_total": 1,
+            "command_install_unit_total": 1,
+            "source_sync_install_unit_total": 0,
+            "completed_command_install_unit_total": 1,
+            "completed_source_sync_install_unit_total": 0,
+            "completed_install_unit_total": 1,
+            "skipped_install_unit_total": 0,
+            "failure_count": 0,
+            "success_count": 1,
+            "source_sync_cache_hit_total": 0,
+            "atom_candidate_install_unit_total": 1,
+            "atom_improved_count": 1,
+            "atom_unchanged_count": 0,
+            "started_at": "2026-04-06T08:12:00+00:00",
+            "updated_at": "2026-04-06T08:12:20+00:00",
+            "message": "aggregate update-all finished",
+        }
+        return {
+            "ok": True,
+            "run_id": "run-demo-improve-001",
+            "progress": dict(self.update_all_progress_snapshot),
+            "candidate_install_unit_total": 1,
+            "planned_install_unit_total": 1,
+            "executed_install_unit_total": 1,
+            "success_count": 1,
+            "failure_count": 0,
+            "precheck_failure_count": 0,
+            "skipped_install_unit_total": 0,
+            "source_sync_cache_hit_total": 0,
+            "failure_taxonomy": {
+                "failed_install_unit_total": 0,
+                "failed_install_unit_reason_groups": [],
+                "failed_install_unit_manager_groups": [],
+                "blocked_install_unit_total": 0,
+                "blocked_reason_groups": [],
+                "failed_source_total": 0,
+                "failed_source_sync_error_groups": [],
+            },
+            "atom_refresh": {
+                "strategy": "all",
+                "total": 1,
+                "success": 1,
+                "improved": 1,
+                "unchanged": 0,
+                "failed": 0,
+                "failureGroups": [],
+                "failureItems": [],
+                "completedAt": "2026-04-06T08:12:05+00:00",
+            },
+            "update": {
+                "supported": True,
+                "actionable": True,
+                "update_mode": "command",
+                "planned_install_unit_total": 1,
+                "deduplicated_install_unit_total": 1,
+                "command_install_unit_total": 1,
+                "source_sync_install_unit_total": 0,
+                "skipped_install_unit_total": 0,
+                "executed_install_unit_total": 1,
+                "source_sync_cache_hit_total": 0,
+                "failure_taxonomy": {
+                    "failed_install_unit_total": 0,
+                    "failed_install_unit_reason_groups": [],
+                    "failed_install_unit_manager_groups": [],
+                    "blocked_install_unit_total": 0,
+                    "blocked_reason_groups": [],
+                    "failed_source_total": 0,
+                    "failed_source_sync_error_groups": [],
+                },
+                "success_count": 1,
+                "failure_count": 0,
+                "message": "aggregate update-all finished",
+            },
+            "updated_install_unit_ids": ["install:skill_cli"],
+            "failed_install_units": [],
+            "unsupported_install_units": [],
+            "skipped_install_unit_ids": [],
+            "deduplicated_install_unit_ids": ["npm:@every-env/compound-plugin"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_get_update_all_aggregate_progress_payload(self, run_id: str = "") -> dict:
+        requested_run_id = str(run_id or "").strip()
+        current_run_id = str(self.update_all_progress_snapshot.get("run_id") or "").strip()
+        if requested_run_id and requested_run_id != current_run_id:
+            return {
+                "ok": False,
+                "message": f"aggregate update-all progress not found: {requested_run_id}",
+                "progress": dict(self.update_all_progress_snapshot),
+            }
+        return {
+            "ok": True,
+            "run_id": current_run_id,
+            "status": str(self.update_all_progress_snapshot.get("status") or "idle"),
+            "workflow_kind": str(self.update_all_progress_snapshot.get("workflow_kind") or "aggregate_update_all"),
+            "progress": dict(self.update_all_progress_snapshot),
+        }
+
+    def webui_get_update_all_aggregate_history_payload(self, limit: int = 40) -> dict:
+        _ = limit
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "counts": {"total": 1},
+            "items": [
+                {
+                    "run_id": "run-demo-improve-001",
+                    "timestamp": "2026-04-06T08:12:20+00:00",
+                    "workflow_kind": "improve_all",
+                    "source_id": "all",
+                    "atom_refresh": {
+                        "run_id": "run-demo-improve-001",
+                        "strategy": "all",
+                        "total": 1,
+                        "success": 1,
+                        "improved": 1,
+                        "unchanged": 0,
+                        "failed": 0,
+                        "failureGroups": [],
+                        "failureItems": [],
+                        "completedAt": "2026-04-06T08:12:05+00:00",
+                    },
+                    "update": {
+                        "run_id": "run-demo-improve-001",
+                        "planned_install_unit_total": 1,
+                        "executed_install_unit_total": 1,
+                        "success_count": 1,
+                        "failure_count": 0,
+                        "skipped_install_unit_total": 0,
+                        "source_sync_install_unit_total": 0,
+                        "source_sync_cache_hit_total": 0,
+                        "failure_taxonomy": {
+                            "failed_install_unit_total": 0,
+                            "failed_install_unit_reason_groups": [],
+                            "failed_install_unit_manager_groups": [],
+                            "blocked_install_unit_total": 0,
+                            "blocked_reason_groups": [],
+                            "failed_source_total": 0,
+                            "failed_source_sync_error_groups": [],
+                        },
+                        "message": "aggregate update-all finished",
+                    },
+                },
+            ],
+            "warnings": [],
         }
 
     async def webui_rollback_install_unit(self, install_unit_id: str, payload: dict) -> dict:
@@ -1202,6 +1411,18 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual("install_unit_rollback", rollback_audit_resp.json()["items"][0]["action"])
         self.assertEqual("install:skill_cli", rollback_audit_resp.json()["items"][0]["source_id"])
 
+        aggregate_history_resp = self.client.get(
+            "/api/skills/aggregates/update-all/history",
+            params={"limit": 10},
+        )
+        self.assertEqual(200, aggregate_history_resp.status_code)
+        self.assertTrue(aggregate_history_resp.json()["ok"])
+        self.assertEqual(1, aggregate_history_resp.json()["counts"]["total"])
+        self.assertEqual("run-demo-improve-001", aggregate_history_resp.json()["items"][0]["run_id"])
+        self.assertEqual("improve_all", aggregate_history_resp.json()["items"][0]["workflow_kind"])
+        self.assertEqual(1, aggregate_history_resp.json()["items"][0]["atom_refresh"]["improved"])
+        self.assertEqual(1, aggregate_history_resp.json()["items"][0]["update"]["planned_install_unit_total"])
+
         hosts_resp = self.client.get("/api/skills/hosts")
         self.assertEqual(200, hosts_resp.status_code)
         self.assertEqual("claude_code", hosts_resp.json()["items"][0]["host_id"])
@@ -1327,11 +1548,50 @@ class WebUIServerTests(unittest.TestCase):
         update_all_resp = self.client.post("/api/skills/aggregates/update-all", json={})
         self.assertEqual(200, update_all_resp.status_code)
         self.assertTrue(update_all_resp.json()["ok"])
+        self.assertEqual("run-demo-001", update_all_resp.json()["run_id"])
+        self.assertEqual("completed", update_all_resp.json()["progress"]["status"])
         self.assertEqual(1, update_all_resp.json()["update"]["planned_install_unit_total"])
         self.assertEqual(1, update_all_resp.json()["planned_install_unit_total"])
         self.assertEqual(1, update_all_resp.json()["success_count"])
         self.assertEqual([], update_all_resp.json()["failure_taxonomy"]["blocked_reason_groups"])
         self.assertEqual(["install:skill_cli"], update_all_resp.json()["updated_install_unit_ids"])
+
+        progress_resp = self.client.get("/api/skills/aggregates/update-all/progress")
+        self.assertEqual(200, progress_resp.status_code)
+        self.assertTrue(progress_resp.json()["ok"])
+        self.assertEqual("run-demo-001", progress_resp.json()["run_id"])
+        self.assertEqual("completed", progress_resp.json()["progress"]["status"])
+
+        progress_by_run_resp = self.client.get("/api/skills/aggregates/update-all/progress?run_id=run-demo-001")
+        self.assertEqual(200, progress_by_run_resp.status_code)
+        self.assertTrue(progress_by_run_resp.json()["ok"])
+        self.assertEqual("run-demo-001", progress_by_run_resp.json()["progress"]["run_id"])
+
+        missing_progress_resp = self.client.get("/api/skills/aggregates/update-all/progress?run_id=missing-run")
+        self.assertEqual(404, missing_progress_resp.status_code)
+        self.assertFalse(missing_progress_resp.json()["ok"])
+
+        improve_all_resp = self.client.post("/api/skills/improve-all", json={})
+        self.assertEqual(200, improve_all_resp.status_code)
+        self.assertTrue(improve_all_resp.json()["ok"])
+        self.assertEqual("run-demo-improve-001", improve_all_resp.json()["run_id"])
+        self.assertEqual("completed", improve_all_resp.json()["progress"]["status"])
+        self.assertEqual("improve_all", improve_all_resp.json()["progress"]["workflow_kind"])
+        self.assertEqual(1, improve_all_resp.json()["progress"]["atom_candidate_install_unit_total"])
+        self.assertEqual(1, improve_all_resp.json()["progress"]["atom_improved_count"])
+        self.assertEqual(0, improve_all_resp.json()["progress"]["atom_unchanged_count"])
+        self.assertEqual(1, improve_all_resp.json()["atom_refresh"]["total"])
+        self.assertEqual(1, improve_all_resp.json()["atom_refresh"]["improved"])
+        self.assertEqual(1, improve_all_resp.json()["update"]["planned_install_unit_total"])
+
+        improve_progress_resp = self.client.get(
+            "/api/skills/aggregates/update-all/progress?run_id=run-demo-improve-001",
+        )
+        self.assertEqual(200, improve_progress_resp.status_code)
+        self.assertTrue(improve_progress_resp.json()["ok"])
+        self.assertEqual("improve_all", improve_progress_resp.json()["progress"]["workflow_kind"])
+        self.assertEqual(1, improve_progress_resp.json()["progress"]["atom_candidate_install_unit_total"])
+        self.assertEqual(1, improve_progress_resp.json()["progress"]["atom_improved_count"])
 
         astrbot_toggle_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/skills/toggle",

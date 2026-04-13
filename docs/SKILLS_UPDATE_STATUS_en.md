@@ -2,7 +2,7 @@
 
 > Language / 语言: [English](./SKILLS_UPDATE_STATUS_en.md) | [中文](./SKILLS_UPDATE_STATUS_zh.md)
 
-Audit date: `2026-04-12`  
+Audit date: `2026-04-13`
 Scope: current `main` branch, source-first Skills management model
 
 ## 1. What Is Actually Complete Today
@@ -248,8 +248,14 @@ To call the feature "complete", the next implementation steps should be:
     - it prefers the latest in-session `update-all` result
     - it falls back to `aggregates_update_all` audit history when no live session result is cached
     - blocked / failed groups can be clicked to focus the related install-unit/source detail
+- Inventory binding saves and deploy-target projection mutations now narrow the authority boundary:
+  - `webui_update_inventory_bindings()` now projects from persisted `manifest` plus the latest skills snapshot instead of forcing an inventory rescan.
+  - The same manifest-first projection helpers are now reused by deploy-target mutation paths, so operator intent no longer has to round-trip through inventory just to become visible again.
+- Runtime freshness writeback is now authoritative after command updates:
+  - successful install-unit command execution now stamps `last_seen_at`, `last_refresh_at`, `source_age_days=0`, and `freshness_status=fresh` back into saved registry rows
+  - this removes the false `AGING` badge that could remain after a successful repo-metadata-backed or registry-backed update path
 - Full regression result is now:
-  - `pytest -q` -> `178 passed`
+  - `pytest -q` -> `191 passed`
 
 - WebUI now renders a rollback audit trail panel backed by `/api/skills/audit?action=rollback`, with automatic switching between current-aggregate scope and global recent records.
 - Rollback flow now supports selective rollback by `source_id`, so operators can scope blast radius instead of always rolling back the full aggregate.

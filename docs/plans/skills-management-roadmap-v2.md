@@ -66,6 +66,12 @@ status: active
 - 增加 source update available / stale age
 - 增加更清晰的 target path / projection 健康诊断
 
+### 阶段 3A：主界面减负与 Update-All Progress Bridge
+- 把 `面板设置` 与低频 controls 抽到 Utility 抽屉，降低 Skills 主界面噪声
+- 主工作区仅保留宿主选择、当前目标、核心 command rail、skills list
+- `update-all` 从前端估算进度升级为后端阶段桥接
+- freshness 语义从“仅本地 mtime”升级为“本地 last_seen + 最近成功 sync/refresh 锚点”
+
 ### 2026-04-06 已落地增量
 - Source freshness / stale age 诊断
 - npm-backed source sync 与 sync-all
@@ -82,14 +88,36 @@ status: active
 - runtime state / projection doctor 诊断
 - skills/inventory GET cache-first 读取，避免只读访问覆盖 generated 状态
 
+### 2026-04-12 已落地增量
+- Utility Inspector `执行历史` 统一入口（batch/current/rollback）
+- Skills 主界面 command rail 与批量更新进度区
+- Skills 列表精简为主信息 + 可展开细节
+- Source Inspector 改为折叠式“结构与成员 / 执行预览与审计”
+- sync 成功后 freshness anchor 修复，避免 `sync_status=ok` 但仍显示 `aging`
+- `一键完善 Skills` 已打通连续进度条：
+  - install-atom 补齐阶段与 aggregate update 阶段都已切到后端统一编排
+  - 两个阶段复用同一条 progress snapshot / polling contract
+  - progress payload 已携带 `workflow_kind` 与 atom 改善计数，页面刷新后仍可恢复 improve-all 语义
+- 新阶段实施计划已固化：
+  - `docs/plans/skills-ui-declutter-and-progress-bridge-plan-2026-04-12.md`
+
+### 2026-04-13 已落地增量
+- `webui_update_inventory_bindings()` 已切到 manifest-first 投影：
+  - 保存绑定时不再要求 inventory 重扫
+  - full replace 会清理 omitted manifest targets，并直接回写兼容投影
+- deploy target 相关 mutation 已复用同一套 manifest-first 投影辅助逻辑，authority boundary 从“inventory 回流”进一步收口到 persisted state
+- install-unit / collection 的命令更新成功后，会立即回写 freshness anchor，修复成功后仍显示 `aging` 的假阳性
+- 当前完整回归基线：`pytest -q -> 191 passed`
+
 ## 阶段 4：更广宿主生态
 - 扩更多 CLI / GUI / claw 家族
 - 增加 git source / registry source
 - 视需要再讨论跨主机统一管理
 
 ## 当前判断
-- 下一步主线不是继续堆 UI，而是先做 Phase 2A。
+- 下一步主线不是继续堆 UI，也不是继续增加聚合命名规则，而是推进 Phase 2B/2C authority boundary completion。
 - `skill-flow` 主要借鉴 source state / planner / doctor。
 - `ai-toolbox` 主要借鉴 host registry / custom tool / sync trigger 思路。
 - 两者都不应直接改变 OneSync 当前的 package-first 主交互。
-- 聚合管理专项的近期主线是 Phase 2A.1，而不是新增更多 bundle 命名规则。
+- 聚合管理专项的主线已从“继续补 Phase 2A.1 聚合规则”切到“Phase 2B/2C authority boundary + runtime reliability 收口”。
+- Phase 3A 继续保留，但仅作为 authority/runtime 收口的支持性 UI 工作，不再独立扩 scope。

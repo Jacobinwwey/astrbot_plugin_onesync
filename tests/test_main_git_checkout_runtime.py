@@ -643,3 +643,388 @@ class OneSyncPluginGitCheckoutPrewarmTests(unittest.IsolatedAsyncioTestCase):
             if isinstance(item, dict) and item.get("ignored")
         ]
         self.assertGreaterEqual(len(ignored), 3)
+
+    async def test_execute_install_unit_update_plans_stamps_registry_refresh_anchor_after_successful_command_update(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.state = {"skills": {"saved_registry": {}}, "inventory": {}}
+
+        source_row = {
+            "source_id": "npx_global_ui_ux_pro_max",
+            "display_name": "ui-ux-pro-max",
+            "source_kind": "npx_single",
+            "provider_key": "npx_skills",
+            "source_scope": "global",
+            "source_path": "/root/.codex/skills/ui-ux-pro-max",
+            "locator": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git#.claude/skills/ui-ux-pro-max",
+            "managed_by": "npx",
+            "update_policy": "registry",
+            "source_exists": True,
+            "last_seen_at": "2026-03-25T02:15:37.179549+00:00",
+            "last_refresh_at": "2026-04-01T09:12:34.003161+00:00",
+            "freshness_status": "aging",
+            "sync_status": "ok",
+            "sync_kind": "repo_metadata_github",
+            "sync_checked_at": "2026-04-01T09:12:24.739012+00:00",
+            "registry_latest_version": "2026-04-03T05:08:19Z",
+            "registry_package_name": "@nextlevelbuilder/ui-ux-pro-max-skill",
+            "registry_package_manager": "npm",
+            "install_unit_id": "npm:@nextlevelbuilder/ui-ux-pro-max-skill",
+            "install_manager": "bunx",
+        }
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-01T09:12:34.003161+00:00",
+            "sources": [dict(source_row)],
+        }
+        saved_registry_box = {"value": saved_registry}
+
+        plugin.webui_get_skills_payload = lambda: {"source_rows": [dict(source_row)]}
+        plugin._load_saved_skills_registry = lambda: saved_registry_box["value"]
+        plugin._save_skills_registry = lambda registry: saved_registry_box.__setitem__("value", registry) or registry
+
+        class _FakeRunner:
+            async def run(self, command: str, *, timeout_s: int = 600, cwd: str | None = None, env_update=None):
+                _ = timeout_s, cwd, env_update
+                return pytypes.SimpleNamespace(
+                    command=command,
+                    exit_code=0,
+                    stdout="updated 1 package\n",
+                    stderr="",
+                    duration_s=0.1,
+                    timed_out=False,
+                )
+
+        plugin.runner = _FakeRunner()
+
+        original_now_iso = MAIN_MODULE._now_iso
+        MAIN_MODULE._now_iso = lambda: "2026-04-12T12:34:56+00:00"
+        try:
+            result = await OneSyncPlugin._execute_install_unit_update_plans(
+                plugin,
+                [
+                    {
+                        "install_unit_id": "npm:@nextlevelbuilder/ui-ux-pro-max-skill",
+                        "display_name": "ui-ux-pro-max",
+                        "manager": "bunx",
+                        "policy": "registry",
+                        "supported": True,
+                        "source_ids": ["npx_global_ui_ux_pro_max"],
+                        "commands": [
+                            "bunx @nextlevelbuilder/ui-ux-pro-max-skill update --target codex",
+                        ],
+                    }
+                ],
+            )
+        finally:
+            MAIN_MODULE._now_iso = original_now_iso
+
+        self.assertTrue(result["install_unit_results"][0]["ok"])
+        updated_row = next(
+            item for item in saved_registry_box["value"]["sources"]
+            if item["source_id"] == "npx_global_ui_ux_pro_max"
+        )
+        self.assertEqual("2026-04-12T12:34:56+00:00", updated_row["last_refresh_at"])
+        self.assertEqual("2026-04-12T12:34:56+00:00", updated_row["last_seen_at"])
+        self.assertEqual("ok", updated_row["sync_status"])
+
+
+class OneSyncPluginAuthorityBoundaryTests(unittest.TestCase):
+    def test_inventory_bindings_update_uses_skills_snapshot_as_primary_compatibility_source(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.config = {
+            "skill_bindings": [
+                {"software_id": "codex", "skill_id": "legacy_source", "scope": "global"},
+            ],
+        }
+        plugin.state = {
+            "inventory": {
+                "last_snapshot": {
+                    "ok": True,
+                    "generated_at": "2026-04-12T10:00:00+00:00",
+                    "software_rows": [
+                        {
+                            "id": "codex",
+                            "display_name": "Codex",
+                            "binding_count": 1,
+                        },
+                    ],
+                    "skill_rows": [
+                        {"id": "legacy_source", "display_name": "Legacy Source"},
+                        {"id": "source_b", "display_name": "Source B"},
+                    ],
+                    "binding_rows": [
+                        {
+                            "software_id": "codex",
+                            "skill_id": "legacy_source",
+                            "scope": "global",
+                            "enabled": True,
+                            "valid": True,
+                            "reason": "",
+                        },
+                    ],
+                    "binding_map": {"codex": ["legacy_source"]},
+                    "binding_map_by_scope": {
+                        "global": {"codex": ["legacy_source"]},
+                        "workspace": {"codex": []},
+                    },
+                    "compatibility": {"codex": ["legacy_source", "source_b"]},
+                    "counts": {
+                        "bindings_total": 1,
+                        "bindings_valid": 1,
+                        "bindings_invalid": 0,
+                    },
+                    "warnings": [],
+                },
+            },
+            "skills": {
+                "last_overview": {
+                    "ok": True,
+                    "generated_at": "2026-04-12T10:00:00+00:00",
+                    "host_rows": [
+                        {"host_id": "codex", "display_name": "Codex"},
+                    ],
+                    "compatible_source_rows_by_software": {
+                        "codex": [
+                            {"source_id": "legacy_source"},
+                            {"source_id": "source_b"},
+                        ],
+                    },
+                    "manifest": {"deploy_targets": []},
+                    "registry": {},
+                    "lock": {},
+                    "install_atom_registry": {},
+                },
+            },
+        }
+
+        manifest_calls: list[tuple[str, list[str]]] = []
+        persisted: list[bool] = []
+        debug_logs: list[str] = []
+
+        def _update_saved_manifest_target_selection(*, target_id: str, selected_source_ids: list[str]):
+            manifest_calls.append((target_id, list(selected_source_ids)))
+            return {
+                "version": 1,
+                "generated_at": "2026-04-12T10:00:00+00:00",
+                "sources": [],
+                "deploy_targets": [
+                    {
+                        "target_id": target_id,
+                        "software_id": "codex",
+                        "scope": "global",
+                        "selected_source_ids": list(selected_source_ids),
+                    },
+                ],
+            }
+
+        def _refresh_skills_snapshot(
+            inventory_snapshot=None,
+            *,
+            saved_manifest=None,
+            saved_registry=None,
+            saved_lock=None,
+            saved_install_atom_registry=None,
+        ):
+            plugin.state.setdefault("skills", {})["last_overview"] = {
+                "ok": True,
+                "generated_at": "2026-04-12T10:00:00+00:00",
+                "manifest": saved_manifest or {},
+                "registry": saved_registry or {},
+                "lock": saved_lock or {},
+                "install_atom_registry": saved_install_atom_registry or {},
+            }
+            return plugin.state["skills"]["last_overview"]
+
+        plugin.webui_get_skills_payload = lambda: plugin.state["skills"]["last_overview"]
+        plugin._update_saved_manifest_target_selection = _update_saved_manifest_target_selection
+        plugin._persist_plugin_config = lambda: persisted.append(True)
+        plugin._push_debug_log = lambda _level, message, **_kwargs: debug_logs.append(str(message))
+        plugin._load_saved_skills_registry = lambda: {}
+        plugin._load_saved_skills_lock = lambda: {}
+        plugin._load_saved_install_atom_registry = lambda: {}
+        plugin._refresh_skills_snapshot = _refresh_skills_snapshot
+        plugin._build_inventory_snapshot = lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("inventory rescan should not be required for binding projection"),
+        )
+
+        result = OneSyncPlugin.webui_update_inventory_bindings(
+            plugin,
+            {"software_id": "codex", "skill_ids": ["source_b"], "scope": "global"},
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual([("codex:global", ["source_b"])], manifest_calls)
+        self.assertEqual(
+            [{"software_id": "codex", "skill_id": "source_b", "scope": "global", "enabled": True, "settings": {}}],
+            plugin.config["skill_bindings"],
+        )
+        self.assertEqual(["source_b"], result["inventory"]["binding_map"]["codex"])
+        self.assertEqual(["source_b"], result["inventory"]["binding_map_by_scope"]["global"]["codex"])
+        self.assertEqual(1, result["inventory"]["counts"]["bindings_total"])
+        self.assertTrue(persisted)
+        self.assertTrue(any("bindings=1" in item for item in debug_logs))
+
+    def test_inventory_bindings_full_replace_clears_omitted_manifest_targets_without_rescan(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.config = {
+            "skill_bindings": [
+                {"software_id": "codex", "skill_id": "legacy_source", "scope": "global"},
+                {"software_id": "claude_code", "skill_id": "source_x", "scope": "global"},
+            ],
+        }
+        plugin.state = {
+            "inventory": {
+                "last_snapshot": {
+                    "ok": True,
+                    "generated_at": "2026-04-12T10:00:00+00:00",
+                    "software_rows": [
+                        {"id": "codex", "display_name": "Codex", "binding_count": 1},
+                        {"id": "claude_code", "display_name": "Claude Code", "binding_count": 1},
+                    ],
+                    "skill_rows": [
+                        {"id": "legacy_source", "display_name": "Legacy Source"},
+                        {"id": "source_b", "display_name": "Source B"},
+                        {"id": "source_x", "display_name": "Source X"},
+                    ],
+                    "binding_rows": [
+                        {
+                            "software_id": "codex",
+                            "skill_id": "legacy_source",
+                            "scope": "global",
+                            "enabled": True,
+                            "valid": True,
+                            "reason": "",
+                        },
+                        {
+                            "software_id": "claude_code",
+                            "skill_id": "source_x",
+                            "scope": "global",
+                            "enabled": True,
+                            "valid": True,
+                            "reason": "",
+                        },
+                    ],
+                    "binding_map": {
+                        "codex": ["legacy_source"],
+                        "claude_code": ["source_x"],
+                    },
+                    "binding_map_by_scope": {
+                        "global": {
+                            "codex": ["legacy_source"],
+                            "claude_code": ["source_x"],
+                        },
+                        "workspace": {
+                            "codex": [],
+                            "claude_code": [],
+                        },
+                    },
+                    "compatibility": {
+                        "codex": ["legacy_source", "source_b"],
+                        "claude_code": ["source_x"],
+                    },
+                    "counts": {
+                        "bindings_total": 2,
+                        "bindings_valid": 2,
+                        "bindings_invalid": 0,
+                    },
+                    "warnings": [],
+                },
+            },
+            "skills": {
+                "last_overview": {
+                    "ok": True,
+                    "generated_at": "2026-04-12T10:00:00+00:00",
+                    "host_rows": [
+                        {"host_id": "codex", "display_name": "Codex"},
+                        {"host_id": "claude_code", "display_name": "Claude Code"},
+                    ],
+                    "compatible_source_rows_by_software": {
+                        "codex": [
+                            {"source_id": "legacy_source"},
+                            {"source_id": "source_b"},
+                        ],
+                        "claude_code": [
+                            {"source_id": "source_x"},
+                        ],
+                    },
+                    "manifest": {
+                        "version": 1,
+                        "generated_at": "2026-04-12T10:00:00+00:00",
+                        "sources": [],
+                        "deploy_targets": [
+                            {
+                                "target_id": "codex:global",
+                                "software_id": "codex",
+                                "scope": "global",
+                                "selected_source_ids": ["legacy_source"],
+                            },
+                            {
+                                "target_id": "claude_code:global",
+                                "software_id": "claude_code",
+                                "scope": "global",
+                                "selected_source_ids": ["source_x"],
+                            },
+                        ],
+                    },
+                    "registry": {},
+                    "lock": {},
+                    "install_atom_registry": {},
+                },
+            },
+        }
+
+        persisted: list[bool] = []
+        debug_logs: list[str] = []
+
+        def _refresh_skills_snapshot(
+            inventory_snapshot=None,
+            *,
+            saved_manifest=None,
+            saved_registry=None,
+            saved_lock=None,
+            saved_install_atom_registry=None,
+        ):
+            plugin.state.setdefault("skills", {})["last_overview"] = {
+                "ok": True,
+                "generated_at": "2026-04-12T10:00:00+00:00",
+                "manifest": saved_manifest or {},
+                "registry": saved_registry or {},
+                "lock": saved_lock or {},
+                "install_atom_registry": saved_install_atom_registry or {},
+            }
+            return plugin.state["skills"]["last_overview"]
+
+        plugin.webui_get_skills_payload = lambda: plugin.state["skills"]["last_overview"]
+        plugin._persist_plugin_config = lambda: persisted.append(True)
+        plugin._push_debug_log = lambda _level, message, **_kwargs: debug_logs.append(str(message))
+        plugin._load_saved_skills_registry = lambda: {}
+        plugin._load_saved_skills_lock = lambda: {}
+        plugin._load_saved_install_atom_registry = lambda: {}
+        plugin._refresh_skills_snapshot = _refresh_skills_snapshot
+        plugin._build_inventory_snapshot = lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("inventory rescan should not be required for binding projection"),
+        )
+
+        result = OneSyncPlugin.webui_update_inventory_bindings(
+            plugin,
+            {"bindings": [{"software_id": "codex", "skill_id": "source_b", "scope": "global"}]},
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            [{"software_id": "codex", "skill_id": "source_b", "scope": "global", "enabled": True, "settings": {}}],
+            plugin.config["skill_bindings"],
+        )
+        manifest_targets = {
+            item["target_id"]: item
+            for item in result["manifest"]["deploy_targets"]
+        }
+        self.assertEqual(["source_b"], manifest_targets["codex:global"]["selected_source_ids"])
+        self.assertEqual([], manifest_targets["claude_code:global"]["selected_source_ids"])
+        self.assertEqual(["source_b"], result["inventory"]["binding_map"]["codex"])
+        self.assertEqual([], result["inventory"]["binding_map"]["claude_code"])
+        self.assertEqual(["source_b"], result["inventory"]["binding_map_by_scope"]["global"]["codex"])
+        self.assertEqual([], result["inventory"]["binding_map_by_scope"]["global"]["claude_code"])
+        self.assertEqual(1, result["inventory"]["counts"]["bindings_total"])
+        self.assertTrue(persisted)
+        self.assertTrue(any("bindings=1" in item for item in debug_logs))

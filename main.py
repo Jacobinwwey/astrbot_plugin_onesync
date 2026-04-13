@@ -45,6 +45,7 @@ from .skills_core import (
     manifest_to_binding_rows,
     normalize_saved_skills_manifest,
     normalize_saved_skills_lock,
+    project_inventory_snapshot_bindings_from_manifest,
 )
 from .skills_sources_core import (
     normalize_skills_registry,
@@ -69,6 +70,14 @@ from .webui_server import OneSyncWebUIServer
 
 PLUGIN_NAME = "astrbot_plugin_onesync"
 SKILLS_ROLLBACK_CONFIRM_TOKEN = "ROLLBACK_ACCEPT_RISK"
+SKILLS_AGGREGATE_UPDATE_ACTIVE_STATUSES = {
+    "planning",
+    "improving_atoms_planning",
+    "improving_atoms_refreshing",
+    "executing_command",
+    "executing_source_sync",
+    "refreshing_snapshot",
+}
 
 DEFAULT_GITHUB_MIRROR_PREFIXES = [
     "",
@@ -461,6 +470,7 @@ class OneSyncPlugin(Star):
         self._run_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
         self._web_job_lock = asyncio.Lock()
+        self._skills_update_all_lock = asyncio.Lock()
 
         self._stop_event = asyncio.Event()
         self._worker_task: asyncio.Task | None = None
@@ -472,6 +482,7 @@ class OneSyncPlugin(Star):
         self._debug_logs: list[dict[str, Any]] = []
         self._debug_log_seq = 0
         self._max_debug_logs = 1200
+        self._skills_update_all_progress: dict[str, Any] = self._build_skills_update_all_progress_snapshot()
 
     async def initialize(self) -> None:
         self.plugin_data_dir.mkdir(parents=True, exist_ok=True)
@@ -1212,6 +1223,382 @@ class OneSyncPlugin(Star):
         self.config["skill_bindings"] = projected_bindings
         self._persist_plugin_config()
         return True
+
+    @staticmethod
+    def _skills_snapshot_compatibility_map(skills_snapshot: dict[str, Any] | None) -> dict[str, list[str]]:
+        snapshot = skills_snapshot if isinstance(skills_snapshot, dict) else {}
+        compatibility: dict[str, list[str]] = {}
+
+        compatibility_raw = snapshot.get("compatibility", {})
+        if isinstance(compatibility_raw, dict):
+            for software_id, source_ids in compatibility_raw.items():
+                software_key = _normalize_inventory_id(software_id, default="")
+                if not software_key:
+                    continue
+                compatibility[software_key] = _dedupe_keep_order(_to_str_list(source_ids))
+
+        compatible_rows_raw = snapshot.get("compatible_source_rows_by_software", {})
+        if isinstance(compatible_rows_raw, dict):
+            for software_id, rows in compatible_rows_raw.items():
+                software_key = _normalize_inventory_id(software_id, default="")
+                if not software_key or not isinstance(rows, list):
+                    continue
+                current_ids = list(compatibility.get(software_key, []))
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    source_id = _normalize_inventory_id(
+                        row.get("source_id") or row.get("id") or row.get("skill_id"),
+                        default="",
+                    )
+                    if source_id:
+                        current_ids.append(source_id)
+                compatibility[software_key] = _dedupe_keep_order(current_ids)
+
+        return compatibility
+
+    @classmethod
+    def _skills_snapshot_known_software_ids(cls, skills_snapshot: dict[str, Any] | None) -> list[str]:
+        snapshot = skills_snapshot if isinstance(skills_snapshot, dict) else {}
+        software_ids: list[str] = []
+
+        for row in snapshot.get("software_rows", []):
+            if not isinstance(row, dict):
+                continue
+            software_id = _normalize_inventory_id(row.get("id"), default="")
+            if software_id:
+                software_ids.append(software_id)
+
+        for row in snapshot.get("host_rows", []):
+            if not isinstance(row, dict):
+                continue
+            software_id = _normalize_inventory_id(row.get("host_id") or row.get("id"), default="")
+            if software_id:
+                software_ids.append(software_id)
+
+        software_ids.extend(cls._skills_snapshot_compatibility_map(snapshot).keys())
+        return _dedupe_keep_order([item for item in software_ids if item])
+
+    @classmethod
+    def _skills_snapshot_compatible_source_ids(
+        cls,
+        skills_snapshot: dict[str, Any] | None,
+        software_id: str,
+    ) -> list[str]:
+        software_key = _normalize_inventory_id(software_id, default="")
+        if not software_key:
+            return []
+        compatibility = cls._skills_snapshot_compatibility_map(skills_snapshot)
+        return _dedupe_keep_order(_to_str_list(compatibility.get(software_key, [])))
+
+    def _store_saved_skills_payloads(
+        self,
+        *,
+        manifest: dict[str, Any] | None = None,
+        registry: dict[str, Any] | None = None,
+        lock: dict[str, Any] | None = None,
+        install_atom_registry: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        skills_state = self._skills_state()
+        stored: dict[str, Any] = {}
+        can_persist_files = hasattr(self, "skills_state_dir")
+
+        if manifest is not None:
+            normalized_manifest = normalize_saved_skills_manifest(manifest)
+            if can_persist_files and hasattr(self, "skills_manifest_path"):
+                normalized_manifest = self._save_skills_manifest(normalized_manifest)
+            else:
+                skills_state["saved_manifest"] = normalized_manifest
+            stored["manifest"] = normalized_manifest
+
+        if registry is not None:
+            normalized_registry = normalize_skills_registry(registry)
+            if can_persist_files and hasattr(self, "skills_registry_path"):
+                normalized_registry = self._save_skills_registry(normalized_registry)
+            else:
+                skills_state["saved_registry"] = normalized_registry
+            stored["registry"] = normalized_registry
+
+        if lock is not None:
+            normalized_lock = normalize_saved_skills_lock(lock)
+            if can_persist_files and hasattr(self, "skills_lock_path"):
+                normalized_lock = self._save_skills_lock(normalized_lock)
+            else:
+                skills_state["saved_lock"] = normalized_lock
+            stored["lock"] = normalized_lock
+
+        if install_atom_registry is not None:
+            normalized_install_atom_registry = normalize_install_atom_registry(install_atom_registry)
+            if can_persist_files and hasattr(self, "skills_install_atom_registry_path"):
+                normalized_install_atom_registry = self._save_install_atom_registry(normalized_install_atom_registry)
+            else:
+                skills_state["saved_install_atom_registry"] = normalized_install_atom_registry
+            stored["install_atom_registry"] = normalized_install_atom_registry
+
+        return stored
+
+    def _replace_saved_manifest_target_selections_from_bindings(
+        self,
+        manifest: dict[str, Any] | None,
+        binding_rows: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        normalized_manifest = normalize_saved_skills_manifest(manifest if isinstance(manifest, dict) else {})
+        deploy_targets = [
+            dict(item)
+            for item in normalized_manifest.get("deploy_targets", [])
+            if isinstance(item, dict)
+        ]
+        target_index = {
+            str(item.get("target_id") or "").strip(): item
+            for item in deploy_targets
+            if str(item.get("target_id") or "").strip()
+        }
+
+        target_selection_map: dict[str, list[str]] = {}
+        incoming_target_ids: list[str] = []
+        for binding in normalize_skill_bindings_payload(binding_rows):
+            if not _to_bool(binding.get("enabled", True), True):
+                continue
+            software_id = _normalize_inventory_id(binding.get("software_id"), default="")
+            skill_id = _normalize_inventory_id(binding.get("skill_id"), default="")
+            scope = _normalize_inventory_id(binding.get("scope", "global"), default="global")
+            if scope not in {"global", "workspace"}:
+                scope = "global"
+            if not software_id or not skill_id:
+                continue
+            target_id = f"{software_id}:{scope}"
+            incoming_target_ids.append(target_id)
+            selected_source_ids = target_selection_map.setdefault(target_id, [])
+            if skill_id not in selected_source_ids:
+                selected_source_ids.append(skill_id)
+
+        ordered_target_ids = _dedupe_keep_order(
+            [
+                str(item.get("target_id") or "").strip()
+                for item in deploy_targets
+                if str(item.get("target_id") or "").strip()
+            ] + incoming_target_ids,
+        )
+
+        next_deploy_targets: list[dict[str, Any]] = []
+        for target_id in ordered_target_ids:
+            software_text, _, scope_text = target_id.partition(":")
+            software_id = _normalize_inventory_id(software_text, default="")
+            scope = _normalize_inventory_id(scope_text or "global", default="global")
+            if scope not in {"global", "workspace"}:
+                scope = "global"
+            current = dict(target_index.get(target_id, {}))
+            current["target_id"] = target_id
+            current["software_id"] = software_id
+            current["scope"] = scope
+            current["selected_source_ids"] = list(target_selection_map.get(target_id, []))
+            next_deploy_targets.append(current)
+
+        normalized_manifest["deploy_targets"] = next_deploy_targets
+        stored = self._store_saved_skills_payloads(manifest=normalized_manifest)
+        return stored.get("manifest", normalized_manifest)
+
+    def _inventory_projection_base_snapshot(
+        self,
+        *,
+        skills_snapshot: dict[str, Any] | None = None,
+        inventory_snapshot: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        snapshot = inventory_snapshot if isinstance(inventory_snapshot, dict) else {}
+        skills = skills_snapshot if isinstance(skills_snapshot, dict) else {}
+
+        software_rows = [
+            dict(item)
+            for item in snapshot.get("software_rows", [])
+            if isinstance(item, dict)
+        ]
+        if not software_rows:
+            software_rows = [
+                dict(item)
+                for item in skills.get("software_rows", [])
+                if isinstance(item, dict)
+            ]
+        if not software_rows:
+            for item in skills.get("host_rows", []):
+                if not isinstance(item, dict):
+                    continue
+                software_id = _normalize_inventory_id(item.get("host_id") or item.get("id"), default="")
+                if not software_id:
+                    continue
+                software_rows.append(
+                    {
+                        "id": software_id,
+                        "display_name": str(item.get("display_name") or software_id),
+                        "binding_count": _to_int(item.get("binding_count", 0), 0, 0),
+                    },
+                )
+
+        skill_rows = [
+            dict(item)
+            for item in snapshot.get("skill_rows", [])
+            if isinstance(item, dict)
+        ]
+        if not skill_rows:
+            skill_rows = [
+                dict(item)
+                for item in skills.get("skill_rows", [])
+                if isinstance(item, dict)
+            ]
+        if not skill_rows:
+            for item in skills.get("source_rows", []):
+                if not isinstance(item, dict):
+                    continue
+                source_id = _normalize_inventory_id(item.get("source_id") or item.get("id"), default="")
+                if not source_id:
+                    continue
+                skill_rows.append(
+                    {
+                        "id": source_id,
+                        "display_name": str(item.get("display_name") or source_id),
+                    },
+                )
+        if not skill_rows:
+            seen_source_ids: set[str] = set()
+            for source_ids in self._skills_snapshot_compatibility_map(skills).values():
+                for source_id in source_ids:
+                    if source_id in seen_source_ids:
+                        continue
+                    seen_source_ids.add(source_id)
+                    skill_rows.append({"id": source_id, "display_name": source_id})
+
+        compatibility = self._skills_snapshot_compatibility_map(skills)
+        if not compatibility:
+            compatibility_raw = snapshot.get("compatibility", {})
+            if isinstance(compatibility_raw, dict):
+                compatibility = {
+                    _normalize_inventory_id(software_id, default=""): _dedupe_keep_order(_to_str_list(source_ids))
+                    for software_id, source_ids in compatibility_raw.items()
+                    if _normalize_inventory_id(software_id, default="")
+                }
+
+        counts = snapshot.get("counts", {})
+        warnings = snapshot.get("warnings", [])
+        return {
+            **snapshot,
+            "ok": _to_bool(snapshot.get("ok", True), True),
+            "generated_at": str(snapshot.get("generated_at") or skills.get("generated_at") or _now_iso()),
+            "software_rows": software_rows,
+            "skill_rows": skill_rows,
+            "compatibility": compatibility,
+            "counts": counts if isinstance(counts, dict) else {},
+            "warnings": list(warnings) if isinstance(warnings, list) else [],
+        }
+
+    def _project_inventory_and_refresh_skills_from_manifest(
+        self,
+        manifest: dict[str, Any] | None,
+        *,
+        skills_snapshot: dict[str, Any] | None = None,
+        inventory_snapshot: dict[str, Any] | None = None,
+        saved_registry: dict[str, Any] | None = None,
+        saved_lock: dict[str, Any] | None = None,
+        saved_install_atom_registry: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        current_skills_snapshot = skills_snapshot if isinstance(skills_snapshot, dict) else self.webui_get_skills_payload()
+        normalized_manifest = normalize_saved_skills_manifest(manifest if isinstance(manifest, dict) else {})
+        base_inventory_snapshot = self._inventory_projection_base_snapshot(
+            skills_snapshot=current_skills_snapshot,
+            inventory_snapshot=inventory_snapshot if isinstance(inventory_snapshot, dict) else self._inventory_state().get("last_snapshot", {}),
+        )
+        projected_inventory_snapshot = project_inventory_snapshot_bindings_from_manifest(
+            base_inventory_snapshot,
+            normalized_manifest,
+        )
+        inventory_state = self._inventory_state()
+        inventory_state["last_snapshot"] = projected_inventory_snapshot
+        inventory_state["last_scanned_at"] = projected_inventory_snapshot.get("generated_at", _now_iso())
+
+        resolved_registry = (
+            saved_registry if isinstance(saved_registry, dict)
+            else current_skills_snapshot.get("registry", {})
+            if isinstance(current_skills_snapshot.get("registry", {}), dict)
+            else self._load_saved_skills_registry()
+        )
+        resolved_lock = (
+            saved_lock if isinstance(saved_lock, dict)
+            else current_skills_snapshot.get("lock", {})
+            if isinstance(current_skills_snapshot.get("lock", {}), dict)
+            else self._load_saved_skills_lock()
+        )
+        resolved_install_atom_registry = (
+            saved_install_atom_registry if isinstance(saved_install_atom_registry, dict)
+            else current_skills_snapshot.get("install_atom_registry", {})
+            if isinstance(current_skills_snapshot.get("install_atom_registry", {}), dict)
+            else self._load_saved_install_atom_registry()
+        )
+
+        refreshed_skills_snapshot = self._refresh_skills_snapshot(
+            inventory_snapshot=projected_inventory_snapshot,
+            saved_manifest=normalized_manifest,
+            saved_registry=resolved_registry,
+            saved_lock=resolved_lock,
+            saved_install_atom_registry=resolved_install_atom_registry,
+        )
+
+        final_manifest = normalize_saved_skills_manifest(
+            refreshed_skills_snapshot.get("manifest", normalized_manifest)
+            if isinstance(refreshed_skills_snapshot, dict)
+            else normalized_manifest,
+        )
+        final_registry = (
+            refreshed_skills_snapshot.get("registry", resolved_registry)
+            if isinstance(refreshed_skills_snapshot, dict) and isinstance(refreshed_skills_snapshot.get("registry", resolved_registry), dict)
+            else resolved_registry
+        )
+        final_lock = (
+            refreshed_skills_snapshot.get("lock", resolved_lock)
+            if isinstance(refreshed_skills_snapshot, dict) and isinstance(refreshed_skills_snapshot.get("lock", resolved_lock), dict)
+            else resolved_lock
+        )
+        final_install_atom_registry = (
+            refreshed_skills_snapshot.get("install_atom_registry", resolved_install_atom_registry)
+            if isinstance(refreshed_skills_snapshot, dict) and isinstance(refreshed_skills_snapshot.get("install_atom_registry", resolved_install_atom_registry), dict)
+            else resolved_install_atom_registry
+        )
+        self._store_saved_skills_payloads(
+            manifest=final_manifest,
+            registry=final_registry,
+            lock=final_lock,
+            install_atom_registry=final_install_atom_registry,
+        )
+
+        self._sync_skill_bindings_projection(final_manifest)
+        projected_inventory_snapshot = project_inventory_snapshot_bindings_from_manifest(
+            base_inventory_snapshot,
+            final_manifest,
+        )
+        inventory_state["last_snapshot"] = projected_inventory_snapshot
+        inventory_state["last_scanned_at"] = projected_inventory_snapshot.get("generated_at", _now_iso())
+
+        last_overview = self._skills_state().get("last_overview", {})
+        if isinstance(last_overview, dict) and last_overview:
+            can_augment_runtime_health = all(
+                hasattr(self, attr)
+                for attr in (
+                    "skills_manifest_path",
+                    "skills_lock_path",
+                    "skills_sources_dir",
+                    "skills_generated_dir",
+                )
+            )
+            if can_augment_runtime_health:
+                self._augment_skills_runtime_health(last_overview)
+                self._schedule_git_checkout_prewarm(last_overview.get("source_rows", []))
+            self._skills_state()["last_overview"] = last_overview
+
+        return {
+            "manifest": final_manifest,
+            "inventory": projected_inventory_snapshot,
+            "skills": self._skills_state().get("last_overview", {}),
+            "registry": final_registry,
+            "lock": final_lock,
+            "install_atom_registry": final_install_atom_registry,
+        }
 
     def _write_json_file(self, path: Path, payload: Any) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -2150,18 +2537,9 @@ class OneSyncPlugin(Star):
             if isinstance(manifest, dict) and manifest:
                 bindings_changed = self._sync_skill_bindings_projection(manifest)
                 if bindings_changed:
-                    snapshot = self._build_inventory_snapshot(
-                        skill_bindings_override=manifest_to_binding_rows(manifest),
-                    )
+                    snapshot = project_inventory_snapshot_bindings_from_manifest(snapshot, manifest)
                     inventory_state["last_snapshot"] = snapshot
                     inventory_state["last_scanned_at"] = snapshot.get("generated_at", _now_iso())
-                    self._refresh_skills_snapshot(
-                        inventory_snapshot=snapshot,
-                        saved_manifest=manifest,
-                        saved_registry=registry,
-                        saved_lock=lock,
-                        saved_install_atom_registry=install_atom_registry if isinstance(install_atom_registry, dict) else {},
-                    )
             last_overview = self._skills_state().get("last_overview", {})
             if isinstance(last_overview, dict) and last_overview:
                 self._augment_skills_runtime_health(last_overview)
@@ -2259,6 +2637,155 @@ class OneSyncPlugin(Star):
             "items": items if isinstance(items, list) else [],
             "warnings": snapshot.get("warnings", []),
         }
+
+    @staticmethod
+    def _normalize_install_atom_refresh_strategy(value: Any) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized == "high_confidence":
+            return "high_confidence"
+        return "all"
+
+    @staticmethod
+    def _install_atom_is_actionable(item: dict[str, Any] | None) -> bool:
+        row = item if isinstance(item, dict) else {}
+        status = str(row.get("resolution_status") or "unresolved").strip().lower()
+        if status == "resolved":
+            return False
+        note_kind = str(row.get("provenance_note_kind") or "").strip().lower()
+        resolver_path = str(row.get("resolver_path") or "").strip().lower()
+        return note_kind != "legacy_root_only" and resolver_path != "aggregation:fallback_single"
+
+    @staticmethod
+    def _install_atom_resolution_rank(value: Any) -> int:
+        normalized = str(value or "unresolved").strip().lower()
+        if normalized == "resolved":
+            return 2
+        if normalized == "partial":
+            return 1
+        return 0
+
+    @staticmethod
+    def _install_atom_evidence_rank(value: Any) -> int:
+        normalized = str(value or "unresolved").strip().lower()
+        if normalized == "explicit":
+            return 3
+        if normalized == "strong":
+            return 2
+        if normalized == "heuristic":
+            return 1
+        return 0
+
+    def _install_atom_row_by_install_unit_id(
+        self,
+        install_atom_registry: dict[str, Any] | None,
+        install_unit_id: str,
+    ) -> dict[str, Any] | None:
+        normalized_install_unit_id = str(install_unit_id or "").strip()
+        if not normalized_install_unit_id:
+            return None
+        registry = normalize_install_atom_registry(install_atom_registry or {})
+        for item in registry.get("install_atoms", []):
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("install_unit_id") or "").strip() == normalized_install_unit_id:
+                return item
+        return None
+
+    def _install_atom_refresh_improved(
+        self,
+        before_row: dict[str, Any] | None,
+        after_row: dict[str, Any] | None,
+    ) -> bool:
+        before = before_row if isinstance(before_row, dict) else {}
+        after = after_row if isinstance(after_row, dict) else {}
+        if self._install_atom_resolution_rank(after.get("resolution_status")) > self._install_atom_resolution_rank(
+            before.get("resolution_status"),
+        ):
+            return True
+        if self._install_atom_evidence_rank(after.get("evidence_level")) > self._install_atom_evidence_rank(
+            before.get("evidence_level"),
+        ):
+            return True
+        before_resolver = str(before.get("resolver_path") or "").strip()
+        after_resolver = str(after.get("resolver_path") or "").strip()
+        return before_resolver != after_resolver and bool(after_resolver) and after_resolver != "aggregation:fallback_single"
+
+    def _build_install_atom_refresh_candidates(
+        self,
+        skills_snapshot: dict[str, Any] | None,
+        *,
+        strategy: str = "all",
+    ) -> dict[str, Any]:
+        snapshot = skills_snapshot if isinstance(skills_snapshot, dict) else {}
+        registry = normalize_install_atom_registry(snapshot.get("install_atom_registry", {}))
+        normalized_strategy = self._normalize_install_atom_refresh_strategy(strategy)
+        install_atoms = [
+            item
+            for item in registry.get("install_atoms", [])
+            if isinstance(item, dict)
+        ]
+        unresolved_rows = [
+            item
+            for item in install_atoms
+            if str(item.get("resolution_status") or "unresolved").strip().lower() != "resolved"
+        ]
+        actionable_rows = [
+            item
+            for item in unresolved_rows
+            if self._install_atom_is_actionable(item)
+        ]
+        if normalized_strategy == "high_confidence":
+            actionable_rows = [
+                item
+                for item in actionable_rows
+                if str(item.get("evidence_level") or "unresolved").strip().lower() in {"explicit", "strong"}
+            ]
+        rows_by_install_unit_id: dict[str, list[dict[str, Any]]] = {}
+        install_unit_ids: list[str] = []
+        for item in actionable_rows:
+            install_unit_id = str(item.get("install_unit_id") or "").strip()
+            if not install_unit_id:
+                continue
+            if install_unit_id not in rows_by_install_unit_id:
+                rows_by_install_unit_id[install_unit_id] = []
+                install_unit_ids.append(install_unit_id)
+            rows_by_install_unit_id[install_unit_id].append(item)
+        return {
+            "strategy": normalized_strategy,
+            "rows": actionable_rows,
+            "install_unit_ids": install_unit_ids,
+            "rows_by_install_unit_id": rows_by_install_unit_id,
+        }
+
+    @staticmethod
+    def _build_install_atom_failure_groups(items: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        failed_items = [item for item in (items or []) if isinstance(item, dict)]
+        failure_group_map: dict[str, dict[str, Any]] = {}
+        for item in failed_items:
+            resolver_path = str(item.get("resolverPath") or "-").strip() or "-"
+            evidence_level = str(item.get("evidenceLevel") or "unresolved").strip().lower() or "unresolved"
+            key = f"{resolver_path}::{evidence_level}"
+            current = failure_group_map.get(key)
+            if not isinstance(current, dict):
+                current = {
+                    "resolverPath": resolver_path,
+                    "evidenceLevel": evidence_level,
+                    "installUnitIds": [],
+                    "count": 0,
+                }
+                failure_group_map[key] = current
+            install_unit_id = str(item.get("installUnitId") or "").strip()
+            if install_unit_id and install_unit_id not in current["installUnitIds"]:
+                current["installUnitIds"].append(install_unit_id)
+                current["count"] = len(current["installUnitIds"])
+        return sorted(
+            failure_group_map.values(),
+            key=lambda item: (
+                -int(item.get("count", 0) or 0),
+                str(item.get("resolverPath") or ""),
+                str(item.get("evidenceLevel") or ""),
+            ),
+        )
 
     def webui_get_skills_audit_payload(
         self,
@@ -3745,6 +4272,7 @@ class OneSyncPlugin(Star):
         self,
         update_plans: list[dict[str, Any]] | None,
         source_rows: list[dict[str, Any]] | None,
+        progress_callback: Any = None,
     ) -> dict[str, Any]:
         plans = [item for item in (update_plans or []) if isinstance(item, dict)]
         if not plans:
@@ -3818,6 +4346,17 @@ class OneSyncPlugin(Star):
                 )
                 if install_unit_id:
                     executed_install_unit_ids.append(install_unit_id)
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            {
+                                "completed_install_unit_total": len(install_unit_results),
+                                "failed_install_unit_total": len(failed_install_units),
+                                "source_sync_cache_hit_total": source_sync_cache_hit_total,
+                            },
+                        )
+                    except Exception:
+                        pass
                 continue
 
             unit_failed_sources: list[dict[str, Any]] = []
@@ -3928,6 +4467,17 @@ class OneSyncPlugin(Star):
                         "message": f"source sync failed for {install_unit_id or 'install unit'}",
                     },
                 )
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        {
+                            "completed_install_unit_total": len(install_unit_results),
+                            "failed_install_unit_total": len(failed_install_units),
+                            "source_sync_cache_hit_total": source_sync_cache_hit_total,
+                        },
+                    )
+                except Exception:
+                    pass
 
         source_sync_success_count = sum(1 for item in phase_results if item.get("ok"))
         source_sync_failure_count = len(phase_results) - source_sync_success_count
@@ -4200,6 +4750,7 @@ class OneSyncPlugin(Star):
     async def _execute_install_unit_update_plans(
         self,
         update_plans: list[dict[str, Any]],
+        progress_callback: Any = None,
     ) -> dict[str, Any]:
         skills_snapshot = self.webui_get_skills_payload()
         source_index = self._build_source_index_by_id(skills_snapshot.get("source_rows", []))
@@ -4339,6 +4890,11 @@ class OneSyncPlugin(Star):
                 if isinstance(item, dict) and not _to_bool(item.get("ignored", False), False)
             ]
             plan_ok = bool(effective_results) and all(item.get("ok") for item in effective_results)
+            if plan_ok and plan_source_rows:
+                self._stamp_registry_sources_refreshed(
+                    plan_source_rows,
+                    refreshed_at=_now_iso(),
+                )
             if install_unit_id:
                 executed_install_unit_ids.append(install_unit_id)
             install_unit_result = {
@@ -4389,6 +4945,16 @@ class OneSyncPlugin(Star):
                         "message": failed_message,
                     },
                 )
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        {
+                            "completed_install_unit_total": len(install_unit_results),
+                            "failed_install_unit_total": len(failed_install_units),
+                        },
+                    )
+                except Exception:
+                    pass
 
         effective_command_results = [
             item
@@ -4742,285 +5308,655 @@ class OneSyncPlugin(Star):
         self,
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        _ = payload if isinstance(payload, dict) else {}
-        skills_snapshot = self.webui_get_skills_payload()
-        install_unit_rows = [
-            item
-            for item in skills_snapshot.get("install_unit_rows", [])
-            if isinstance(item, dict)
-        ]
-        source_rows = [
-            item
-            for item in skills_snapshot.get("source_rows", [])
-            if isinstance(item, dict)
-        ]
-        source_rows_by_install_unit_id: dict[str, list[dict[str, Any]]] = {}
-        for source_row in source_rows:
-            install_unit_id = str(source_row.get("install_unit_id") or "").strip()
-            if not install_unit_id:
-                continue
-            source_rows_by_install_unit_id.setdefault(install_unit_id, []).append(source_row)
+        body = payload if isinstance(payload, dict) else {}
+        if self._skills_update_all_lock.locked():
+            progress_payload = self.webui_get_update_all_aggregate_progress_payload()
+            return {
+                "ok": False,
+                "message": "aggregate update-all already running",
+                "progress": progress_payload.get("progress", {}),
+            }
 
-        all_plans: list[dict[str, Any]] = []
-        seen_plan_keys: dict[str, str] = {}
-        duplicate_install_unit_ids: list[str] = []
-        duplicate_install_unit_pairs: list[dict[str, Any]] = []
-
-        for install_unit in install_unit_rows:
-            install_unit_id = str(install_unit.get("install_unit_id") or "").strip()
-            if not install_unit_id:
-                continue
-            plan_source_rows = source_rows_by_install_unit_id.get(install_unit_id, [])
-            plan = self._augment_update_plan_with_source_sync_fallback_preview(
-                build_install_unit_update_plan(install_unit, plan_source_rows),
-                plan_source_rows,
-                display_name=str(
-                    install_unit.get("display_name")
-                    or install_unit.get("install_unit_display_name")
-                    or install_unit_id
-                    or "install unit"
-                ).strip(),
+        async with self._skills_update_all_lock:
+            return await self._webui_update_all_skill_aggregates_locked(
+                body,
+                workflow_kind="aggregate_update_all",
+                reset_progress=True,
             )
-            dedupe_key = self._build_install_unit_update_plan_dedupe_key(plan)
-            previous_install_unit_id = seen_plan_keys.get(dedupe_key, "")
-            if previous_install_unit_id:
-                duplicate_install_unit_ids.append(install_unit_id)
-                duplicate_install_unit_pairs.append(
-                    {
-                        "install_unit_id": install_unit_id,
-                        "deduped_into_install_unit_id": previous_install_unit_id,
+
+    async def webui_improve_all_skills(
+        self,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        body = payload if isinstance(payload, dict) else {}
+        if self._skills_update_all_lock.locked():
+            progress_payload = self.webui_get_update_all_aggregate_progress_payload()
+            return {
+                "ok": False,
+                "message": "skills improve-all already running",
+                "progress": progress_payload.get("progress", {}),
+            }
+
+        async with self._skills_update_all_lock:
+            run_id = secrets.token_hex(8)
+            started_at = _now_iso()
+            refresh_strategy = self._normalize_install_atom_refresh_strategy(body.get("atom_refresh_strategy", "all"))
+            self._replace_skills_update_all_progress_snapshot(
+                self._build_skills_update_all_progress_snapshot(
+                    run_id=run_id,
+                    status="improving_atoms_planning",
+                    workflow_kind="improve_all",
+                    started_at=started_at,
+                    message="building install atom improve plan",
+                ),
+            )
+
+            try:
+                skills_snapshot = self.webui_get_skills_payload()
+                refresh_candidates = self._build_install_atom_refresh_candidates(
+                    skills_snapshot,
+                    strategy=refresh_strategy,
+                )
+                install_unit_ids = _to_str_list(refresh_candidates.get("install_unit_ids", []))
+                rows_by_install_unit_id = refresh_candidates.get("rows_by_install_unit_id", {})
+                if not isinstance(rows_by_install_unit_id, dict):
+                    rows_by_install_unit_id = {}
+                self._update_skills_update_all_progress_snapshot(
+                    run_id=run_id,
+                    status="improving_atoms_planning",
+                    workflow_kind="improve_all",
+                    started_at=started_at,
+                    candidate_install_unit_total=len(install_unit_ids),
+                    planned_install_unit_total=len(install_unit_ids),
+                    actionable_install_unit_total=len(install_unit_ids),
+                    command_install_unit_total=len(install_unit_ids),
+                    source_sync_install_unit_total=0,
+                    completed_command_install_unit_total=0,
+                    completed_source_sync_install_unit_total=0,
+                    skipped_install_unit_total=0,
+                    failure_count=0,
+                    success_count=0,
+                    source_sync_cache_hit_total=0,
+                    atom_candidate_install_unit_total=len(install_unit_ids),
+                    atom_improved_count=0,
+                    atom_unchanged_count=0,
+                    message="install atom improve plan ready",
+                )
+
+                refreshed_skills_snapshot = skills_snapshot
+                inventory_snapshot = self.webui_get_inventory_payload()
+                success = 0
+                failed = 0
+                improved = 0
+                unchanged = 0
+                failed_items: list[dict[str, Any]] = []
+
+                if install_unit_ids:
+                    self._update_skills_update_all_progress_snapshot(
+                        run_id=run_id,
+                        status="improving_atoms_refreshing",
+                        workflow_kind="improve_all",
+                        started_at=started_at,
+                        message=f"refreshing install atoms 0/{len(install_unit_ids)}",
+                    )
+
+                evidence_order = {
+                    "unresolved": 0,
+                    "heuristic": 1,
+                    "strong": 2,
+                    "explicit": 3,
+                }
+                for install_unit_id in install_unit_ids:
+                    before_atom_row = self._install_atom_row_by_install_unit_id(
+                        refreshed_skills_snapshot.get("install_atom_registry", {}),
+                        install_unit_id,
+                    )
+                    try:
+                        refresh_result = self.webui_refresh_install_unit(install_unit_id, {})
+                        if not refresh_result.get("ok"):
+                            raise RuntimeError(str(refresh_result.get("message") or f"refresh failed: {install_unit_id}"))
+                        inventory_snapshot = refresh_result.get("inventory", inventory_snapshot)
+                        refreshed_skills_snapshot = refresh_result.get("skills", refreshed_skills_snapshot)
+                        success += 1
+                        after_atom_row = self._install_atom_row_by_install_unit_id(
+                            refreshed_skills_snapshot.get("install_atom_registry", {}),
+                            install_unit_id,
+                        )
+                        if self._install_atom_refresh_improved(before_atom_row, after_atom_row):
+                            improved += 1
+                        else:
+                            unchanged += 1
+                    except Exception as exc:
+                        failed += 1
+                        candidate_rows = rows_by_install_unit_id.get(install_unit_id, [])
+                        resolver_path_values = {
+                            str(item.get("resolver_path") or "").strip()
+                            for item in candidate_rows
+                            if isinstance(item, dict) and str(item.get("resolver_path") or "").strip()
+                        }
+                        if len(resolver_path_values) == 1:
+                            resolver_path = next(iter(resolver_path_values))
+                        elif len(resolver_path_values) > 1:
+                            resolver_path = "multi-install-units"
+                        else:
+                            resolver_path = "-"
+                        evidence_candidates = [
+                            str(item.get("evidence_level") or "unresolved").strip().lower() or "unresolved"
+                            for item in candidate_rows
+                            if isinstance(item, dict)
+                        ]
+                        evidence_level = (
+                            sorted(evidence_candidates, key=lambda value: evidence_order.get(value, 99))[0]
+                            if evidence_candidates
+                            else "unresolved"
+                        )
+                        failed_items.append(
+                            {
+                                "installUnitId": install_unit_id,
+                                "resolverPath": resolver_path,
+                                "evidenceLevel": evidence_level,
+                            },
+                        )
+                        self._push_debug_log(
+                            "warn",
+                            (
+                                "install atom improve failed: "
+                                f"run_id={run_id} install_unit={install_unit_id} error={exc}"
+                            ),
+                            source="webui",
+                        )
+                    finally:
+                        self._update_skills_update_all_progress_snapshot(
+                            run_id=run_id,
+                            status="improving_atoms_refreshing",
+                            workflow_kind="improve_all",
+                            started_at=started_at,
+                            candidate_install_unit_total=len(install_unit_ids),
+                            planned_install_unit_total=len(install_unit_ids),
+                            actionable_install_unit_total=len(install_unit_ids),
+                            command_install_unit_total=len(install_unit_ids),
+                            completed_command_install_unit_total=success + failed,
+                            completed_source_sync_install_unit_total=0,
+                            skipped_install_unit_total=0,
+                            failure_count=failed,
+                            success_count=success,
+                            atom_candidate_install_unit_total=len(install_unit_ids),
+                            atom_improved_count=improved,
+                            atom_unchanged_count=unchanged,
+                            message=f"refreshing install atoms {success + failed}/{len(install_unit_ids)}",
+                        )
+
+                failure_groups = self._build_install_atom_failure_groups(failed_items)
+                atom_refresh_summary = {
+                    "strategy": refresh_strategy,
+                    "total": len(install_unit_ids),
+                    "success": success,
+                    "improved": improved,
+                    "unchanged": unchanged,
+                    "failed": failed,
+                    "failureGroups": failure_groups,
+                    "failureItems": failed_items,
+                    "completedAt": _now_iso(),
+                }
+                self._append_skills_audit_event(
+                    "install_atom_refresh_all",
+                    source_id="all",
+                    payload={
+                        "run_id": run_id,
+                        "strategy": refresh_strategy,
+                        "total": len(install_unit_ids),
+                        "success": success,
+                        "improved": improved,
+                        "unchanged": unchanged,
+                        "failed": failed,
+                        "failure_groups": failure_groups,
                     },
                 )
-                continue
-            seen_plan_keys[dedupe_key] = install_unit_id
-            all_plans.append(plan)
 
-        actionable_unit_plans = [
-            item
-            for item in all_plans
-            if isinstance(item, dict) and _to_bool(item.get("actionable"), False)
-        ]
-        command_unit_plans = [
-            item
-            for item in actionable_unit_plans
-            if _to_str_list(item.get("commands", []))
-        ]
-        source_sync_unit_plans = [
-            item
-            for item in actionable_unit_plans
-            if self._is_source_sync_update_plan(item)
-            and not _to_str_list(item.get("commands", []))
-        ]
-        blocked_unit_plans = [
-            item
-            for item in all_plans
-            if isinstance(item, dict) and not _to_bool(item.get("actionable"), False)
-        ]
+                aggregate_result = await self._webui_update_all_skill_aggregates_locked(
+                    body,
+                    run_id=run_id,
+                    started_at=started_at,
+                    workflow_kind="improve_all",
+                    reset_progress=False,
+                )
+                aggregate_result["atom_refresh"] = atom_refresh_summary
+                return aggregate_result
+            except Exception as exc:
+                self._update_skills_update_all_progress_snapshot(
+                    run_id=run_id,
+                    status="failed",
+                    workflow_kind="improve_all",
+                    started_at=started_at,
+                    message=f"improve-all failed: {exc}",
+                )
+                raise
 
-        command_execution = (
-            await self._execute_install_unit_update_plans(command_unit_plans)
-            if command_unit_plans
-            else self._empty_install_unit_execution_summary()
-        )
-        source_sync_execution = self._execute_install_unit_source_sync_plans(
-            source_sync_unit_plans,
-            source_rows,
-        )
-        execution = self._merge_install_unit_execution_summaries(
-            [command_execution, source_sync_execution],
-        )
-
-        executed_install_unit_ids = _to_str_list(execution.get("executed_install_unit_ids", []))
-        skipped_install_unit_ids = _dedupe_keep_order(
-            [
-                str(item.get("install_unit_id") or "").strip()
-                for item in blocked_unit_plans
-                if str(item.get("install_unit_id") or "").strip()
-            ],
-        )
-        skipped_manual_only_install_unit_ids = _dedupe_keep_order(
-            [
-                str(item.get("install_unit_id") or "").strip()
-                for item in blocked_unit_plans
-                if str(item.get("install_unit_id") or "").strip()
-                and _to_bool(item.get("manual_only", False), False)
-            ],
-        )
-        skipped_manual_only_install_unit_id_set = set(skipped_manual_only_install_unit_ids)
-        skipped_other_install_unit_ids = _dedupe_keep_order(
-            [
-                install_unit_id
-                for install_unit_id in skipped_install_unit_ids
-                if install_unit_id not in skipped_manual_only_install_unit_id_set
-            ],
-        )
-        unsupported_install_units = [
-            {
-                "install_unit_id": str(item.get("install_unit_id") or "").strip(),
-                "message": str(item.get("message") or "").strip(),
-                "reason_code": str(item.get("reason_code") or "").strip().lower(),
-            }
-            for item in blocked_unit_plans
-            if str(item.get("install_unit_id") or "").strip() or str(item.get("message") or "").strip()
-        ]
-        command_install_unit_ids = _dedupe_keep_order(
-            [
-                str(item.get("install_unit_id") or "").strip()
-                for item in command_unit_plans
-                if str(item.get("install_unit_id") or "").strip()
-            ],
-        )
-        source_sync_install_unit_ids = _dedupe_keep_order(
-            [
-                str(item.get("install_unit_id") or "").strip()
-                for item in source_sync_unit_plans
-                if str(item.get("install_unit_id") or "").strip()
-            ],
-        )
-
-        if command_install_unit_ids and source_sync_install_unit_ids:
-            update_mode = "partial"
-        elif command_install_unit_ids:
-            update_mode = "command"
-        elif source_sync_install_unit_ids:
-            update_mode = "source_sync"
+    async def _webui_update_all_skill_aggregates_locked(
+        self,
+        payload: dict[str, Any] | None = None,
+        *,
+        run_id: str = "",
+        started_at: str = "",
+        workflow_kind: str = "aggregate_update_all",
+        reset_progress: bool = True,
+    ) -> dict[str, Any]:
+        body = payload if isinstance(payload, dict) else {}
+        effective_run_id = str(run_id or "").strip() or secrets.token_hex(8)
+        effective_started_at = str(started_at or "").strip() or _now_iso()
+        normalized_workflow_kind = str(workflow_kind or "aggregate_update_all").strip().lower() or "aggregate_update_all"
+        if reset_progress:
+            self._replace_skills_update_all_progress_snapshot(
+                self._build_skills_update_all_progress_snapshot(
+                    run_id=effective_run_id,
+                    status="planning",
+                    workflow_kind=normalized_workflow_kind,
+                    started_at=effective_started_at,
+                    message="building aggregate update plan",
+                ),
+            )
         else:
-            update_mode = "manual_only"
+            self._update_skills_update_all_progress_snapshot(
+                run_id=effective_run_id,
+                status="planning",
+                workflow_kind=normalized_workflow_kind,
+                started_at=effective_started_at,
+                message="building aggregate update plan",
+            )
 
-        failure_taxonomy = self._summarize_update_all_failure_taxonomy(
-            failed_install_units=execution.get("failed_install_units", []),
-            install_unit_results=execution.get("install_unit_results", []),
-            blocked_unit_plans=blocked_unit_plans,
-            failed_sources=execution.get("failed_sources", []),
-        )
+        try:
+            skills_snapshot = self.webui_get_skills_payload()
+            install_unit_rows = [
+                item
+                for item in skills_snapshot.get("install_unit_rows", [])
+                if isinstance(item, dict)
+            ]
+            source_rows = [
+                item
+                for item in skills_snapshot.get("source_rows", [])
+                if isinstance(item, dict)
+            ]
+            source_rows_by_install_unit_id: dict[str, list[dict[str, Any]]] = {}
+            for source_row in source_rows:
+                install_unit_id = str(source_row.get("install_unit_id") or "").strip()
+                if not install_unit_id:
+                    continue
+                source_rows_by_install_unit_id.setdefault(install_unit_id, []).append(source_row)
 
-        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        await self._save_state()
-        refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
-        update_summary = {
-            "supported": bool(actionable_unit_plans),
-            "actionable": bool(actionable_unit_plans),
-            "manual_only": update_mode == "manual_only",
-            "update_mode": update_mode,
-            "manager": "mixed" if command_install_unit_ids and source_sync_install_unit_ids else "",
-            "policy": "mixed" if command_install_unit_ids and source_sync_install_unit_ids else "",
-            "candidate_install_unit_total": len(install_unit_rows),
-            "planned_install_unit_total": len(all_plans),
-            "deduplicated_install_unit_total": len(duplicate_install_unit_ids),
-            "deduplicated_install_unit_ids": duplicate_install_unit_ids,
-            "deduplicated_install_unit_pairs": duplicate_install_unit_pairs,
-            "actionable_install_unit_ids": _dedupe_keep_order(
+            all_plans: list[dict[str, Any]] = []
+            seen_plan_keys: dict[str, str] = {}
+            duplicate_install_unit_ids: list[str] = []
+            duplicate_install_unit_pairs: list[dict[str, Any]] = []
+
+            for install_unit in install_unit_rows:
+                install_unit_id = str(install_unit.get("install_unit_id") or "").strip()
+                if not install_unit_id:
+                    continue
+                plan_source_rows = source_rows_by_install_unit_id.get(install_unit_id, [])
+                plan = self._augment_update_plan_with_source_sync_fallback_preview(
+                    build_install_unit_update_plan(install_unit, plan_source_rows),
+                    plan_source_rows,
+                    display_name=str(
+                        install_unit.get("display_name")
+                        or install_unit.get("install_unit_display_name")
+                        or install_unit_id
+                        or "install unit"
+                    ).strip(),
+                )
+                dedupe_key = self._build_install_unit_update_plan_dedupe_key(plan)
+                previous_install_unit_id = seen_plan_keys.get(dedupe_key, "")
+                if previous_install_unit_id:
+                    duplicate_install_unit_ids.append(install_unit_id)
+                    duplicate_install_unit_pairs.append(
+                        {
+                            "install_unit_id": install_unit_id,
+                            "deduped_into_install_unit_id": previous_install_unit_id,
+                        },
+                    )
+                    continue
+                seen_plan_keys[dedupe_key] = install_unit_id
+                all_plans.append(plan)
+
+            actionable_unit_plans = [
+                item
+                for item in all_plans
+                if isinstance(item, dict) and _to_bool(item.get("actionable"), False)
+            ]
+            command_unit_plans = [
+                item
+                for item in actionable_unit_plans
+                if _to_str_list(item.get("commands", []))
+            ]
+            source_sync_unit_plans = [
+                item
+                for item in actionable_unit_plans
+                if self._is_source_sync_update_plan(item)
+                and not _to_str_list(item.get("commands", []))
+            ]
+            blocked_unit_plans = [
+                item
+                for item in all_plans
+                if isinstance(item, dict) and not _to_bool(item.get("actionable"), False)
+            ]
+
+            command_install_unit_ids = _dedupe_keep_order(
                 [
                     str(item.get("install_unit_id") or "").strip()
-                    for item in actionable_unit_plans
+                    for item in command_unit_plans
                     if str(item.get("install_unit_id") or "").strip()
                 ],
-            ),
-            "actionable_install_unit_total": len(actionable_unit_plans),
-            "supported_install_unit_total": len(actionable_unit_plans),
-            "unsupported_install_unit_total": len(blocked_unit_plans),
-            "unsupported_install_units": unsupported_install_units,
-            "command_install_unit_ids": command_install_unit_ids,
-            "command_install_unit_total": len(command_install_unit_ids),
-            "source_sync_install_unit_ids": source_sync_install_unit_ids,
-            "source_sync_install_unit_total": len(source_sync_install_unit_ids),
-            "skipped_install_unit_ids": skipped_install_unit_ids,
-            "skipped_install_unit_total": len(skipped_install_unit_ids),
-            "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
-            "skipped_manual_only_install_unit_total": len(skipped_manual_only_install_unit_ids),
-            "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
-            "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
-            "executed_install_unit_ids": executed_install_unit_ids,
-            "executed_install_unit_total": len(executed_install_unit_ids),
-            "failure_taxonomy": failure_taxonomy,
-            **execution,
-            "message": (
-                "aggregate update-all finished: "
-                f"{execution.get('success_count', 0)} commands ok, "
-                f"{execution.get('failure_count', 0)} failed, "
-                f"{execution.get('source_sync_success_count', 0)} source sync ok, "
-                f"{execution.get('source_sync_failure_count', 0)} source sync failed, "
-                f"{len(skipped_install_unit_ids)} blocked, "
-                f"{len(duplicate_install_unit_ids)} deduplicated"
-            ),
-        }
-        self._append_skills_audit_event(
-            "aggregates_update_all",
-            source_id="all",
-            payload={
+            )
+            source_sync_install_unit_ids = _dedupe_keep_order(
+                [
+                    str(item.get("install_unit_id") or "").strip()
+                    for item in source_sync_unit_plans
+                    if str(item.get("install_unit_id") or "").strip()
+                ],
+            )
+            skipped_install_unit_ids = _dedupe_keep_order(
+                [
+                    str(item.get("install_unit_id") or "").strip()
+                    for item in blocked_unit_plans
+                    if str(item.get("install_unit_id") or "").strip()
+                ],
+            )
+            skipped_manual_only_install_unit_ids = _dedupe_keep_order(
+                [
+                    str(item.get("install_unit_id") or "").strip()
+                    for item in blocked_unit_plans
+                    if str(item.get("install_unit_id") or "").strip()
+                    and _to_bool(item.get("manual_only", False), False)
+                ],
+            )
+            skipped_manual_only_install_unit_id_set = set(skipped_manual_only_install_unit_ids)
+            skipped_other_install_unit_ids = _dedupe_keep_order(
+                [
+                    install_unit_id
+                    for install_unit_id in skipped_install_unit_ids
+                    if install_unit_id not in skipped_manual_only_install_unit_id_set
+                ],
+            )
+            unsupported_install_units = [
+                {
+                    "install_unit_id": str(item.get("install_unit_id") or "").strip(),
+                    "message": str(item.get("message") or "").strip(),
+                    "reason_code": str(item.get("reason_code") or "").strip().lower(),
+                }
+                for item in blocked_unit_plans
+                if str(item.get("install_unit_id") or "").strip() or str(item.get("message") or "").strip()
+            ]
+
+            self._update_skills_update_all_progress_snapshot(
+                run_id=effective_run_id,
+                status="planning",
+                workflow_kind=normalized_workflow_kind,
+                started_at=effective_started_at,
+                candidate_install_unit_total=len(install_unit_rows),
+                planned_install_unit_total=len(all_plans),
+                actionable_install_unit_total=len(actionable_unit_plans),
+                command_install_unit_total=len(command_install_unit_ids),
+                source_sync_install_unit_total=len(source_sync_install_unit_ids),
+                completed_command_install_unit_total=0,
+                completed_source_sync_install_unit_total=0,
+                skipped_install_unit_total=len(skipped_install_unit_ids),
+                failure_count=0,
+                success_count=0,
+                source_sync_cache_hit_total=0,
+                message="aggregate update plan ready",
+            )
+
+            def _command_progress(progress_payload: dict[str, Any] | None = None) -> None:
+                progress = progress_payload if isinstance(progress_payload, dict) else {}
+                completed_total = max(0, int(progress.get("completed_install_unit_total", 0) or 0))
+                failed_total = max(0, int(progress.get("failed_install_unit_total", 0) or 0))
+                self._update_skills_update_all_progress_snapshot(
+                    run_id=effective_run_id,
+                    status="executing_command",
+                    workflow_kind=normalized_workflow_kind,
+                    started_at=effective_started_at,
+                    completed_command_install_unit_total=completed_total,
+                    failure_count=failed_total,
+                    message=f"executing command install units {completed_total}/{len(command_install_unit_ids)}",
+                )
+
+            def _source_sync_progress(progress_payload: dict[str, Any] | None = None, base_failures: int = 0) -> None:
+                progress = progress_payload if isinstance(progress_payload, dict) else {}
+                completed_total = max(0, int(progress.get("completed_install_unit_total", 0) or 0))
+                failed_total = max(0, int(progress.get("failed_install_unit_total", 0) or 0))
+                cache_hits = max(0, int(progress.get("source_sync_cache_hit_total", 0) or 0))
+                self._update_skills_update_all_progress_snapshot(
+                    run_id=effective_run_id,
+                    status="executing_source_sync",
+                    workflow_kind=normalized_workflow_kind,
+                    started_at=effective_started_at,
+                    completed_source_sync_install_unit_total=completed_total,
+                    failure_count=base_failures + failed_total,
+                    source_sync_cache_hit_total=cache_hits,
+                    message=f"executing source sync install units {completed_total}/{len(source_sync_install_unit_ids)}",
+                )
+
+            command_execution = self._empty_install_unit_execution_summary()
+            if command_unit_plans:
+                self._update_skills_update_all_progress_snapshot(
+                    run_id=effective_run_id,
+                    status="executing_command",
+                    workflow_kind=normalized_workflow_kind,
+                    started_at=effective_started_at,
+                    message=f"executing command install units 0/{len(command_install_unit_ids)}",
+                )
+                command_execution = await self._execute_install_unit_update_plans(
+                    command_unit_plans,
+                    progress_callback=_command_progress,
+                )
+
+            source_sync_execution = self._empty_install_unit_execution_summary()
+            if source_sync_unit_plans:
+                command_failures = int(command_execution.get("failure_count", 0) or 0)
+                self._update_skills_update_all_progress_snapshot(
+                    run_id=effective_run_id,
+                    status="executing_source_sync",
+                    workflow_kind=normalized_workflow_kind,
+                    started_at=effective_started_at,
+                    completed_command_install_unit_total=len(command_execution.get("install_unit_results", [])),
+                    failure_count=command_failures,
+                    message=f"executing source sync install units 0/{len(source_sync_install_unit_ids)}",
+                )
+                source_sync_execution = self._execute_install_unit_source_sync_plans(
+                    source_sync_unit_plans,
+                    source_rows,
+                    progress_callback=lambda progress: _source_sync_progress(progress, command_failures),
+                )
+
+            execution = self._merge_install_unit_execution_summaries(
+                [command_execution, source_sync_execution],
+            )
+            executed_install_unit_ids = _to_str_list(execution.get("executed_install_unit_ids", []))
+
+            if command_install_unit_ids and source_sync_install_unit_ids:
+                update_mode = "partial"
+            elif command_install_unit_ids:
+                update_mode = "command"
+            elif source_sync_install_unit_ids:
+                update_mode = "source_sync"
+            else:
+                update_mode = "manual_only"
+
+            failure_taxonomy = self._summarize_update_all_failure_taxonomy(
+                failed_install_units=execution.get("failed_install_units", []),
+                install_unit_results=execution.get("install_unit_results", []),
+                blocked_unit_plans=blocked_unit_plans,
+                failed_sources=execution.get("failed_sources", []),
+            )
+
+            self._update_skills_update_all_progress_snapshot(
+                run_id=effective_run_id,
+                status="refreshing_snapshot",
+                workflow_kind=normalized_workflow_kind,
+                started_at=effective_started_at,
+                completed_command_install_unit_total=len(command_execution.get("install_unit_results", [])),
+                completed_source_sync_install_unit_total=len(source_sync_execution.get("install_unit_results", [])),
+                failure_count=int(execution.get("failure_count", 0) or 0),
+                success_count=int(execution.get("success_count", 0) or 0),
+                source_sync_cache_hit_total=int(execution.get("source_sync_cache_hit_total", 0) or 0),
+                message="refreshing skills snapshot",
+            )
+
+            inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+            await self._save_state()
+            refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+            update_summary = {
+                "run_id": effective_run_id,
+                "supported": bool(actionable_unit_plans),
+                "actionable": bool(actionable_unit_plans),
+                "manual_only": update_mode == "manual_only",
+                "update_mode": update_mode,
+                "manager": "mixed" if command_install_unit_ids and source_sync_install_unit_ids else "",
+                "policy": "mixed" if command_install_unit_ids and source_sync_install_unit_ids else "",
                 "candidate_install_unit_total": len(install_unit_rows),
                 "planned_install_unit_total": len(all_plans),
                 "deduplicated_install_unit_total": len(duplicate_install_unit_ids),
+                "deduplicated_install_unit_ids": duplicate_install_unit_ids,
+                "deduplicated_install_unit_pairs": duplicate_install_unit_pairs,
+                "actionable_install_unit_ids": _dedupe_keep_order(
+                    [
+                        str(item.get("install_unit_id") or "").strip()
+                        for item in actionable_unit_plans
+                        if str(item.get("install_unit_id") or "").strip()
+                    ],
+                ),
+                "actionable_install_unit_total": len(actionable_unit_plans),
+                "supported_install_unit_total": len(actionable_unit_plans),
+                "unsupported_install_unit_total": len(blocked_unit_plans),
+                "unsupported_install_units": unsupported_install_units,
+                "command_install_unit_ids": command_install_unit_ids,
+                "command_install_unit_total": len(command_install_unit_ids),
+                "completed_command_install_unit_total": len(command_execution.get("install_unit_results", [])),
+                "source_sync_install_unit_ids": source_sync_install_unit_ids,
+                "source_sync_install_unit_total": len(source_sync_install_unit_ids),
+                "completed_source_sync_install_unit_total": len(source_sync_execution.get("install_unit_results", [])),
+                "skipped_install_unit_ids": skipped_install_unit_ids,
+                "skipped_install_unit_total": len(skipped_install_unit_ids),
+                "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
+                "skipped_manual_only_install_unit_total": len(skipped_manual_only_install_unit_ids),
+                "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+                "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
                 "executed_install_unit_ids": executed_install_unit_ids,
+                "executed_install_unit_total": len(executed_install_unit_ids),
+                "failure_taxonomy": failure_taxonomy,
+                **execution,
+                "message": (
+                    "aggregate update-all finished: "
+                    f"{execution.get('success_count', 0)} commands ok, "
+                    f"{execution.get('failure_count', 0)} failed, "
+                    f"{execution.get('source_sync_success_count', 0)} source sync ok, "
+                    f"{execution.get('source_sync_failure_count', 0)} source sync failed, "
+                    f"{len(skipped_install_unit_ids)} blocked, "
+                    f"{len(duplicate_install_unit_ids)} deduplicated"
+                ),
+            }
+            self._append_skills_audit_event(
+                "aggregates_update_all",
+                source_id="all",
+                payload={
+                    "run_id": effective_run_id,
+                    "candidate_install_unit_total": len(install_unit_rows),
+                    "planned_install_unit_total": len(all_plans),
+                    "deduplicated_install_unit_total": len(duplicate_install_unit_ids),
+                    "executed_install_unit_ids": executed_install_unit_ids,
+                    "success_count": execution.get("success_count", 0),
+                    "failure_count": execution.get("failure_count", 0),
+                    "source_sync_success_count": execution.get("source_sync_success_count", 0),
+                    "source_sync_failure_count": execution.get("source_sync_failure_count", 0),
+                    "source_sync_cache_hit_total": execution.get("source_sync_cache_hit_total", 0),
+                    "skipped_install_unit_total": len(skipped_install_unit_ids),
+                    "failure_taxonomy": failure_taxonomy,
+                },
+            )
+            blocked_reason_groups = failure_taxonomy.get("blocked_reason_groups", [])
+            failed_reason_groups = failure_taxonomy.get("failed_install_unit_reason_groups", [])
+            blocked_reason_tail = ", ".join(
+                f"{str(item.get('reason_code') or '')}:{int(item.get('count', 0) or 0)}"
+                for item in blocked_reason_groups[:3]
+                if isinstance(item, dict)
+            )
+            failed_reason_tail = ", ".join(
+                f"{str(item.get('failure_reason') or '')}:{int(item.get('count', 0) or 0)}"
+                for item in failed_reason_groups[:3]
+                if isinstance(item, dict)
+            )
+            self._push_debug_log(
+                (
+                    "info"
+                    if (
+                        not execution.get("failure_count")
+                        and not execution.get("source_sync_failure_count")
+                    )
+                    else "warn"
+                ),
+                (
+                    "aggregate update-all: "
+                    f"run_id={effective_run_id} "
+                    f"workflow={normalized_workflow_kind} "
+                    f"planned={len(all_plans)} "
+                    f"executed={len(executed_install_unit_ids)} "
+                    f"ok={execution.get('success_count', 0)} "
+                    f"failed={execution.get('failure_count', 0)} "
+                    f"sync_ok={execution.get('source_sync_success_count', 0)} "
+                    f"sync_failed={execution.get('source_sync_failure_count', 0)} "
+                    f"sync_cache_hits={execution.get('source_sync_cache_hit_total', 0)} "
+                    f"skipped={len(skipped_install_unit_ids)} "
+                    f"deduped={len(duplicate_install_unit_ids)} "
+                    f"failed_reasons=[{failed_reason_tail or '-'}] "
+                    f"blocked_reasons=[{blocked_reason_tail or '-'}]"
+                ),
+                source="webui",
+            )
+            progress_snapshot = self._update_skills_update_all_progress_snapshot(
+                run_id=effective_run_id,
+                status="completed",
+                workflow_kind=normalized_workflow_kind,
+                started_at=effective_started_at,
+                completed_command_install_unit_total=len(command_execution.get("install_unit_results", [])),
+                completed_source_sync_install_unit_total=len(source_sync_execution.get("install_unit_results", [])),
+                failure_count=int(execution.get("failure_count", 0) or 0),
+                success_count=int(execution.get("success_count", 0) or 0),
+                source_sync_cache_hit_total=int(execution.get("source_sync_cache_hit_total", 0) or 0),
+                message=str(update_summary.get("message") or "").strip(),
+            )
+            return {
+                "ok": True,
+                "run_id": effective_run_id,
+                "progress": progress_snapshot,
+                "generated_at": refreshed_skills_snapshot.get("generated_at", skills_snapshot.get("generated_at")),
+                "update": update_summary,
+                "candidate_install_unit_total": len(install_unit_rows),
+                "planned_install_unit_total": len(all_plans),
+                "executed_install_unit_total": len(executed_install_unit_ids),
                 "success_count": execution.get("success_count", 0),
                 "failure_count": execution.get("failure_count", 0),
-                "source_sync_success_count": execution.get("source_sync_success_count", 0),
-                "source_sync_failure_count": execution.get("source_sync_failure_count", 0),
-                "source_sync_cache_hit_total": execution.get("source_sync_cache_hit_total", 0),
+                "precheck_failure_count": execution.get("precheck_failure_count", 0),
                 "skipped_install_unit_total": len(skipped_install_unit_ids),
+                "source_sync_cache_hit_total": execution.get("source_sync_cache_hit_total", 0),
                 "failure_taxonomy": failure_taxonomy,
-            },
-        )
-        blocked_reason_groups = failure_taxonomy.get("blocked_reason_groups", [])
-        failed_reason_groups = failure_taxonomy.get("failed_install_unit_reason_groups", [])
-        blocked_reason_tail = ", ".join(
-            f"{str(item.get('reason_code') or '')}:{int(item.get('count', 0) or 0)}"
-            for item in blocked_reason_groups[:3]
-            if isinstance(item, dict)
-        )
-        failed_reason_tail = ", ".join(
-            f"{str(item.get('failure_reason') or '')}:{int(item.get('count', 0) or 0)}"
-            for item in failed_reason_groups[:3]
-            if isinstance(item, dict)
-        )
-        self._push_debug_log(
-            (
-                "info"
-                if (
-                    not execution.get("failure_count")
-                    and not execution.get("source_sync_failure_count")
-                )
-                else "warn"
-            ),
-            (
-                "aggregate update-all: "
-                f"planned={len(all_plans)} "
-                f"executed={len(executed_install_unit_ids)} "
-                f"ok={execution.get('success_count', 0)} "
-                f"failed={execution.get('failure_count', 0)} "
-                f"sync_ok={execution.get('source_sync_success_count', 0)} "
-                f"sync_failed={execution.get('source_sync_failure_count', 0)} "
-                f"sync_cache_hits={execution.get('source_sync_cache_hit_total', 0)} "
-                f"skipped={len(skipped_install_unit_ids)} "
-                f"deduped={len(duplicate_install_unit_ids)} "
-                f"failed_reasons=[{failed_reason_tail or '-'}] "
-                f"blocked_reasons=[{blocked_reason_tail or '-'}]"
-            ),
-            source="webui",
-        )
-        return {
-            "ok": True,
-            "generated_at": refreshed_skills_snapshot.get("generated_at", skills_snapshot.get("generated_at")),
-            "update": update_summary,
-            "candidate_install_unit_total": len(install_unit_rows),
-            "planned_install_unit_total": len(all_plans),
-            "executed_install_unit_total": len(executed_install_unit_ids),
-            "success_count": execution.get("success_count", 0),
-            "failure_count": execution.get("failure_count", 0),
-            "precheck_failure_count": execution.get("precheck_failure_count", 0),
-            "skipped_install_unit_total": len(skipped_install_unit_ids),
-            "source_sync_cache_hit_total": execution.get("source_sync_cache_hit_total", 0),
-            "failure_taxonomy": failure_taxonomy,
-            "updated_install_unit_ids": executed_install_unit_ids,
-            "failed_install_units": execution.get("failed_install_units", []),
-            "unsupported_install_units": unsupported_install_units,
-            "skipped_install_unit_ids": skipped_install_unit_ids,
-            "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
-            "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
-            "deduplicated_install_unit_ids": duplicate_install_unit_ids,
-            "skills": refreshed_skills_snapshot,
-            "inventory": inventory_snapshot,
-        }
+                "updated_install_unit_ids": executed_install_unit_ids,
+                "failed_install_units": execution.get("failed_install_units", []),
+                "unsupported_install_units": unsupported_install_units,
+                "skipped_install_unit_ids": skipped_install_unit_ids,
+                "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
+                "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+                "deduplicated_install_unit_ids": duplicate_install_unit_ids,
+                "skills": refreshed_skills_snapshot,
+                "inventory": inventory_snapshot,
+            }
+        except Exception as exc:
+            self._update_skills_update_all_progress_snapshot(
+                run_id=effective_run_id,
+                status="failed",
+                workflow_kind=normalized_workflow_kind,
+                started_at=effective_started_at,
+                message=f"aggregate update-all failed: {exc}",
+            )
+            raise
 
     async def webui_rollback_install_unit(
         self,
@@ -6147,6 +7083,52 @@ class OneSyncPlugin(Star):
             )
         return self._save_skills_registry(updated_registry)
 
+    def _stamp_registry_sources_refreshed(
+        self,
+        source_rows: list[dict[str, Any]] | None,
+        *,
+        refreshed_at: str = "",
+    ) -> dict[str, Any]:
+        rows = [item for item in (source_rows or []) if isinstance(item, dict)]
+        if not rows:
+            return self._load_saved_skills_registry()
+
+        ts = str(refreshed_at or _now_iso()).strip() or _now_iso()
+        registry = self._load_saved_skills_registry()
+        refreshed_source_ids: list[str] = []
+
+        for source_row in rows:
+            source_id = _normalize_inventory_id(source_row.get("source_id"), default="")
+            if not source_id:
+                continue
+            refreshed_payload = {
+                **source_row,
+                "source_id": source_id,
+                "source_exists": _to_bool(source_row.get("source_exists", True), True),
+                "last_seen_at": ts,
+                "last_refresh_at": ts,
+                "source_age_days": 0,
+                "freshness_status": "fresh",
+            }
+            try:
+                registry = refresh_registry_source(
+                    registry,
+                    source_id,
+                    refreshed_payload,
+                    generated_at=ts,
+                )
+            except Exception:
+                registry = register_registry_source(
+                    registry,
+                    refreshed_payload,
+                    generated_at=ts,
+                )
+            refreshed_source_ids.append(source_id)
+
+        if refreshed_source_ids:
+            registry = self._save_skills_registry(registry)
+        return registry
+
     def _remove_source_from_saved_manifest(self, source_id: str) -> dict[str, Any]:
         normalized_source_id = _normalize_inventory_id(source_id, default="")
         if not normalized_source_id:
@@ -6250,8 +7232,13 @@ class OneSyncPlugin(Star):
                 selected_source_ids=next_source_ids,
             )
 
-        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        skills_snapshot = self._skills_state().get("last_overview", {})
+        refresh_result = self._project_inventory_and_refresh_skills_from_manifest(
+            manifest,
+            skills_snapshot=snapshot,
+        )
+        inventory_snapshot = refresh_result.get("inventory", {})
+        skills_snapshot = refresh_result.get("skills", {})
+        manifest = refresh_result.get("manifest", manifest)
         return {
             "ok": True,
             "scope": scope,
@@ -6374,8 +7361,13 @@ class OneSyncPlugin(Star):
             target_id=normalized_target_id,
             selected_source_ids=requested_source_ids,
         )
-        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        updated_skills_snapshot = self._skills_state().get("last_overview", {})
+        refresh_result = self._project_inventory_and_refresh_skills_from_manifest(
+            manifest,
+            skills_snapshot=skills_snapshot,
+        )
+        inventory_snapshot = refresh_result.get("inventory", {})
+        updated_skills_snapshot = refresh_result.get("skills", {})
+        manifest = refresh_result.get("manifest", manifest)
         self._push_debug_log(
             "info",
             (
@@ -6477,8 +7469,13 @@ class OneSyncPlugin(Star):
             target_id=normalized_target_id,
             selected_source_ids=_to_str_list(repair_result.get("selected_source_ids", [])),
         )
-        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        updated_skills_snapshot = self._skills_state().get("last_overview", {})
+        refresh_result = self._project_inventory_and_refresh_skills_from_manifest(
+            manifest,
+            skills_snapshot=target_payload.get("skills", {}) if isinstance(target_payload.get("skills", {}), dict) else None,
+        )
+        inventory_snapshot = refresh_result.get("inventory", {})
+        updated_skills_snapshot = refresh_result.get("skills", {})
+        manifest = refresh_result.get("manifest", manifest)
         refreshed_target = next(
             (
                 item for item in updated_skills_snapshot.get("deploy_rows", [])
@@ -6558,8 +7555,12 @@ class OneSyncPlugin(Star):
                 },
             )
 
-        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        updated_skills_snapshot = self._skills_state().get("last_overview", {})
+        refresh_result = self._project_inventory_and_refresh_skills_from_manifest(
+            self._load_saved_skills_manifest(),
+            skills_snapshot=skills_snapshot,
+        )
+        inventory_snapshot = refresh_result.get("inventory", {})
+        updated_skills_snapshot = refresh_result.get("skills", {})
         deploy_target_index = {
             str(item.get("target_id", "")).strip(): item
             for item in updated_skills_snapshot.get("deploy_rows", [])
@@ -6722,12 +7723,38 @@ class OneSyncPlugin(Star):
 
         current_bindings = normalize_skill_bindings_payload(self.config.get("skill_bindings", []))
         incoming_bindings = payload.get("bindings")
+        skills_snapshot = self.webui_get_skills_payload()
+        manifest = (
+            skills_snapshot.get("manifest", {})
+            if isinstance(skills_snapshot.get("manifest", {}), dict)
+            else self._load_saved_skills_manifest()
+        )
 
         if incoming_bindings is not None:
             try:
                 next_bindings = normalize_skill_bindings_payload(incoming_bindings)
             except Exception as exc:
                 return {"ok": False, "message": f"invalid bindings payload: {exc}"}
+            known_software_ids = set(self._skills_snapshot_known_software_ids(skills_snapshot))
+            for item in next_bindings:
+                if not isinstance(item, dict) or not _to_bool(item.get("enabled", True), True):
+                    continue
+                software_id = _normalize_inventory_id(item.get("software_id"), default="")
+                skill_id = _normalize_inventory_id(item.get("skill_id"), default="")
+                if not software_id or not skill_id:
+                    continue
+                if known_software_ids and software_id not in known_software_ids:
+                    return {"ok": False, "message": f"software_id not found: {software_id}"}
+                compatible_ids = set(self._skills_snapshot_compatible_source_ids(skills_snapshot, software_id))
+                if compatible_ids and skill_id not in compatible_ids:
+                    return {
+                        "ok": False,
+                        "message": (
+                            "some skill_ids are incompatible with software "
+                            f"{software_id}: {skill_id}"
+                        ),
+                    }
+            manifest = self._replace_saved_manifest_target_selections_from_bindings(manifest, next_bindings)
         else:
             software_id = _normalize_inventory_id(payload.get("software_id", ""))
             if not software_id:
@@ -6742,19 +7769,12 @@ class OneSyncPlugin(Star):
             ]
             requested_skill_ids = _dedupe_keep_order([sid for sid in requested_skill_ids if sid])
 
-            snapshot = self._build_inventory_snapshot()
-            compatibility = snapshot.get("compatibility", {})
-            software_rows = snapshot.get("software_rows", [])
-            software_exists = any(
-                str(item.get("id", "")) == software_id
-                for item in software_rows
-                if isinstance(item, dict)
-            )
+            software_exists = software_id in set(self._skills_snapshot_known_software_ids(skills_snapshot))
             if not software_exists:
                 return {"ok": False, "message": f"software_id not found: {software_id}"}
 
-            compatible_ids = set(compatibility.get(software_id, []))
-            incompatible = [sid for sid in requested_skill_ids if sid not in compatible_ids]
+            compatible_ids = set(self._skills_snapshot_compatible_source_ids(skills_snapshot, software_id))
+            incompatible = [sid for sid in requested_skill_ids if compatible_ids and sid not in compatible_ids]
             if incompatible:
                 return {
                     "ok": False,
@@ -6772,32 +7792,20 @@ class OneSyncPlugin(Star):
             )
 
         self.config["skill_bindings"] = next_bindings
-        manifest = self._load_saved_skills_manifest()
         target_key = f"{software_id}:{scope}" if incoming_bindings is None else ""
         if incoming_bindings is None and target_key:
             manifest = self._update_saved_manifest_target_selection(
                 target_id=target_key,
                 selected_source_ids=requested_skill_ids,
             )
-        elif incoming_bindings is not None:
-            for item in next_bindings:
-                if not isinstance(item, dict):
-                    continue
-                target_key = f"{item.get('software_id', '')}:{item.get('scope', 'global')}"
-                selected_for_target = [
-                    str(row.get("skill_id", "")).strip()
-                    for row in next_bindings
-                    if isinstance(row, dict)
-                    and str(row.get("software_id", "")).strip() == str(item.get("software_id", "")).strip()
-                    and str(row.get("scope", "global")).strip() == str(item.get("scope", "global")).strip()
-                ]
-                manifest = self._update_saved_manifest_target_selection(
-                    target_id=target_key,
-                    selected_source_ids=selected_for_target,
-                )
         self._persist_plugin_config()
-        snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        skills_snapshot = self._skills_state().get("last_overview", {})
+        refresh_result = self._project_inventory_and_refresh_skills_from_manifest(
+            manifest,
+            skills_snapshot=skills_snapshot,
+        )
+        snapshot = refresh_result.get("inventory", {})
+        skills_snapshot = refresh_result.get("skills", {})
+        manifest = refresh_result.get("manifest", manifest)
         self._push_debug_log(
             "info",
             (
@@ -7431,6 +8439,209 @@ class OneSyncPlugin(Star):
             skills_state = {}
             self.state["skills"] = skills_state
         return skills_state
+
+    @staticmethod
+    def _build_skills_update_all_progress_snapshot(
+        *,
+        run_id: str = "",
+        status: str = "idle",
+        workflow_kind: str = "aggregate_update_all",
+        candidate_install_unit_total: int = 0,
+        planned_install_unit_total: int = 0,
+        actionable_install_unit_total: int = 0,
+        command_install_unit_total: int = 0,
+        source_sync_install_unit_total: int = 0,
+        completed_command_install_unit_total: int = 0,
+        completed_source_sync_install_unit_total: int = 0,
+        skipped_install_unit_total: int = 0,
+        failure_count: int = 0,
+        success_count: int = 0,
+        source_sync_cache_hit_total: int = 0,
+        atom_candidate_install_unit_total: int = 0,
+        atom_improved_count: int = 0,
+        atom_unchanged_count: int = 0,
+        started_at: str = "",
+        updated_at: str = "",
+        message: str = "",
+    ) -> dict[str, Any]:
+        normalized_status = str(status or "idle").strip().lower() or "idle"
+        normalized_workflow_kind = str(workflow_kind or "aggregate_update_all").strip().lower() or "aggregate_update_all"
+        now_iso = _now_iso()
+        normalized_started_at = str(started_at or "").strip()
+        if normalized_status != "idle" and not normalized_started_at:
+            normalized_started_at = now_iso
+        normalized_updated_at = str(updated_at or "").strip() or now_iso
+        completed_command_total = max(0, int(completed_command_install_unit_total or 0))
+        completed_source_sync_total = max(0, int(completed_source_sync_install_unit_total or 0))
+        skipped_total = max(0, int(skipped_install_unit_total or 0))
+        return {
+            "run_id": str(run_id or "").strip(),
+            "status": normalized_status,
+            "workflow_kind": normalized_workflow_kind,
+            "active": normalized_status in SKILLS_AGGREGATE_UPDATE_ACTIVE_STATUSES,
+            "candidate_install_unit_total": max(0, int(candidate_install_unit_total or 0)),
+            "planned_install_unit_total": max(0, int(planned_install_unit_total or 0)),
+            "actionable_install_unit_total": max(0, int(actionable_install_unit_total or 0)),
+            "command_install_unit_total": max(0, int(command_install_unit_total or 0)),
+            "source_sync_install_unit_total": max(0, int(source_sync_install_unit_total or 0)),
+            "completed_command_install_unit_total": completed_command_total,
+            "completed_source_sync_install_unit_total": completed_source_sync_total,
+            "completed_install_unit_total": completed_command_total + completed_source_sync_total + skipped_total,
+            "skipped_install_unit_total": skipped_total,
+            "failure_count": max(0, int(failure_count or 0)),
+            "success_count": max(0, int(success_count or 0)),
+            "source_sync_cache_hit_total": max(0, int(source_sync_cache_hit_total or 0)),
+            "atom_candidate_install_unit_total": max(0, int(atom_candidate_install_unit_total or 0)),
+            "atom_improved_count": max(0, int(atom_improved_count or 0)),
+            "atom_unchanged_count": max(0, int(atom_unchanged_count or 0)),
+            "started_at": normalized_started_at,
+            "updated_at": normalized_updated_at,
+            "message": str(message or "").strip(),
+        }
+
+    def _get_skills_update_all_progress_snapshot(self) -> dict[str, Any]:
+        snapshot = self._skills_update_all_progress
+        if not isinstance(snapshot, dict):
+            snapshot = self._build_skills_update_all_progress_snapshot()
+            self._skills_update_all_progress = snapshot
+        return dict(snapshot)
+
+    def _replace_skills_update_all_progress_snapshot(self, snapshot: dict[str, Any] | None) -> dict[str, Any]:
+        payload = snapshot if isinstance(snapshot, dict) else {}
+        normalized = self._build_skills_update_all_progress_snapshot(
+            run_id=payload.get("run_id", ""),
+            status=payload.get("status", "idle"),
+            workflow_kind=payload.get("workflow_kind", "aggregate_update_all"),
+            candidate_install_unit_total=payload.get("candidate_install_unit_total", 0),
+            planned_install_unit_total=payload.get("planned_install_unit_total", 0),
+            actionable_install_unit_total=payload.get("actionable_install_unit_total", 0),
+            command_install_unit_total=payload.get("command_install_unit_total", 0),
+            source_sync_install_unit_total=payload.get("source_sync_install_unit_total", 0),
+            completed_command_install_unit_total=payload.get("completed_command_install_unit_total", 0),
+            completed_source_sync_install_unit_total=payload.get("completed_source_sync_install_unit_total", 0),
+            skipped_install_unit_total=payload.get("skipped_install_unit_total", 0),
+            failure_count=payload.get("failure_count", 0),
+            success_count=payload.get("success_count", 0),
+            source_sync_cache_hit_total=payload.get("source_sync_cache_hit_total", 0),
+            atom_candidate_install_unit_total=payload.get("atom_candidate_install_unit_total", 0),
+            atom_improved_count=payload.get("atom_improved_count", 0),
+            atom_unchanged_count=payload.get("atom_unchanged_count", 0),
+            started_at=payload.get("started_at", ""),
+            updated_at=payload.get("updated_at", ""),
+            message=payload.get("message", ""),
+        )
+        self._skills_update_all_progress = normalized
+        return dict(normalized)
+
+    def _update_skills_update_all_progress_snapshot(self, **patch: Any) -> dict[str, Any]:
+        current = self._get_skills_update_all_progress_snapshot()
+        current.update({key: value for key, value in patch.items()})
+        return self._replace_skills_update_all_progress_snapshot(current)
+
+    def webui_get_update_all_aggregate_progress_payload(
+        self,
+        run_id: str = "",
+    ) -> dict[str, Any]:
+        snapshot = self._get_skills_update_all_progress_snapshot()
+        requested_run_id = str(run_id or "").strip()
+        current_run_id = str(snapshot.get("run_id") or "").strip()
+        if requested_run_id and requested_run_id != current_run_id:
+            return {
+                "ok": False,
+                "message": f"aggregate update-all progress not found: {requested_run_id}",
+                "progress": snapshot,
+            }
+        return {
+            "ok": True,
+            "run_id": current_run_id,
+            "status": str(snapshot.get("status") or "idle").strip().lower() or "idle",
+            "workflow_kind": str(snapshot.get("workflow_kind") or "aggregate_update_all").strip().lower()
+            or "aggregate_update_all",
+            "progress": snapshot,
+        }
+
+    def webui_get_update_all_aggregate_history_payload(
+        self,
+        *,
+        limit: int = 40,
+    ) -> dict[str, Any]:
+        normalized_limit = _to_int(limit, 40, 1)
+        if normalized_limit > 500:
+            normalized_limit = 500
+
+        warnings: list[str] = []
+        history_by_run_id: dict[str, dict[str, Any]] = {}
+
+        if self.skills_audit_path.exists():
+            try:
+                with self.skills_audit_path.open("r", encoding="utf-8") as f:
+                    for raw_line in f:
+                        line = str(raw_line or "").strip()
+                        if not line:
+                            continue
+                        try:
+                            parsed = json.loads(line)
+                        except Exception:
+                            continue
+                        if not isinstance(parsed, dict):
+                            continue
+                        action = str(parsed.get("action") or "").strip().lower()
+                        if action not in {"aggregates_update_all", "install_atom_refresh_all"}:
+                            continue
+                        payload = parsed.get("payload", {})
+                        if not isinstance(payload, dict):
+                            payload = {}
+                        run_id = str(payload.get("run_id") or "").strip()
+                        if not run_id:
+                            continue
+                        timestamp = str(parsed.get("timestamp") or "").strip()
+                        current = history_by_run_id.get(run_id)
+                        if not isinstance(current, dict):
+                            current = {
+                                "run_id": run_id,
+                                "timestamp": timestamp,
+                                "workflow_kind": "aggregate_update_all",
+                                "source_id": str(parsed.get("source_id") or "").strip(),
+                                "update": {},
+                                "atom_refresh": {},
+                            }
+                            history_by_run_id[run_id] = current
+
+                        current_timestamp = _parse_iso(str(current.get("timestamp") or "").strip())
+                        candidate_timestamp = _parse_iso(timestamp)
+                        if candidate_timestamp and (
+                            not current_timestamp or candidate_timestamp >= current_timestamp
+                        ):
+                            current["timestamp"] = timestamp
+
+                        if action == "install_atom_refresh_all":
+                            current["workflow_kind"] = "improve_all"
+                            current["atom_refresh"] = payload
+                        elif action == "aggregates_update_all":
+                            current["update"] = payload
+                            if str(current.get("workflow_kind") or "").strip().lower() != "improve_all":
+                                current["workflow_kind"] = "aggregate_update_all"
+            except Exception as exc:
+                logger.error("[onesync] read update-all aggregate history failed: %s", exc)
+                warnings.append(f"failed to read update-all aggregate history: {exc}")
+
+        items = sorted(
+            history_by_run_id.values(),
+            key=lambda item: (
+                _parse_iso(str(item.get("timestamp") or "").strip()) or datetime.min.replace(tzinfo=timezone.utc),
+                str(item.get("run_id") or ""),
+            ),
+            reverse=True,
+        )[:normalized_limit]
+        return {
+            "ok": True,
+            "generated_at": _now_iso(),
+            "counts": {
+                "total": len(items),
+            },
+            "items": items,
+            "warnings": warnings,
+        }
 
     async def _record_event(self, payload: dict[str, Any]) -> None:
         line = json.dumps(payload, ensure_ascii=False)

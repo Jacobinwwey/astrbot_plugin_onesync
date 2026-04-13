@@ -2,7 +2,7 @@
 
 > 语言 / Language: [中文](./SKILLS_UPDATE_STATUS_zh.md) | [English](./SKILLS_UPDATE_STATUS_en.md)
 
-审计日期：`2026-04-12`  
+审计日期：`2026-04-13`
 适用范围：当前 `main` 分支、source-first Skills 管理模型
 
 ## 1. 当前已经完成的部分
@@ -248,8 +248,14 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
     - 优先显示当前会话内最近一次 `update-all` 结果
     - 若当前会话没有结果，则回退显示 `aggregates_update_all` 审计记录
     - blocked / failed group 可点击定位到对应 install-unit/source 详情
+- 绑定保存与 deploy target 投影变更已进一步收口 authority boundary：
+  - `webui_update_inventory_bindings()` 现在直接基于 persisted `manifest` 与最新 skills snapshot 生成投影，不再强依赖 inventory 重扫。
+  - deploy target 的保存/修复链路也已复用同一套 manifest-first 投影辅助逻辑，operator intent 不必再先回流 inventory 才能变成可见状态。
+- 命令更新成功后的 freshness 写回现已成为权威结果：
+  - install-unit 命令执行成功后，会把 `last_seen_at`、`last_refresh_at`、`source_age_days=0` 与 `freshness_status=fresh` 回写到 saved registry
+  - 这修复了 repo-metadata / registry 类聚合“更新成功但仍显示 `AGING`”的假阳性问题
 - 当前完整回归结果已更新：
-  - `pytest -q` -> `178 passed`
+  - `pytest -q` -> `191 passed`
 
 - WebUI 已接入回滚审计轨迹面板：从 `/api/skills/audit?action=rollback` 拉取记录并在当前聚合与全局最近回滚之间自动切换展示。
 - 回滚流程已支持“按 source_id 选择子集回滚”，避免对整个聚合盲目全量回滚。

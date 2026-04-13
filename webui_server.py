@@ -48,7 +48,7 @@ class OneSyncWebUIServer:
         self.app = FastAPI(
             title="OneSync WebUI",
             description="OneSync software updater dashboard",
-            version="0.1.0",
+            version="0.2.1",
         )
         self.app.add_middleware(
             CORSMiddleware,
@@ -330,6 +330,28 @@ class OneSyncWebUIServer:
             if not ret.get("ok"):
                 status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
                 return JSONResponse(_public(ret), status_code=status_code)
+            return _public(ret)
+
+        @self.app.post("/api/skills/improve-all")
+        async def skill_improve_all(payload: dict[str, Any]):
+            ret = await self.plugin.webui_improve_all_skills(payload)
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(_public(ret), status_code=status_code)
+            return _public(ret)
+
+        @self.app.get("/api/skills/aggregates/update-all/progress")
+        async def skill_aggregates_update_all_progress(run_id: str = ""):
+            ret = self.plugin.webui_get_update_all_aggregate_progress_payload(run_id=run_id)
+            if not ret.get("ok"):
+                return JSONResponse(_public(ret), status_code=404)
+            return _public(ret)
+
+        @self.app.get("/api/skills/aggregates/update-all/history")
+        async def skill_aggregates_update_all_history(limit: int = 40):
+            ret = self.plugin.webui_get_update_all_aggregate_history_payload(limit=limit)
+            if not ret.get("ok"):
+                return JSONResponse(_public(ret), status_code=404)
             return _public(ret)
 
         @self.app.post("/api/skills/collections/{collection_group_id}/rollback")

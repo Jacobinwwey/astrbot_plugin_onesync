@@ -19,6 +19,7 @@ from skills_core import (
     build_skills_overview,
     build_install_unit_detail_payload,
     manifest_to_binding_rows,
+    project_inventory_snapshot_bindings_from_manifest,
     normalize_saved_skills_manifest,
     normalize_saved_skills_lock,
 )
@@ -783,6 +784,67 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("repo_metadata_github", repo_source["sync_kind"])
         self.assertEqual("2026-04-10T12:34:56Z", repo_source["sync_remote_revision"])
 
+    def test_build_skills_overview_refreshes_freshness_from_recent_successful_sync(self) -> None:
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-12T09:12:34+00:00",
+            "sources": [
+                {
+                    "source_id": "npx_global_ui_ux_pro_max",
+                    "display_name": "ui-ux-pro-max",
+                    "source_kind": "npx_single",
+                    "provider_key": "npx_skills",
+                    "source_scope": "global",
+                    "source_path": "/root/.codex/skills/ui-ux-pro-max",
+                    "locator": "/root/.codex/skills/ui-ux-pro-max",
+                    "managed_by": "npx",
+                    "update_policy": "registry",
+                    "source_exists": True,
+                    "last_seen_at": "2026-03-25T02:15:37.179549+00:00",
+                    "last_refresh_at": "2026-04-12T09:12:34.003161+00:00",
+                    "source_age_days": 18,
+                    "freshness_status": "aging",
+                    "sync_status": "ok",
+                    "sync_kind": "repo_metadata_github",
+                    "sync_checked_at": "2026-04-12T09:12:24.739012+00:00",
+                    "sync_message": "fetched github repository metadata for nextlevelbuilder/ui-ux-pro-max-skill",
+                    "sync_remote_revision": "2026-04-03T05:08:19Z",
+                    "sync_resolved_revision": "2026-04-03T05:08:19Z",
+                    "registry_latest_version": "2026-04-03T05:08:19Z",
+                    "registry_homepage": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+                    "compatible_software_ids": ["codex"],
+                    "compatible_software_families": ["codex"],
+                    "install_ref": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git#.claude/skills/ui-ux-pro-max",
+                    "tags": ["npx-managed"],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(
+            self.inventory_snapshot,
+            saved_registry=saved_registry,
+            generated_at="2026-04-12T09:12:35+00:00",
+        )
+
+        source_row = next(
+            item for item in overview["source_rows"] if item["source_id"] == "npx_global_ui_ux_pro_max"
+        )
+        install_unit_row = next(
+            item
+            for item in overview["install_unit_rows"]
+            if item["primary_source_id"] == "npx_global_ui_ux_pro_max"
+        )
+        collection_group_row = next(
+            item
+            for item in overview["collection_group_rows"]
+            if item["primary_source_id"] == "npx_global_ui_ux_pro_max"
+        )
+
+        self.assertEqual("fresh", source_row["freshness_status"])
+        self.assertEqual(0, source_row["source_age_days"])
+        self.assertEqual("fresh", install_unit_row["freshness_status"])
+        self.assertEqual("fresh", collection_group_row["freshness_status"])
+
     def test_build_skills_overview_tracks_sync_dirty_and_revision_drift(self) -> None:
         saved_registry = {
             "version": 1,
@@ -1097,6 +1159,25 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("stale", lock_target["status"])
         self.assertEqual("missing_source", lock_target["drift_status"])
         self.assertIn("retired_bundle", lock_target["missing_source_ids"])
+
+    def test_build_skills_manifest_preserves_explicit_empty_selection_from_saved_manifest(self) -> None:
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T07:59:00+00:00",
+            "sources": [],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": [],
+                },
+            ],
+        }
+
+        manifest = build_skills_manifest(self.inventory_snapshot, saved_manifest=saved_manifest)
+        codex_global = next(item for item in manifest["deploy_targets"] if item["target_id"] == "codex:global")
+        self.assertEqual([], codex_global["selected_source_ids"])
 
     def test_build_skills_overview_exposes_registry_and_host_rows(self) -> None:
         saved_registry = {
@@ -1724,6 +1805,111 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("manual_git_demo", overview["source_rows"][0]["source_id"])
         self.assertEqual("codex:global", overview["deploy_rows"][0]["target_id"])
 
+    def test_build_skills_overview_uses_saved_lock_runtime_when_inventory_host_observation_degrades(self) -> None:
+        degraded_inventory = copy.deepcopy(self.inventory_snapshot)
+        degraded_inventory["software_rows"][0].update(
+            {
+                "installed": False,
+                "declared_skill_roots": [],
+                "resolved_skill_roots": [],
+            },
+        )
+        degraded_inventory["binding_rows"] = []
+        degraded_inventory["binding_map"] = {"codex": [], "antigravity": []}
+        degraded_inventory["binding_map_by_scope"] = {
+            "global": {"codex": [], "antigravity": []},
+            "workspace": {"codex": [], "antigravity": []},
+        }
+
+        target_root = Path(self._tempdir.name) / "codex-runtime"
+        target_root.mkdir(parents=True, exist_ok=True)
+
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/example/demo-skills.git",
+                    "source_scope": "global",
+                    "provider_key": "manual",
+                    "compatible_software_ids": ["codex"],
+                    "enabled": True,
+                    "discovered": True,
+                    "source_exists": True,
+                },
+            ],
+        }
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "provider_key": "manual",
+                    "enabled": True,
+                    "source_scope": "global",
+                },
+            ],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": ["manual_git_demo"],
+                },
+            ],
+        }
+        saved_lock = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "status": "ready",
+                },
+            ],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "software_display_name": "Codex",
+                    "software_family": "codex",
+                    "software_kind": "cli",
+                    "provider_key": "codex",
+                    "scope": "global",
+                    "installed": True,
+                    "managed": False,
+                    "target_path": str(target_root),
+                    "selected_source_ids": ["manual_git_demo"],
+                    "available_source_ids": ["manual_git_demo"],
+                    "declared_skill_roots": [str(target_root)],
+                    "resolved_skill_roots": [str(target_root)],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(
+            degraded_inventory,
+            saved_manifest=saved_manifest,
+            saved_registry=saved_registry,
+            saved_lock=saved_lock,
+        )
+
+        codex_host = next(item for item in overview["host_rows"] if item["host_id"] == "codex")
+        self.assertTrue(codex_host["installed"])
+        self.assertEqual([str(target_root)], codex_host["resolved_skill_roots"])
+        self.assertEqual(str(target_root), codex_host["target_paths"]["global"])
+
+        codex_global = next(item for item in overview["deploy_rows"] if item["target_id"] == "codex:global")
+        self.assertEqual("ready", codex_global["status"])
+        self.assertEqual("ok", codex_global["drift_status"])
+        self.assertEqual(str(target_root), codex_global["target_path"])
+
     def test_manifest_to_binding_rows_projects_selected_sources(self) -> None:
         manifest = build_skills_manifest(self.inventory_snapshot)
         for item in manifest["deploy_targets"]:
@@ -1736,6 +1922,52 @@ class SkillsCoreTests(unittest.TestCase):
         keys = {(row["software_id"], row["skill_id"], row["scope"]) for row in rows}
         self.assertIn(("codex", "npx_bundle_compound_engineering_global", "global"), keys)
         self.assertIn(("codex", "npx_global_find_skills", "global"), keys)
+
+    def test_project_inventory_snapshot_bindings_from_manifest_reprojects_binding_views(self) -> None:
+        inventory_snapshot = copy.deepcopy(self.inventory_snapshot)
+        inventory_snapshot["binding_rows"] = []
+        inventory_snapshot["binding_map"] = {"codex": [], "antigravity": []}
+        inventory_snapshot["binding_map_by_scope"] = {
+            "global": {"codex": [], "antigravity": []},
+            "workspace": {"codex": [], "antigravity": []},
+        }
+        inventory_snapshot["software_rows"][0]["binding_count"] = 0
+        inventory_snapshot["software_rows"][1]["binding_count"] = 0
+        inventory_snapshot["counts"]["bindings_total"] = 0
+        inventory_snapshot["counts"]["bindings_valid"] = 0
+        inventory_snapshot["counts"]["bindings_invalid"] = 0
+
+        manifest = build_skills_manifest(self.inventory_snapshot)
+        for item in manifest["deploy_targets"]:
+            if item["target_id"] == "codex:global":
+                item["selected_source_ids"] = ["npx_global_find_skills"]
+            else:
+                item["selected_source_ids"] = []
+
+        projected = project_inventory_snapshot_bindings_from_manifest(inventory_snapshot, manifest)
+
+        self.assertEqual(
+            [
+                {
+                    "software_id": "codex",
+                    "skill_id": "npx_global_find_skills",
+                    "scope": "global",
+                    "enabled": True,
+                    "valid": True,
+                    "reason": "",
+                },
+            ],
+            projected["binding_rows"],
+        )
+        self.assertEqual(["npx_global_find_skills"], projected["binding_map"]["codex"])
+        self.assertEqual([], projected["binding_map"]["antigravity"])
+        self.assertEqual(["npx_global_find_skills"], projected["binding_map_by_scope"]["global"]["codex"])
+        self.assertEqual([], projected["binding_map_by_scope"]["workspace"]["codex"])
+        self.assertEqual(1, projected["software_rows"][0]["binding_count"])
+        self.assertEqual(0, projected["software_rows"][1]["binding_count"])
+        self.assertEqual(1, projected["counts"]["bindings_total"])
+        self.assertEqual(1, projected["counts"]["bindings_valid"])
+        self.assertEqual(0, projected["counts"]["bindings_invalid"])
 
 
 if __name__ == "__main__":

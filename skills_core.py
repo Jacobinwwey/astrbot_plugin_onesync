@@ -54,6 +54,8 @@ except ImportError:  # pragma: no cover - direct test imports
     from source_sync_core import is_source_syncable
 
 VALID_DEPLOY_SCOPES = ("global", "workspace")
+SOURCE_FRESH_MAX_AGE_DAYS = 7
+SOURCE_AGING_MAX_AGE_DAYS = 30
 
 LEGACY_NPX_ROOT_BUNDLE_RULES = [
     {
@@ -85,6 +87,63 @@ LEGACY_NPX_ROOT_BUNDLE_RULES = [
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _freshness_status_from_age(age_days: int | None, *, exists: bool) -> str:
+    if not exists:
+        return "missing"
+    if age_days is None:
+        return "fresh"
+    if age_days <= SOURCE_FRESH_MAX_AGE_DAYS:
+        return "fresh"
+    if age_days <= SOURCE_AGING_MAX_AGE_DAYS:
+        return "aging"
+    return "stale"
+
+
+def _refresh_source_freshness_from_sync(
+    source_row: dict[str, Any],
+    *,
+    now_iso: str,
+) -> dict[str, Any]:
+    row = source_row if isinstance(source_row, dict) else {}
+    source_exists = _to_bool(row.get("source_exists", False), False)
+    if not source_exists:
+        row["source_age_days"] = None
+        row["freshness_status"] = "missing"
+        return row
+
+    freshness_anchor = _parse_iso_datetime(row.get("last_seen_at"))
+    sync_ok = str(row.get("sync_status") or "").strip().lower() == "ok" and is_source_syncable(row)
+    if sync_ok:
+        for key in ("sync_checked_at", "last_refresh_at", "last_synced_at"):
+            candidate = _parse_iso_datetime(row.get(key))
+            if candidate and (freshness_anchor is None or candidate > freshness_anchor):
+                freshness_anchor = candidate
+
+    now_dt = _parse_iso_datetime(now_iso) or datetime.now(timezone.utc)
+    age_days: int | None = None
+    if freshness_anchor is not None:
+        age_seconds = max(0.0, (now_dt - freshness_anchor).total_seconds())
+        age_days = int(age_seconds // 86400)
+    row["source_age_days"] = age_days
+    row["freshness_status"] = _freshness_status_from_age(age_days, exists=source_exists)
+    return row
 
 
 def _slug(value: Any, default: str = "") -> str:
@@ -541,6 +600,145 @@ def manifest_to_binding_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def project_inventory_snapshot_bindings_from_manifest(
+    inventory_snapshot: dict[str, Any],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    snapshot = copy.deepcopy(inventory_snapshot if isinstance(inventory_snapshot, dict) else {})
+    software_rows = [
+        item
+        for item in snapshot.get("software_rows", [])
+        if isinstance(item, dict)
+    ]
+    skill_rows = [
+        item
+        for item in snapshot.get("skill_rows", [])
+        if isinstance(item, dict)
+    ]
+    compatibility_raw = snapshot.get("compatibility", {})
+    compatibility = compatibility_raw if isinstance(compatibility_raw, dict) else {}
+    software_ids = [
+        str(item.get("id") or "").strip()
+        for item in software_rows
+        if str(item.get("id") or "").strip()
+    ]
+    software_index = {
+        str(item.get("id") or "").strip(): item
+        for item in software_rows
+        if str(item.get("id") or "").strip()
+    }
+    skill_index = {
+        str(item.get("id") or "").strip(): item
+        for item in skill_rows
+        if str(item.get("id") or "").strip()
+    }
+
+    binding_map: dict[str, list[str]] = {software_id: [] for software_id in software_ids}
+    binding_map_by_scope: dict[str, dict[str, list[str]]] = {
+        scope: {software_id: [] for software_id in software_ids}
+        for scope in VALID_DEPLOY_SCOPES
+    }
+    binding_rows: list[dict[str, Any]] = []
+    valid_binding_count = 0
+    invalid_binding_count = 0
+
+    for binding in manifest_to_binding_rows(manifest if isinstance(manifest, dict) else {}):
+        software_id = str(binding.get("software_id") or "").strip()
+        skill_id = str(binding.get("skill_id") or "").strip()
+        scope = _normalize_scope(binding.get("scope", "global"))
+        enabled = _to_bool(binding.get("enabled", True), True)
+        valid = True
+        invalid_reason = ""
+
+        software = software_index.get(software_id)
+        skill = skill_index.get(skill_id)
+        if not software:
+            valid = False
+            invalid_reason = "software_not_found"
+        elif not skill:
+            valid = False
+            invalid_reason = "skill_not_found"
+        elif skill_id not in set(_to_str_list(compatibility.get(software_id, []))):
+            valid = False
+            invalid_reason = "incompatible_kind"
+
+        if valid and enabled:
+            skill_ids = binding_map.setdefault(software_id, [])
+            if skill_id not in skill_ids:
+                skill_ids.append(skill_id)
+            scoped_map = binding_map_by_scope.setdefault(scope, {sid: [] for sid in software_ids})
+            scoped_list = scoped_map.setdefault(software_id, [])
+            if skill_id not in scoped_list:
+                scoped_list.append(skill_id)
+            valid_binding_count += 1
+        elif not valid:
+            invalid_binding_count += 1
+
+        binding_rows.append(
+            {
+                "software_id": software_id,
+                "skill_id": skill_id,
+                "scope": scope,
+                "enabled": enabled,
+                "valid": valid,
+                "reason": invalid_reason,
+            },
+        )
+
+    for software_id in software_ids:
+        software = software_index.get(software_id)
+        if not software:
+            continue
+        software["binding_count"] = len(binding_map.get(software_id, []))
+
+    skill_binding_reverse: dict[str, set[str]] = {}
+    for software_id, skill_ids in binding_map.items():
+        for skill_id in skill_ids:
+            owners = skill_binding_reverse.setdefault(skill_id, set())
+            owners.add(software_id)
+
+    for skill in skill_rows:
+        skill_id = str(skill.get("id") or "").strip()
+        owners = sorted(skill_binding_reverse.get(skill_id, set()))
+        skill["bound_software_count"] = len(owners)
+        skill["bound_software_ids"] = owners
+
+    counts = snapshot.get("counts", {})
+    if not isinstance(counts, dict):
+        counts = {}
+    counts = {
+        **counts,
+        "bindings_total": len(binding_rows),
+        "bindings_valid": valid_binding_count,
+        "bindings_invalid": invalid_binding_count,
+    }
+
+    existing_warnings = [
+        str(item or "").strip()
+        for item in snapshot.get("warnings", [])
+        if str(item or "").strip()
+    ] if isinstance(snapshot.get("warnings", []), list) else []
+    warnings = [
+        warning
+        for warning in existing_warnings
+        if not warning.startswith("binding[")
+    ]
+    for binding in binding_rows:
+        if not _to_bool(binding.get("valid", False), False):
+            warnings.append(
+                f"binding[{binding.get('software_id')}->{binding.get('skill_id')}] is invalid: {binding.get('reason')}",
+            )
+
+    snapshot["software_rows"] = software_rows
+    snapshot["skill_rows"] = skill_rows
+    snapshot["binding_rows"] = binding_rows
+    snapshot["binding_map"] = binding_map
+    snapshot["binding_map_by_scope"] = binding_map_by_scope
+    snapshot["counts"] = counts
+    snapshot["warnings"] = warnings
+    return snapshot
+
+
 def _source_matches_host(
     source: dict[str, Any],
     host: dict[str, Any],
@@ -825,9 +1023,11 @@ def build_skills_manifest(
                 _to_str_list(binding_map_by_scope.get(scope, {}).get(software_id, [])),
             )
             saved_target = saved_target_index.get(target_id, {})
-            selected_ids = _dedupe_keep_order(
-                _to_str_list(saved_target.get("selected_source_ids", []))
-                or selected_from_inventory,
+            saved_target_has_selection = isinstance(saved_target, dict) and "selected_source_ids" in saved_target
+            selected_ids = (
+                _dedupe_keep_order(_to_str_list(saved_target.get("selected_source_ids", [])))
+                if saved_target_has_selection
+                else selected_from_inventory
             )
             selected_ids = _expand_legacy_root_bundle_selection(
                 selected_ids,
@@ -893,6 +1093,7 @@ def build_skills_lock(
         resolved_source = _merge_overlay_row(copy.deepcopy(source), registry_source_index.get(source_id, {}))
         resolved_source.update(derive_source_provenance_fields(resolved_source))
         resolved_source.update(enrich_source_aggregation(resolved_source))
+        resolved_source = _refresh_source_freshness_from_sync(resolved_source, now_iso=ts)
         deployed_target_ids = [
             str(target.get("target_id", "")).strip()
             for target in manifest.get("deploy_targets", [])
@@ -1096,6 +1297,89 @@ def _derive_host_rows_from_saved_lock(saved_lock: dict[str, Any]) -> list[dict[s
         hosts.append(item)
     hosts.sort(key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("host_id", "")).lower()))
     return hosts
+
+
+def _merge_host_rows_with_saved_lock(
+    host_rows: list[dict[str, Any]],
+    saved_lock: dict[str, Any],
+) -> list[dict[str, Any]]:
+    merged_rows: list[dict[str, Any]] = []
+    seen_host_ids: set[str] = set()
+    saved_host_rows = _derive_host_rows_from_saved_lock(saved_lock)
+    saved_host_index = {
+        str(item.get("host_id") or item.get("id") or "").strip(): item
+        for item in saved_host_rows
+        if isinstance(item, dict) and str(item.get("host_id") or item.get("id") or "").strip()
+    }
+
+    for host in host_rows:
+        if not isinstance(host, dict):
+            continue
+        merged = copy.deepcopy(host)
+        host_id = str(merged.get("host_id") or merged.get("id") or "").strip()
+        if not host_id:
+            continue
+        seen_host_ids.add(host_id)
+        saved_host = saved_host_index.get(host_id, {})
+        if isinstance(saved_host, dict) and saved_host:
+            current_declared_roots = _to_str_list(merged.get("declared_skill_roots", []))
+            current_resolved_roots = _to_str_list(merged.get("resolved_skill_roots", []))
+            current_target_paths = (
+                copy.deepcopy(merged.get("target_paths", {}))
+                if isinstance(merged.get("target_paths", {}), dict)
+                else {}
+            )
+            current_runtime_missing = (
+                not any(str(current_target_paths.get(scope) or "").strip() for scope in VALID_DEPLOY_SCOPES)
+                and not current_declared_roots
+                and not current_resolved_roots
+            )
+            declared_roots = _dedupe_keep_order(
+                current_declared_roots
+                + _to_str_list(saved_host.get("declared_skill_roots", [])),
+            )
+            resolved_roots = _dedupe_keep_order(
+                current_resolved_roots
+                + _to_str_list(saved_host.get("resolved_skill_roots", [])),
+            )
+            merged["declared_skill_roots"] = declared_roots
+            merged["resolved_skill_roots"] = resolved_roots
+
+            saved_target_paths = (
+                saved_host.get("target_paths", {})
+                if isinstance(saved_host.get("target_paths", {}), dict)
+                else {}
+            )
+            merged_target_paths = {
+                "global": str(current_target_paths.get("global") or saved_target_paths.get("global") or "").strip(),
+                "workspace": str(current_target_paths.get("workspace") or saved_target_paths.get("workspace") or "").strip(),
+            }
+
+            if current_runtime_missing and _to_bool(saved_host.get("installed", False), False):
+                merged["installed"] = True
+            merged["managed"] = _to_bool(merged.get("managed", False), False) or _to_bool(saved_host.get("managed", False), False)
+            if not str(merged.get("linked_target_name") or "").strip():
+                merged["linked_target_name"] = str(saved_host.get("linked_target_name") or "").strip()
+            if not str(merged.get("runtime_state_backend") or "").strip():
+                merged["runtime_state_backend"] = str(saved_host.get("runtime_state_backend") or "").strip()
+
+            if not merged_target_paths["global"]:
+                merged_target_paths["global"] = resolve_host_target_path(merged, "global")
+            if not merged_target_paths["workspace"]:
+                merged_target_paths["workspace"] = resolve_host_target_path(merged, "workspace")
+            merged["target_paths"] = merged_target_paths
+            merged["target_path"] = merged_target_paths["global"] or merged_target_paths["workspace"] or ""
+
+        merged_rows.append(merged)
+
+    for saved_host in saved_host_rows:
+        host_id = str(saved_host.get("host_id") or saved_host.get("id") or "").strip()
+        if not host_id or host_id in seen_host_ids:
+            continue
+        merged_rows.append(copy.deepcopy(saved_host))
+
+    merged_rows.sort(key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("host_id", "")).lower()))
+    return merged_rows
 
 
 def _apply_saved_lock_fallback(
@@ -1338,7 +1622,9 @@ def build_skills_overview(
         if isinstance(item, dict)
     ]
     host_rows = build_host_adapters(software_rows)
-    if not host_rows and normalized_saved_lock.get("deploy_targets"):
+    if host_rows and normalized_saved_lock.get("deploy_targets"):
+        host_rows = _merge_host_rows_with_saved_lock(host_rows, normalized_saved_lock)
+    elif not host_rows and normalized_saved_lock.get("deploy_targets"):
         host_rows = _derive_host_rows_from_saved_lock(normalized_saved_lock)
     registry = build_skills_registry(skill_rows, saved_registry=saved_registry, generated_at=ts)
     manifest = build_skills_manifest(

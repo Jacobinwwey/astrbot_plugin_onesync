@@ -4,6 +4,8 @@
 
 OneSync is an extensible software update manager plugin for AstrBot.
 
+Current mainline version: `v0.2.1`
+
 - Scheduled checks, optional auto-update, and manual run support.
 - Multi-target architecture (not limited to `zeroclaw`).
 - Mirror and multi-remote fallback for stable updates.
@@ -79,6 +81,9 @@ WebUI/API endpoints:
 - `POST /api/skills/collections/{collection_group_id}/sync`: sync upstream metadata for all sources in one collection group.
 - `POST /api/skills/collections/{collection_group_id}/update`: execute updates for all supported install units in one collection group.
 - `POST /api/skills/aggregates/update-all`: batch-run all currently actionable aggregate update plans and return executed/skipped/source-sync breakdown.
+- `GET /api/skills/aggregates/update-all/progress`: fetch the latest in-flight aggregate-update progress snapshot.
+- `GET /api/skills/aggregates/update-all/history`: fetch recent aggregate-update history for replay/audit views.
+- `POST /api/skills/improve-all`: run the unified "Improve All Skills" workflow that stitches install-atom completion and aggregate update into one backend-managed run.
 - `POST /api/skills/sources/sync-all`: batch-sync all currently syncable sources.
 
 Notes:
@@ -88,14 +93,23 @@ Notes:
 - In `npx` mode, the UI prefers package-level bundles over raw skill explosion. For example, `ce:*` is grouped as `Compound Engineering` with one maintenance command.
 - In `filesystem/hybrid` mode, skill discovery can still scan `SKILL.md` under configured `skill_roots` and merge with manual `skill_catalog`.
 - Provenance resolution now distinguishes `registry_package / skill_lock_source / documented_source_repo / catalog_source_repo / community_source_repo / local_custom_skill`; for example, a self-authored `doc` skill can be modeled as `local_custom_skill`.
+- `POST /api/inventory/bindings` now projects directly from persisted `manifest` plus the latest skills snapshot, so binding saves no longer depend on an inventory rescan to converge.
 - `Sync Source` and `Update Install Unit` are different capabilities: source sync refreshes upstream metadata, while install-unit / collection-group update executes the effective update plan.
 - Git-backed `skill_lock` and repo-derived sources no longer require users to pre-create a local git checkout manually. When the leaf skill path is not a git worktree, OneSync now bootstraps a managed checkout under `plugin_data/.../skills/git_repos/` and routes sync/update through that checkout.
+- Successful install-unit / collection command updates now refresh registry freshness anchors immediately, clearing false `AGING` UI state after a successful run.
 - Update support is now on a more honest boundary:
   - npm / registry-backed aggregates are updateable
   - git-backed `skill_lock` aggregates are updateable after managed checkout bootstrap
   - repo-metadata-backed aggregates can run source-sync fallback
   - `local_custom`, `synthetic_single`, and similar no-package-boundary sources are explicitly treated as `manual_only`
 - Maintainers should use [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) and [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) for the full support matrix and audit notes.
+
+### Latest Progress (2026-04-13)
+
+- `POST /api/inventory/bindings` and deploy-target projection mutations now reuse manifest-first projection helpers, which removes the old requirement to rescan inventory just to make binding changes visible.
+- Successful install-unit / collection command updates now stamp `last_seen_at`, `last_refresh_at`, `source_age_days=0`, and `freshness_status=fresh`, fixing the false `AGING` state that could remain after success.
+- `Improve All Skills` and `Update All Aggregates` now share one backend progress/history contract instead of relying on transient frontend-only feedback.
+- Current regression baseline on `main`: `pytest -q -> 191 passed`.
 
 ### Latest Progress (2026-04-12)
 
@@ -135,6 +149,7 @@ For full parameters and reliability notes, see:
 - [Stitch WebUI Baseline Notes](./docs/plans/stitch-webui-baseline-2026-04-06.md)
 - [Skills Management Reference Comparison](./docs/plans/skills-management-reference-comparative-analysis-2026-04-06.md)
 - [Skills Management Next-Step Plan](./docs/plans/skills-management-next-step-implementation-plan-2026-04-06.md)
+- [Skills UI Declutter and Update-All Progress Bridge Plan](./docs/plans/skills-ui-declutter-and-progress-bridge-plan-2026-04-12.md)
 
 ### Embedded AI Assistant and Guide
 

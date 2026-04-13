@@ -4,6 +4,8 @@
 
 OneSync 是一个面向 AstrBot 的通用可扩展软件更新器插件。
 
+当前主线版本：`v0.2.1`
+
 - 支持定时检查、自动更新、手动触发。
 - 支持多目标扩展（不仅是 `zeroclaw`）。
 - 支持镜像/多远端回退（提高更新稳定性）。
@@ -117,6 +119,9 @@ WebUI 与 API：
 - `POST /api/skills/collections/{collection_group_id}/sync`：同步 collection group 下全部 source 的上游元数据。
 - `POST /api/skills/collections/{collection_group_id}/update`：执行 collection group 中所有受支持 install unit 的真实更新命令。
 - `POST /api/skills/aggregates/update-all`：批量执行当前所有可执行聚合的更新计划，并返回 executed/skipped/source-sync 分层统计。
+- `GET /api/skills/aggregates/update-all/progress`：读取最近一次批量聚合更新的运行态进度快照。
+- `GET /api/skills/aggregates/update-all/history`：读取最近批量聚合更新历史，供前端面板与审计回放复用。
+- `POST /api/skills/improve-all`：统一编排 install-atom 补齐与 aggregate update 两个阶段的“一键完善 Skills”流程。
 - `POST /api/skills/sources/sync-all`：批量同步当前所有可同步 source。
 - `POST /api/skills/deploy-targets/{target_id}`：保存当前 target 的 selected sources。
 - `POST /api/skills/deploy-targets/{target_id}/reproject`：重建单个 target 的 generated projection，用于消除缓存与落盘状态漂移。
@@ -131,14 +136,23 @@ WebUI 与 API：
 - `filesystem/hybrid` 模式下，仍支持从 `skill_roots` 扫描 `SKILL.md` 并与手工 `skill_catalog` 合并去重。
 - `GET /api/skills/*` 当前采用 cache-first 读取，不会在每次页面访问时强制重写 `generated/*.json`；如需刷新真相源，请显式调用 `POST /api/skills/import` 或 target 级 `reproject`。
 - 当前来源归因已可区分 `registry_package / skill_lock_source / documented_source_repo / catalog_source_repo / community_source_repo / local_custom_skill`；例如用户自建的 `doc` skill 会被归类为 `local_custom_skill`。
+- `POST /api/inventory/bindings` 现已直接基于 persisted `manifest` 与最新 skills snapshot 生成兼容投影，不再依赖 inventory 重扫才能反映绑定结果。
 - `Sync Source` 与 `Update Install Unit` 不是同一件事：前者负责刷新 source 元数据，后者负责执行 install unit / collection group 的真实更新计划。
 - git-backed `skill_lock` / repo 来源现在不再强依赖用户手工准备本地 git repo。若叶子 skill 目录不是 git worktree，OneSync 会在 `plugin_data/.../skills/git_repos/` 下创建受管 checkout，并让 sync/update 都走这份 checkout。
+- install-unit / collection-group 的命令更新成功后，OneSync 现会立即回写 registry freshness anchor，避免 source 卡片在成功后仍显示 `AGING` 假阳性。
 - 当前“更新功能”已从“部分可用”推进到“核心路径可用”：
   - npm / registry-backed 聚合可更新
   - git-backed `skill_lock` 聚合现已可自动补齐 checkout 后更新
   - repo-metadata-backed 聚合可执行 source sync fallback
   - `local_custom` / `synthetic_single` / `derived` 等无真实包边界来源会被显式收敛到 `manual_only`
 - 维护者可参考 [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) 与 [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) 了解完整支持矩阵。
+
+### 最新进展（2026-04-13）
+
+- `POST /api/inventory/bindings` 与 deploy target projection 变更现已走 manifest-first 投影辅助逻辑，避免保存绑定时必须重扫 inventory 才能收敛状态。
+- install-unit / collection-group 的命令更新成功后，会立刻写回 `last_seen_at`、`last_refresh_at`、`source_age_days=0` 与 `freshness_status=fresh`，修复成功后仍显示 `AGING` 的假阳性。
+- `一键完善 Skills` 与 `更新全部聚合` 已共用后端 progress/history contract，前端不再只能依赖瞬时提示。
+- 当前主干回归基线：`pytest -q -> 191 passed`。
 
 ### 最新进展（2026-04-12）
 
@@ -178,6 +192,7 @@ python3 scripts/stitch_mcp_runner.py baseline \
 - [Stitch WebUI 基线记录](./docs/plans/stitch-webui-baseline-2026-04-06.md)
 - [Skills 管理参考仓库对比分析](./docs/plans/skills-management-reference-comparative-analysis-2026-04-06.md)
 - [Skills 管理下一步实施计划](./docs/plans/skills-management-next-step-implementation-plan-2026-04-06.md)
+- [Skills UI 减负与 Update-All Progress Bridge 实施计划](./docs/plans/skills-ui-declutter-and-progress-bridge-plan-2026-04-12.md)
 
 ### WebUI 内嵌 AI 助手与使用指引
 
