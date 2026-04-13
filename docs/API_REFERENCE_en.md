@@ -4,7 +4,7 @@
 
 | Current version | Updated | Audience | Start here |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | script callers, frontend integrators, extension authors | [README_en.md](../README_en.md) |
+| `v0.2.3` | `2026-04-13` | script callers, frontend integrators, extension authors | [README_en.md](../README_en.md) |
 
 This document does one job: it maps the embedded WebUI `/api/*` surface cleanly. If you are installing or operating the plugin, start elsewhere.
 
@@ -177,6 +177,7 @@ Current note:
 Recommendation:
 
 - for progress UI, prefer `progress` / `history` instead of inventing client-side progress estimates
+- `POST /api/skills/improve-all` writes to the same progress channel; distinguish the combined atom-refresh + aggregate-update workflow through `progress.workflow_kind = "improve_all"` and the `atom_*` counters.
 
 ## 9. AstrBot runtime routes
 
@@ -186,6 +187,70 @@ Recommendation:
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/delete` | delete a local AstrBot skill |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | trigger sandbox sync |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | sync one AstrBot Neo source |
+
+### 9.1 Host detail response shape
+
+Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
+
+- `host`
+  - the current host row
+- `layout.available_scopes`
+  - the scopes currently exposed by the host (`global / workspace`)
+- `layout.selected_scope`
+  - the default read scope
+- `layout.scoped_layouts.{scope}`
+  - per-scope paths and availability such as `skills_root`, `skills_config_path`, `sandbox_cache_path`, `neo_map_path`, and `state_available`
+- `runtime_state.summary.available_scopes`
+  - the runtime layer re-exposes usable scopes so the client does not need to infer from layout only
+- `runtime_state.summary.scope_summaries.{scope}`
+  - per-scope summaries such as `local_skill_total`, `active_skill_total`, `sandbox_cache_exists`, and `sandbox_cache_ready`
+- `runtime_state.state_rows[]`
+  - per-skill rows carrying `scope`, `skill_name`, `state_classification`, `local_exists`, `sandbox_exists`, and `active`
+
+### 9.2 AstrBot mutation payloads
+
+Pass `scope` explicitly whenever the caller already knows which root it wants.
+
+- `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
+
+```json
+{
+  "skill_name": "demo",
+  "active": false,
+  "scope": "workspace"
+}
+```
+
+- `POST /api/skills/hosts/{host_id}/astrbot/skills/delete`
+
+```json
+{
+  "skill_name": "demo",
+  "scope": "workspace"
+}
+```
+
+- `POST /api/skills/hosts/{host_id}/astrbot/sandbox/sync`
+
+```json
+{
+  "scope": "workspace"
+}
+```
+
+- `POST /api/skills/astrbot-neo-sources/{source_id}/sync`
+
+```json
+{
+  "release_id": "rel-2"
+}
+```
+
+Notes:
+
+- `scope` should be `global` or `workspace`.
+- Requesting an unavailable scope returns `reason_code = "scope_unavailable"`.
+- Neo sync may omit `release_id`; when omitted, backend default candidate/release selection is used.
 
 ## 10. Config routes
 
@@ -223,6 +288,13 @@ Important note:
 1. `POST /api/skills/aggregates/update-all`
 2. `GET /api/skills/aggregates/update-all/progress`
 3. `GET /api/skills/aggregates/update-all/history`
+
+### 11.4 AstrBot local skill flow
+
+1. `GET /api/skills/hosts`
+2. `GET /api/skills/hosts/{host_id}/astrbot`
+3. call toggle / delete / sandbox sync with explicit `scope`
+4. `GET /api/skills/hosts/{host_id}/astrbot`
 
 ## 12. Related documents
 

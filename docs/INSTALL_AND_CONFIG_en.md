@@ -4,7 +4,7 @@
 
 | Current version | Updated | Audience | Start here |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | first-time users and day-to-day operators | [README_en.md](../README_en.md) |
+| `v0.2.3` | `2026-04-13` | first-time users and day-to-day operators | [README_en.md](../README_en.md) |
 
 This guide is for two moments: the first time you install OneSync, and the first time you need to extend or repair a real setup. It stays on the operational path. Internal architecture lives elsewhere.
 
@@ -37,6 +37,8 @@ Core capabilities:
 - Persistent runtime state and events log for operations/audit.
 - Built-in WebUI (without modifying AstrBot Dashboard source).
 - Auto-generated software/version overview for large-scale operations.
+- The settings center now uses summary cards plus grouped configuration sections so operators see mode, polling, port, and password state immediately.
+- AstrBot local skills now support explicit `global / workspace` scope management instead of a single flat host-path view.
 
 ## 2. Requirements
 
@@ -125,7 +127,9 @@ WebUI features:
 - Filter targets by keyword and status.
 - `Run Update (Filtered)` with confirmation dialog.
 - `Run Update (All Managed)` with confirmation dialog.
-- Config Center: sync/read/write plugin config directly from WebUI.
+- Settings Center: sync/read/write plugin config directly from WebUI, with summary cards for current mode, polling, port, and password state.
+- `Improve All Skills`: refresh improve-able install atoms first, then run actionable aggregate updates; progress bar, latest report, and replay history share the same backend progress contract.
+- AstrBot Local Skills: when a host exposes both `global` and `workspace`, local toggle/delete/sandbox-sync actions execute against the selected scope.
 - Recent job panel (queued/running/success/partial/error).
 - Debug log panel with i18n-ready layout:
   - Tabs: `All / Run / Target / Scheduler / System`

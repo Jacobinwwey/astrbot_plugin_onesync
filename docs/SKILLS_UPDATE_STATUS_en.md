@@ -4,7 +4,7 @@
 
 | Current version | Audit date | Scope | Start here |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | current `main` branch, source-first Skills management model | [README_en.md](../README_en.md) |
+| `v0.2.3` | `2026-04-13` | current `main` branch, source-first Skills management model | [README_en.md](../README_en.md) |
 
 This is not product marketing. It is a capability audit. If you need to answer “what is actually updateable today, what only syncs metadata, and what is still manual,” start here.
 
@@ -307,3 +307,18 @@ To call the feature "complete", the next implementation steps should be:
 - AstrBot Phase 4 Neo write path is now wired: added `POST /api/skills/astrbot-neo-sources/{source_id}/sync` with Neo release sync execution and audit trail writeback (`astrbot_neo_source_sync`).
 - Full regression is now: `python3 -m pytest tests -q` -> `161 passed`.
 - WebUI Source / Bundle now surfaces and operates `astrneo:*` rows: Neo standalone sources are visible, detail loading auto-routes to `/api/skills/astrbot-neo-sources/{source_id}`, and the sync button auto-switches to the Neo sync API.
+
+## 9. Follow-up Progress (2026-04-13)
+
+- AstrBot local skill management now has a scope-aware contract end to end:
+  - `GET /api/skills/hosts/{host_id}/astrbot` now reliably exposes `available_scopes`, `selected_scope`, and `scoped_layouts`
+  - `runtime_state.summary.scope_summaries` carries separate `global / workspace` local-skill summaries
+  - toggle / delete / sandbox sync all accept explicit `scope`
+  - unavailable scopes now fail explicitly with `reason_code = "scope_unavailable"` instead of silently drifting to another root
+- The frontend primary action is now converged on `Improve All Skills`:
+  - refresh improve-able install atoms first
+  - then execute all actionable aggregates
+  - progress bar, latest report, and history all read from the same progress channel
+- This closes precision and observability gaps; it does not magically turn `manual_only` units into updateable ones:
+  - `local_custom`, `synthetic_single`, and `derived` units remain non-auto-update targets
+  - scope-aware AstrBot local actions do not change the updateability classification of those units

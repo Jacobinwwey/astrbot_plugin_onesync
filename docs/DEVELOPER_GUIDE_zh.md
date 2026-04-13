@@ -4,7 +4,7 @@
 
 | 当前版本 | 最后更新 | 适用对象 | 建议先读 |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | 维护者、贡献者、二次开发者 | [README.md](../README.md) |
+| `v0.2.3` | `2026-04-13` | 维护者、贡献者、二次开发者 | [README.md](../README.md) |
 
 这份文档给准备改代码的人看。它不重复用户安装步骤，重点是告诉你：代码在哪，状态落在哪，改动后怎么验证，哪些边界现在不能轻易打破。
 
@@ -171,6 +171,14 @@ pytest -q tests/test_main_git_checkout_runtime.py tests/test_skills_core.py test
 - `skills_core.py`
 - AstrBot 专项时还会触及 `skills_astrbot_*`
 
+AstrBot 专项扩展当前还要额外保持一组 scope 契约一致：
+
+- `layout.available_scopes`
+- `layout.selected_scope`
+- `layout.scoped_layouts`
+- `runtime_state.summary.scope_summaries`
+- action payload 中显式传入的 `scope`
+
 建议原则：
 
 - 先定义 capability / normalized row。
@@ -193,6 +201,7 @@ pytest -q tests/test_main_git_checkout_runtime.py tests/test_skills_core.py test
 - authority boundary 仍未完全从 inventory 切离
 - runtime reliability 仍受 manager、checkout、source sync 稳定性影响
 - `manual_only` / repo-metadata / git-backed source 的语义需要持续保持一致
+- AstrBot `layout -> UI -> action payload` 的 scope 语义必须保持一致，避免把 `workspace` 动作误写到 `global`
 
 开发时应避免：
 

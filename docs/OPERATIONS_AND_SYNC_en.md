@@ -4,7 +4,7 @@
 
 | Current version | Updated | Audience | Start here |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | maintainers and release operators | [README_en.md](../README_en.md) |
+| `v0.2.3` | `2026-04-13` | maintainers and release operators | [README_en.md](../README_en.md) |
 
 This manual is for the people who publish and maintain the repository. It is not usage documentation. It is the place to keep release flow, tags, remote sync, and published messaging clean.
 
@@ -70,7 +70,7 @@ Recommendations:
 Run in the plugin repository:
 
 ```bash
-./scripts/release.sh v0.2.2
+./scripts/release.sh v0.2.3
 ```
 
 This script will:
@@ -82,7 +82,7 @@ This script will:
 ### 4.2 Local dry run (no push)
 
 ```bash
-NO_PUSH=1 ./scripts/release.sh v0.2.2
+NO_PUSH=1 ./scripts/release.sh v0.2.3
 ```
 
 ### 4.3 GitHub release notes requirement
@@ -98,9 +98,9 @@ Recommended sequence:
 Recommended command:
 
 ```bash
-gh release edit v0.2.2 \
-  --title "v0.2.2 · english title / 中文标题" \
-  --notes-file docs/releases/v0.2.2.md
+gh release edit v0.2.3 \
+  --title "v0.2.3 · english title / 中文标题" \
+  --notes-file docs/releases/v0.2.3.md
 ```
 
 Template file:
@@ -114,9 +114,9 @@ Template file:
 
 ### 4.5 Current repository baseline
 
-- `metadata.yaml` version: `v0.2.2`
-- Embedded WebUI OpenAPI version: `0.2.2`
-- Current full regression baseline: `pytest -q -> 191 passed`
+- `metadata.yaml` version: `v0.2.3`
+- Embedded WebUI OpenAPI version: `0.2.3`
+- Current full regression baseline: `pytest -q -> 204 passed`
 
 ## 5. Code Sync Workflow (Local -> GitHub)
 
@@ -186,8 +186,13 @@ Current implementation status:
 - `synthetic_single`, `derived`, and `local_custom` install units without a real package boundary are now explicitly treated as `manual_only` instead of generating bogus update commands.
 - WebUI now exposes:
   - `POST /api/skills/aggregates/update-all`
-  - `Update All Aggregates`
+  - `POST /api/skills/improve-all`
+  - the primary `Improve All Skills` action
   - executed / skipped / source-sync breakdown in the result path
+- AstrBot local-skill actions are now scope-aware by contract:
+  - `GET /api/skills/hosts/{host_id}/astrbot` returns `available_scopes`, `selected_scope`, and `scoped_layouts`
+  - toggle / delete / sandbox sync calls should pass explicit `scope`
+  - unavailable scopes should be handled as `reason_code = "scope_unavailable"`
 
 When diagnosing an update complaint, check the install-unit detail payload first and treat `update_plan` as the source of truth.
 

@@ -4,7 +4,7 @@
 
 | 当前版本 | 审计日期 | 适用范围 | 建议先读 |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | 当前 `main` 分支、source-first Skills 管理模型 | [README.md](../README.md) |
+| `v0.2.3` | `2026-04-13` | 当前 `main` 分支、source-first Skills 管理模型 | [README.md](../README.md) |
 
 这份文档不是产品介绍，它是现状审计。你如果想知道“现在到底哪些 Skills 更新是真的可用、哪些还只是同步元数据、哪些仍然只能手工维护”，先看这份。
 
@@ -307,3 +307,18 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 - AstrBot Phase 4 Neo 写路径已接入：新增 `POST /api/skills/astrbot-neo-sources/{source_id}/sync`，已支持从 Neo release 同步并回写审计轨迹（`astrbot_neo_source_sync`）。
 - 全量回归已更新：`python3 -m pytest tests -q` -> `161 passed`。
 - WebUI Source / Bundle 面板现已可见并管理 `astrneo:*`：会展示 Neo standalone source，详情接口自动路由到 `/api/skills/astrbot-neo-sources/{source_id}`，同步按钮会自动切换 Neo sync API。
+
+## 9. 补充进展（2026-04-13）
+
+- AstrBot 本地 skill 管理已补齐 scope-aware contract：
+  - `GET /api/skills/hosts/{host_id}/astrbot` 会稳定返回 `available_scopes`、`selected_scope`、`scoped_layouts`
+  - `runtime_state.summary.scope_summaries` 会分别暴露 `global / workspace` 的本地 skill 摘要
+  - toggle / delete / sandbox sync 全部支持显式 `scope`
+  - 当前 scope 不可用时，会以 `reason_code = "scope_unavailable"` 明确失败，而不是静默回退到其他根目录
+- 前端主操作已经收敛到 `一键完善 Skills`：
+  - 先刷新可改善的 install atom
+  - 再推进全部可执行聚合
+  - 进度条、最近报告与历史记录共用同一进度通道
+- 这轮补齐的是“动作精度与可观测性”，不是把 `manual_only` 单元错误包装成可更新：
+  - `local_custom`、`synthetic_single`、`derived` 依然不是自动更新目标
+  - scope-aware AstrBot 本地动作不会改变这类 install unit 的 updateability 定性

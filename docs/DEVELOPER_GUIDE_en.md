@@ -4,7 +4,7 @@
 
 | Current version | Updated | Audience | Start here |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | maintainers, contributors, extension authors | [README_en.md](../README_en.md) |
+| `v0.2.3` | `2026-04-13` | maintainers, contributors, extension authors | [README_en.md](../README_en.md) |
 
 This guide is for people who are about to change code. It does not repeat install instructions. It tells you where the logic lives, where state lands, how to verify changes, and which boundaries are currently important.
 
@@ -171,6 +171,14 @@ Host-related extensions usually touch:
 - `skills_core.py`
 - and `skills_astrbot_*` for AstrBot-specific runtime support
 
+AstrBot-specific extensions now also need to preserve one scope contract across backend and UI:
+
+- `layout.available_scopes`
+- `layout.selected_scope`
+- `layout.scoped_layouts`
+- `runtime_state.summary.scope_summaries`
+- the explicit `scope` carried by action payloads
+
 Recommended order:
 
 1. define capability and normalized row shape
@@ -194,6 +202,7 @@ The mainline risk is not “missing aggregation models”. It is:
 - authority boundary is still not fully detached from inventory
 - runtime reliability is still sensitive to manager availability, checkout quality, and sync stability
 - semantics for `manual_only`, repo-metadata, and git-backed sources need to stay consistent across UI and execution
+- AstrBot `layout -> UI -> action payload` scope semantics must stay aligned, or `workspace` actions can drift back into `global`
 
 Avoid:
 

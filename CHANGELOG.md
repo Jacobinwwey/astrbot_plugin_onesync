@@ -6,6 +6,20 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.2.3] - 2026-04-13
+
+### Added
+- Added explicit API and documentation coverage for AstrBot scope-aware local skill management, including `available_scopes`, `selected_scope`, `scoped_layouts`, `scope_summaries`, and explicit mutation `scope` payloads.
+- Added bilingual `v0.2.3` release notes covering the current settings-center, Skills improvement workflow, and AstrBot local-scope baseline.
+
+### Changed
+- Bumped repository metadata and embedded WebUI OpenAPI version to `v0.2.3` / `0.2.3`.
+- Refreshed README and install docs so the shipped baseline now clearly foregrounds the redesigned settings center, the primary `Improve All Skills` workflow, and AstrBot `global / workspace` local-skill operations.
+- Synced maintainer/developer docs so release flow, extension guidance, and repo About templates match the current mainline.
+
+### Fixed
+- Removed version/documentation drift between the published docs and the already-shipped settings-center + AstrBot scope-aware Skills management behavior.
+
 ## [v0.2.2] - 2026-04-13
 
 ### Added

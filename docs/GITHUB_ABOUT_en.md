@@ -4,7 +4,7 @@
 
 | Current version | Updated | Audience | Start here |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | repository maintainers | [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md) |
+| `v0.2.3` | `2026-04-13` | repository maintainers | [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md) |
 
 This document is only about the GitHub repository `About` area. If you want the shortest path, copy the template below as-is and adjust only if you have a specific reason.
 

@@ -7,7 +7,7 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.2.2-2563eb" alt="version v0.2.2">
+  <img src="https://img.shields.io/badge/version-v0.2.3-2563eb" alt="version v0.2.3">
   <img src="https://img.shields.io/badge/AstrBot-%3E%3D4.16-16a34a" alt="AstrBot >=4.16">
   <img src="https://img.shields.io/badge/WebUI-127.0.0.1%3A8099-f59e0b" alt="WebUI 127.0.0.1:8099">
   <img src="https://img.shields.io/badge/Skills-aggregate--first-7c3aed" alt="aggregate-first skills">
@@ -45,7 +45,8 @@ It is built for a practical situation: you maintain more than one software targe
 ### 2. Embedded WebUI without dashboard patching
 
 - Embedded WebUI at `127.0.0.1:8099`.
-- Config center, runtime overview, latest job, and debug logs in one place.
+- The settings center now uses summary cards plus grouped forms, so config, runtime overview, latest job, and debug logs read as one layered control plane.
+- High-frequency actions stay in drawers and Utility panels instead of leaving low-frequency settings expanded in the primary workspace.
 - Chinese/English UI switching.
 - Filtering by keyword, status, and strategy.
 
@@ -53,6 +54,8 @@ It is built for a practical situation: you maintain more than one software targe
 
 - Install units and collection groups are the primary management objects.
 - Source bundles, deploy targets, and host software live in the same control plane.
+- `global / workspace` is a first-class binding scope, and AstrBot local skills now run scope-aware actions.
+- `Improve All Skills` refreshes improve-able install atoms first, then executes all actionable aggregate plans with progress and replay.
 - `manual_only`, git-backed, repo-metadata, and registry-backed paths stay explicit.
 - `Structure & Members` is collapsed by default so primary actions stay visible.
 
@@ -262,10 +265,15 @@ Notes:
 The WebUI is built around three practical needs: write the config correctly, watch the execution clearly, and diagnose failures without guessing.
 
 - `Config Center`
-  - read and write plugin config directly
-  - `human` / `developer` dual-mode support
+  - summary cards surface current mode, polling, port, and password state first
+  - direct config read/write with `human` / `developer` dual-mode support
 - `AI Assistant`
   - bootstrap, incremental add, diagnose/repair, and full-suite prompt generation
+- `Improve All Skills`
+  - refreshes improve-able install atoms first, then runs actionable aggregate updates
+  - shares one backend progress contract with the progress bar, latest report, and replay history
+- `AstrBot Local Skills`
+  - toggle, delete, and sandbox-sync local AstrBot skills under explicit `global / workspace` scope
 - `Latest Job`
   - recent software-update execution summary
 - `Debug Logs`
@@ -287,7 +295,8 @@ OneSync does not mirror a raw `npx skills ls` dump. It organizes the Skills surf
 
 - Installed, skill-capable hosts are shown first.
 - Uninstalled candidates can still be revealed deliberately.
-- `global / workspace` is a first-class binding scope.
+- `global / workspace` is a first-class binding scope, and AstrBot local actions always carry that scope explicitly.
+- `Improve All Skills` collapses install-atom refresh plus batch aggregate update into one primary action while keeping a replayable report.
 - The right-side inspector focuses on the current source / install unit / deploy target.
 - Longer sections such as `Structure & Members` and `Execution Preview & Audit` stay collapsible.
 
@@ -328,6 +337,7 @@ If the panel still looks wrong, check:
 
 - whether the source is actually `manual_only`
 - whether the path used real command update or `source sync fallback`
+- if this is an AstrBot local skill, whether the selected scope is correct; `workspace` actions do not write back into `global`
 - whether `Debug Logs` or `doctor` show a structured error
 
 ### 3. Should I use `human` or `developer` mode?

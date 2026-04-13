@@ -4,7 +4,7 @@
 
 | 当前版本 | 最后更新 | 适用对象 | 建议先读 |
 | --- | --- | --- | --- |
-| `v0.2.2` | `2026-04-13` | 脚本调用者、前端联调者、二次集成者 | [README.md](../README.md) |
+| `v0.2.3` | `2026-04-13` | 脚本调用者、前端联调者、二次集成者 | [README.md](../README.md) |
 
 这份文档只做一件事：把 OneSync 内置 WebUI 的 `/api/*` 面整理清楚。你如果只是安装和使用插件，不需要从这里开始。
 
@@ -178,6 +178,7 @@
 当前建议：
 
 - 若要做 UI 进度展示，优先依赖 `progress` / `history`，不要自行估算。
+- `POST /api/skills/improve-all` 也会写入同一条进度通道；前端应通过 `progress.workflow_kind = "improve_all"` 以及 `atom_*` 计数字段区分“原子刷新 + 聚合更新”的复合流程。
 
 ## 9. AstrBot 运行态接口
 
@@ -187,6 +188,70 @@
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/delete` | 删除本地 AstrBot skill |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | 触发 sandbox 同步 |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | 同步 AstrBot Neo source |
+
+### 9.1 宿主详情响应结构
+
+`GET /api/skills/hosts/{host_id}/astrbot` 的响应重点字段：
+
+- `host`
+  - 当前 host row。
+- `layout.available_scopes`
+  - 当前宿主可用的 `global / workspace` 范围。
+- `layout.selected_scope`
+  - 默认读取范围。
+- `layout.scoped_layouts.{scope}`
+  - 每个 scope 下的 `skills_root`、`skills_config_path`、`sandbox_cache_path`、`neo_map_path`、`state_available`。
+- `runtime_state.summary.available_scopes`
+  - 运行态层再次暴露可用范围，便于前端不依赖 layout 推断。
+- `runtime_state.summary.scope_summaries.{scope}`
+  - 每个范围各自的 `local_skill_total`、`active_skill_total`、`sandbox_cache_exists`、`sandbox_cache_ready` 等摘要。
+- `runtime_state.state_rows[]`
+  - 逐 skill 状态行，包含 `scope`、`skill_name`、`state_classification`、`local_exists`、`sandbox_exists`、`active`。
+
+### 9.2 AstrBot 变更请求 payload
+
+建议显式传递 `scope`，不要让前端隐式假设默认范围。
+
+- `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
+
+```json
+{
+  "skill_name": "demo",
+  "active": false,
+  "scope": "workspace"
+}
+```
+
+- `POST /api/skills/hosts/{host_id}/astrbot/skills/delete`
+
+```json
+{
+  "skill_name": "demo",
+  "scope": "workspace"
+}
+```
+
+- `POST /api/skills/hosts/{host_id}/astrbot/sandbox/sync`
+
+```json
+{
+  "scope": "workspace"
+}
+```
+
+- `POST /api/skills/astrbot-neo-sources/{source_id}/sync`
+
+```json
+{
+  "release_id": "rel-2"
+}
+```
+
+注意：
+
+- `scope` 可取 `global` 或 `workspace`。
+- 若请求了当前宿主未暴露的范围，会返回 `reason_code = "scope_unavailable"`。
+- Neo sync 可省略 `release_id`，省略时按当前后端默认 candidate/release 选择执行。
 
 ## 10. 配置接口
 
@@ -224,6 +289,13 @@
 1. `POST /api/skills/aggregates/update-all`
 2. `GET /api/skills/aggregates/update-all/progress`
 3. `GET /api/skills/aggregates/update-all/history`
+
+### 11.4 AstrBot 本地 skill 管理
+
+1. `GET /api/skills/hosts`
+2. `GET /api/skills/hosts/{host_id}/astrbot`
+3. 按显式 `scope` 调用 toggle / delete / sandbox sync
+4. `GET /api/skills/hosts/{host_id}/astrbot`
 
 ## 12. 相关文档
 
