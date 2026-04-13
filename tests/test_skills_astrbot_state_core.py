@@ -226,7 +226,7 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
             str(discovered_workspace_skills_root),
             layout["scoped_layouts"]["workspace"]["skills_root"],
         )
-        self.assertEqual("session_alpha", layout["selected_workspace_id"])
+        self.assertEqual("", layout["selected_workspace_id"])
         self.assertEqual(1, len(layout["workspace_profiles"]))
 
     def test_build_astrbot_host_runtime_state_tracks_rows_per_scope(self) -> None:

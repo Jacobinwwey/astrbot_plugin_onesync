@@ -252,6 +252,75 @@ def _workspace_root_from_skills_root(skills_root: Path) -> Path:
     return normalized
 
 
+def _normalize_path_for_compare(path_text: Any) -> str:
+    normalized = Path(str(path_text or "").strip()).expanduser()
+    if not str(normalized):
+        return ""
+    try:
+        return str(normalized.resolve())
+    except Exception:
+        return str(normalized)
+
+
+def _workspace_candidate_roots(path_text: Any) -> tuple[str, str]:
+    normalized = Path(str(path_text or "").strip()).expanduser()
+    if not str(normalized):
+        return "", ""
+    if normalized.name == "skills":
+        workspace_root = normalized.parent
+        skills_root = normalized
+    else:
+        workspace_root = normalized
+        skills_root = normalized / "skills"
+    return _normalize_path_for_compare(workspace_root), _normalize_path_for_compare(skills_root)
+
+
+def _resolve_selected_workspace_id_from_target_paths(
+    host: dict[str, Any],
+    workspace_profiles: list[dict[str, Any]],
+) -> str:
+    target_paths = host.get("target_paths", {}) if isinstance(host.get("target_paths"), dict) else {}
+    workspace_targets = _to_str_list(target_paths.get("workspace")) if isinstance(target_paths, dict) else []
+    if not workspace_targets or not workspace_profiles:
+        return ""
+
+    normalized_profiles: list[dict[str, str]] = []
+    for profile in workspace_profiles:
+        if not isinstance(profile, dict):
+            continue
+        workspace_id = str(profile.get("workspace_id") or "").strip()
+        if not workspace_id:
+            continue
+        normalized_profiles.append(
+            {
+                "workspace_id": workspace_id,
+                "workspace_root": _normalize_path_for_compare(profile.get("workspace_root")),
+                "skills_root": _normalize_path_for_compare(profile.get("skills_root")),
+            },
+        )
+    if not normalized_profiles:
+        return ""
+
+    for candidate in workspace_targets:
+        candidate_workspace_root, candidate_skills_root = _workspace_candidate_roots(candidate)
+        for profile in normalized_profiles:
+            if candidate_workspace_root and profile["workspace_root"] == candidate_workspace_root:
+                return profile["workspace_id"]
+            if candidate_skills_root and profile["skills_root"] == candidate_skills_root:
+                return profile["workspace_id"]
+
+    for candidate in workspace_targets:
+        candidate_workspace_root, _ = _workspace_candidate_roots(candidate)
+        workspace_name = Path(candidate_workspace_root).name if candidate_workspace_root else ""
+        normalized_workspace_id = _slug(workspace_name, default="")
+        if not normalized_workspace_id:
+            continue
+        for profile in normalized_profiles:
+            if profile["workspace_id"] == normalized_workspace_id:
+                return profile["workspace_id"]
+    return ""
+
+
 def _build_workspace_profiles(workspace_roots: list[Path]) -> tuple[list[dict[str, Any]], str]:
     profiles: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -278,14 +347,7 @@ def _build_workspace_profiles(workspace_roots: list[Path]) -> tuple[list[dict[st
             "exists": workspace_root.is_dir() and normalized_skills_root.is_dir(),
         }
         profiles.append(profile)
-    selected_workspace_id = ""
-    for profile in profiles:
-        if _to_bool(profile.get("exists"), False):
-            selected_workspace_id = str(profile.get("workspace_id") or "").strip()
-            break
-    if not selected_workspace_id and profiles:
-        selected_workspace_id = str(profiles[0].get("workspace_id") or "").strip()
-    return profiles, selected_workspace_id
+    return profiles, ""
 
 
 def _merged_scope_root_candidates(host: dict[str, Any]) -> list[str]:
@@ -514,8 +576,12 @@ def resolve_astrbot_host_layout(host: dict[str, Any] | None) -> dict[str, Any]:
         scope: _build_scoped_astrbot_layout(scope, candidates[0] if candidates else Path())
         for scope, candidates in scoped_candidates.items()
     }
-    workspace_profiles, selected_workspace_id = _build_workspace_profiles(
+    workspace_profiles = _build_workspace_profiles(
         scoped_candidates.get("workspace", []),
+    )[0]
+    selected_workspace_id = _resolve_selected_workspace_id_from_target_paths(
+        normalized_host,
+        workspace_profiles,
     )
     available_scopes = [
         scope
