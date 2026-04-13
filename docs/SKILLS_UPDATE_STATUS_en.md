@@ -177,6 +177,10 @@ To call the feature "complete", the next implementation steps should be:
     - failure reason grouping (`reason:count`)
     - per-record `Retry Failed` action that reuses `retry_before_revisions` directly against rollback APIs
   - Retry execution is now mutually exclusive with aggregate update/sync/deploy flows to avoid concurrent mutation collisions.
+- Rollback audit traceability is now explicit:
+  - each audit event now has an `event_id`;
+  - rollback audit payloads now include `request_source` and `retry_of_event_id`;
+  - the UI surfaces these fields directly so operators can trace which retry came from which failed rollback event.
 - Test-order stability is now fixed:
   - Resolved fake astrbot module initialization conflicts between `tests/test_main_git_checkout_runtime.py` and `tests/test_webui_server.py`.
   - Combined run now passes consistently: `pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`.

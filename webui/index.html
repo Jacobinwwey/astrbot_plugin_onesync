@@ -4793,11 +4793,15 @@
         inventory_rollback_audit_scope_all: "最近回滚",
         inventory_rollback_audit_scope_current: "当前聚合",
         inventory_rollback_audit_stats: "候选 {candidate} · 恢复 {restored} · 未恢复 {notRestored} · 失败 {failed}",
+        inventory_rollback_audit_event_id: "事件: {eventId}",
+        inventory_rollback_audit_retry_of: "重试来源: {eventId}",
+        inventory_rollback_audit_request_source_manual: "触发来源: 手工执行",
+        inventory_rollback_audit_request_source_audit_retry: "触发来源: 审计重试",
         inventory_rollback_audit_failure_groups: "失败原因: {summary}",
         inventory_rollback_audit_retry_action: "重试失败项",
         inventory_rollback_audit_retry_running: "重试中...",
         inventory_rollback_audit_retry_missing: "该回滚记录没有可重试的 Source 快照。",
-        inventory_rollback_audit_retry_confirm: "即将按审计记录重试回滚。\n\n范围: {scope}\nID: {sourceId}\n候选 Source: {count}\n\n确认继续？",
+        inventory_rollback_audit_retry_confirm: "即将按审计记录重试回滚。\n\n范围: {scope}\nID: {sourceId}\n事件: {eventId}\n候选 Source: {count}\n\n确认继续？",
         inventory_rollback_audit_retry_success: "审计重试完成: 恢复 {restored} 条 Source，未恢复 {notRestored} 条，失败命令 {failed} 条。",
         inventory_rollback_audit_retry_error: "审计重试失败: {msg}",
         inventory_rollback_audit_retry_busy: "当前有进行中的聚合操作，请稍后再试。",
@@ -5633,11 +5637,15 @@
         inventory_rollback_audit_scope_all: "Recent Rollbacks",
         inventory_rollback_audit_scope_current: "Current Aggregate",
         inventory_rollback_audit_stats: "Candidates {candidate} · Restored {restored} · Not restored {notRestored} · Failed {failed}",
+        inventory_rollback_audit_event_id: "Event: {eventId}",
+        inventory_rollback_audit_retry_of: "Retry of: {eventId}",
+        inventory_rollback_audit_request_source_manual: "Request source: manual",
+        inventory_rollback_audit_request_source_audit_retry: "Request source: audit retry",
         inventory_rollback_audit_failure_groups: "Failure reasons: {summary}",
         inventory_rollback_audit_retry_action: "Retry Failed",
         inventory_rollback_audit_retry_running: "Retrying...",
         inventory_rollback_audit_retry_missing: "This rollback record does not include retryable source snapshots.",
-        inventory_rollback_audit_retry_confirm: "Retry rollback using this audit record.\n\nScope: {scope}\nID: {sourceId}\nCandidate sources: {count}\n\nContinue?",
+        inventory_rollback_audit_retry_confirm: "Retry rollback using this audit record.\n\nScope: {scope}\nID: {sourceId}\nEvent: {eventId}\nCandidate sources: {count}\n\nContinue?",
         inventory_rollback_audit_retry_success: "Audit retry finished: {restored} sources restored, {notRestored} not restored, {failed} commands failed.",
         inventory_rollback_audit_retry_error: "Audit retry failed: {msg}",
         inventory_rollback_audit_retry_busy: "Another aggregate operation is in progress. Retry after it finishes.",
@@ -10687,8 +10695,10 @@
           const normalizedAction = String(item.action || "").trim().toLowerCase();
           return normalizedAction.includes("install_unit") || normalizedAction.includes("collection_group");
         })();
+        const requestSource = String(payload.request_source || "").trim().toLowerCase() || "manual";
         normalizedRows.push({
           row_index: Number(rowIndex) || 0,
+          event_id: String(item.event_id || "").trim() || `legacy_${Number(rowIndex) + 1}`,
           timestamp: String(item.timestamp || "").trim(),
           action: String(item.action || "").trim(),
           source_id: String(item.source_id || "").trim(),
@@ -10708,6 +10718,8 @@
           not_restored_source_ids: notRestoredSourceIds,
           retry_before_revisions: retryBeforeRevisions,
           retry_supported: retrySupportedByAction && retryBeforeRevisions.length > 0,
+          request_source: requestSource,
+          retry_of_event_id: String(payload.retry_of_event_id || "").trim(),
           payload,
         });
       });
@@ -10927,6 +10939,7 @@
         const tone = hasFailures ? "warn" : (restored > 0 ? "success" : "neutral");
         const actionLabel = inventoryRollbackAuditActionLabel(item.action);
         const sourceId = String(item.source_id || "").trim() || "-";
+        const eventId = String(item.event_id || "").trim() || "-";
         const timestamp = String(item.timestamp || "").trim();
         const timeText = timestamp ? toLocalTime(timestamp) : "-";
         const retryBusy = Boolean(state.inventoryRollbackAuditRetrying);
@@ -10954,7 +10967,16 @@
               <span>${escapeHtml(actionLabel)}</span>
               <span>${escapeHtml(timeText)}</span>
             </div>
+            <div class="meta">${escapeHtml(t("inventory_rollback_audit_event_id", { eventId }))}</div>
             <div class="meta">source_id: ${escapeHtml(sourceId)}</div>
+            <div class="meta">${escapeHtml(t(
+              item.request_source === "audit_retry"
+                ? "inventory_rollback_audit_request_source_audit_retry"
+                : "inventory_rollback_audit_request_source_manual",
+            ))}</div>
+            ${item.retry_of_event_id
+              ? `<div class="meta">${escapeHtml(t("inventory_rollback_audit_retry_of", { eventId: String(item.retry_of_event_id || "").trim() }))}</div>`
+              : ""}
             <div class="meta">${escapeHtml(t("inventory_rollback_audit_stats", {
               candidate,
               restored,
@@ -11612,6 +11634,7 @@
       const confirmed = window.confirm(t("inventory_rollback_audit_retry_confirm", {
         scope: inventoryRollbackAuditActionLabel(targetRow.action),
         sourceId: String(targetRow.source_id || "").trim() || "-",
+        eventId: String(targetRow.event_id || "").trim() || "-",
         count: retryBeforeRevisions.length,
       }));
       if (!confirmed) {
@@ -11628,6 +11651,8 @@
             execute: true,
             confirm: SKILLS_ROLLBACK_CONFIRM_TOKEN,
             before_revisions: retryBeforeRevisions,
+            request_source: "audit_retry",
+            retry_of_event_id: String(targetRow.event_id || "").trim(),
           }),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;

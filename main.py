@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -1235,7 +1236,9 @@ class OneSyncPlugin(Star):
         source_id: str = "",
         payload: dict[str, Any] | None = None,
     ) -> None:
+        event_id = f"audit_{uuid.uuid4().hex}"
         event = {
+            "event_id": event_id,
             "timestamp": _now_iso(),
             "action": str(action or "").strip(),
             "source_id": str(source_id or "").strip(),
@@ -2838,7 +2841,7 @@ class OneSyncPlugin(Star):
         if self.skills_audit_path.exists():
             try:
                 with self.skills_audit_path.open("r", encoding="utf-8") as f:
-                    for raw_line in f:
+                    for line_no, raw_line in enumerate(f, start=1):
                         line = str(raw_line or "").strip()
                         if not line:
                             continue
@@ -2850,6 +2853,9 @@ class OneSyncPlugin(Star):
                             continue
                         event_action = str(parsed.get("action") or "").strip()
                         event_source_id = str(parsed.get("source_id") or "").strip()
+                        event_id = str(parsed.get("event_id") or "").strip()
+                        if not event_id:
+                            event_id = f"legacy_{line_no}"
                         normalized_event_source_id = _normalize_inventory_id(event_source_id, default="")
                         if action_keyword and action_keyword not in event_action.lower():
                             continue
@@ -2860,6 +2866,7 @@ class OneSyncPlugin(Star):
                             payload = {}
                         events.append(
                             {
+                                "event_id": event_id,
                                 "timestamp": str(parsed.get("timestamp") or "").strip(),
                                 "action": event_action,
                                 "source_id": event_source_id,
@@ -6715,6 +6722,10 @@ class OneSyncPlugin(Star):
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         rollback_payload = payload if isinstance(payload, dict) else {}
+        request_source = str(rollback_payload.get("request_source") or "").strip().lower() or "manual"
+        if request_source not in {"manual", "audit_retry"}:
+            request_source = "manual"
+        retry_of_event_id = str(rollback_payload.get("retry_of_event_id") or "").strip()
         context = self._resolve_install_unit_action_context(install_unit_id)
         if not context.get("ok"):
             return context
@@ -6795,6 +6806,8 @@ class OneSyncPlugin(Star):
             **rollback_preview,
             **execution,
             "retry_before_revisions": retry_before_revisions,
+            "request_source": request_source,
+            "retry_of_event_id": retry_of_event_id,
             "message": (
                 "install unit rollback finished: "
                 f"{execution.get('success_count', 0)} commands ok, "
@@ -6815,6 +6828,8 @@ class OneSyncPlugin(Star):
                 "failed_sources": execution.get("failed_sources", []),
                 "not_restored_source_ids": execution.get("not_restored_source_ids", []),
                 "retry_before_revisions": retry_before_revisions,
+                "request_source": request_source,
+                "retry_of_event_id": retry_of_event_id,
             },
         )
         self._push_debug_log(
@@ -6844,6 +6859,10 @@ class OneSyncPlugin(Star):
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         rollback_payload = payload if isinstance(payload, dict) else {}
+        request_source = str(rollback_payload.get("request_source") or "").strip().lower() or "manual"
+        if request_source not in {"manual", "audit_retry"}:
+            request_source = "manual"
+        retry_of_event_id = str(rollback_payload.get("retry_of_event_id") or "").strip()
         context = self._resolve_collection_group_action_context(collection_group_id)
         if not context.get("ok"):
             return context
@@ -7034,6 +7053,8 @@ class OneSyncPlugin(Star):
             "not_restored_source_ids": deduped_not_restored_source_ids,
             "failed_sources": all_failed_sources,
             "retry_before_revisions": retry_before_revisions,
+            "request_source": request_source,
+            "retry_of_event_id": retry_of_event_id,
             "message": (
                 "collection group rollback finished: "
                 f"{success_count} commands ok, "
@@ -7055,6 +7076,8 @@ class OneSyncPlugin(Star):
                 "failed_sources": all_failed_sources,
                 "not_restored_source_ids": deduped_not_restored_source_ids,
                 "retry_before_revisions": retry_before_revisions,
+                "request_source": request_source,
+                "retry_of_event_id": retry_of_event_id,
             },
         )
         self._push_debug_log(

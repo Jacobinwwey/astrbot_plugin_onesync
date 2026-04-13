@@ -177,6 +177,10 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
     - 失败原因分组摘要（reason:count）
     - 按审计记录一键“重试失败项”按钮（直接复用 `retry_before_revisions` 调 rollback API）
   - 重试期间会与 update/sync/deploy 等聚合动作互斥，避免并发写路径冲突。
+- rollback 审计可追踪性已补齐：
+  - 每条审计事件新增 `event_id`；
+  - rollback 审计 payload 新增 `request_source` 与 `retry_of_event_id`；
+  - 前端审计轨迹会直接展示 event id 与重试来源，便于追踪“哪一次失败引发了哪一次重试”。
 - 测试稳定性已补齐：
   - 修复 `tests/test_main_git_checkout_runtime.py` 与 `tests/test_webui_server.py` 组合执行时的 fake astrbot module 初始化冲突，
   - 现已可稳定通过：`pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`。
