@@ -3692,6 +3692,12 @@
                   <div class="inventory-utility-section-body inventory-inspector-card">
                     <div class="inventory-soft-meta" id="inventoryAstrbotRuntimeSummary">当前软件不是 AstrBot，或运行态尚不可用。</div>
                     <div class="inventory-soft-meta">
+                      <label for="inventoryAstrbotWorkspaceSelect" id="inventoryAstrbotWorkspaceLabel">Workspace</label>
+                      <select id="inventoryAstrbotWorkspaceSelect">
+                        <option value="" id="inventoryAstrbotWorkspaceAutoOption">自动选择</option>
+                      </select>
+                    </div>
+                    <div class="inventory-soft-meta">
                       <label for="inventoryAstrbotSkillNameInput" id="inventoryAstrbotSkillNameLabel">Skill 名称</label>
                       <input id="inventoryAstrbotSkillNameInput" type="text" placeholder="输入当前范围内的 AstrBot skill 名称">
                     </div>
@@ -4366,6 +4372,7 @@
       inventoryAstrbotSyncingSandbox: false,
       inventoryAstrbotImportingZip: false,
       inventoryAstrbotExportingZip: false,
+      inventoryAstrbotSelectedWorkspaceId: "",
       inventoryAstrbotLastActionNote: "",
       inventoryRollbackBeforeRevisionsByAggregateId: {},
       inventoryLastUpdateByAggregateId: {},
@@ -5060,6 +5067,8 @@
         inventory_meta_runtime_warnings: "运行警告",
         inventory_astrbot_runtime_title: "AstrBot 本地技能",
         inventory_astrbot_runtime_empty: "当前软件不是 AstrBot，或运行态尚不可用。",
+        inventory_astrbot_workspace_label: "Workspace",
+        inventory_astrbot_workspace_auto: "自动选择（默认）",
         inventory_astrbot_skill_name_label: "Skill 名称",
         inventory_astrbot_skill_name_placeholder: "输入 {scope} 范围内的 AstrBot skill 名称",
         inventory_astrbot_enable: "启用",
@@ -5911,6 +5920,8 @@
         inventory_meta_runtime_warnings: "runtime_warnings",
         inventory_astrbot_runtime_title: "AstrBot Local Skills",
         inventory_astrbot_runtime_empty: "Selected host is not AstrBot or runtime state is unavailable.",
+        inventory_astrbot_workspace_label: "Workspace",
+        inventory_astrbot_workspace_auto: "Auto (default)",
         inventory_astrbot_skill_name_label: "Skill Name",
         inventory_astrbot_skill_name_placeholder: "Enter an AstrBot skill name under {scope}",
         inventory_astrbot_enable: "Enable",
@@ -7122,6 +7133,8 @@
         ? t("inventory_install_atom_retrying")
         : t("inventory_install_atom_retry_failed");
       $("inventoryInstallAtomRefreshReportTitle").textContent = t("inventory_install_atom_refresh_report_title");
+      $("inventoryAstrbotWorkspaceLabel").textContent = t("inventory_astrbot_workspace_label");
+      $("inventoryAstrbotWorkspaceAutoOption").textContent = t("inventory_astrbot_workspace_auto");
       $("inventoryAstrbotSkillNameLabel").textContent = t("inventory_astrbot_skill_name_label");
       $("inventoryAstrbotSkillNameInput").placeholder = t("inventory_astrbot_skill_name_placeholder", {
         scope: inventoryScopeLabel(normalizeInventoryScope(state.inventorySelectedScope)),
@@ -9322,7 +9335,10 @@
       const workspaceIds = Object.keys(workspaceSummaries)
         .map((item) => normalizeWorkspaceId(item))
         .filter(Boolean);
-      let workspaceId = normalizeWorkspaceId(runtimeSummary.selected_workspace_id);
+      let workspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
+      if (!workspaceId) {
+        workspaceId = normalizeWorkspaceId(runtimeSummary.selected_workspace_id);
+      }
       if (scope === "workspace" && !workspaceId && workspaceIds.length) {
         workspaceId = workspaceIds[0];
       }
@@ -12258,6 +12274,7 @@
       const retryFailedAtomsBtn = $("inventoryRetryFailedAtomsBtn");
       const astrbotRuntimeTitleEl = $("inventoryAstrbotRuntimeTitle");
       const astrbotRuntimeSummaryEl = $("inventoryAstrbotRuntimeSummary");
+      const astrbotWorkspaceSelectEl = $("inventoryAstrbotWorkspaceSelect");
       const astrbotSkillNameInputEl = $("inventoryAstrbotSkillNameInput");
       const astrbotEnableBtn = $("inventoryAstrbotEnableBtn");
       const astrbotDisableBtn = $("inventoryAstrbotDisableBtn");
@@ -13664,9 +13681,31 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const selectedHostRuntimeSummary = selectedHost.runtime_state_summary && typeof selectedHost.runtime_state_summary === "object"
         ? selectedHost.runtime_state_summary
         : {};
+      const normalizeWorkspaceId = (value) => String(value || "").trim().toLowerCase();
       const astrbotScopeSummaries = selectedHostRuntimeSummary.scope_summaries && typeof selectedHostRuntimeSummary.scope_summaries === "object"
         ? selectedHostRuntimeSummary.scope_summaries
         : {};
+      const astrbotWorkspaceSummaries = selectedHostRuntimeSummary.workspace_summaries && typeof selectedHostRuntimeSummary.workspace_summaries === "object"
+        ? selectedHostRuntimeSummary.workspace_summaries
+        : {};
+      const astrbotWorkspaceOptions = Object.entries(astrbotWorkspaceSummaries)
+        .map(([workspaceId, summary]) => {
+          const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+          if (!normalizedWorkspaceId) {
+            return null;
+          }
+          const workspaceSummary = summary && typeof summary === "object" ? summary : {};
+          const workspaceRoot = String(workspaceSummary.workspace_root || "").trim();
+          const localSkillTotal = Number(workspaceSummary.local_skill_total) || 0;
+          const label = workspaceRoot
+            ? `${normalizedWorkspaceId} · ${workspaceRoot} · local=${localSkillTotal}`
+            : `${normalizedWorkspaceId} · local=${localSkillTotal}`;
+          return {
+            id: normalizedWorkspaceId,
+            label,
+          };
+        })
+        .filter(Boolean);
       const astrbotAvailableScopes = Array.isArray(selectedHost.available_scopes)
         ? selectedHost.available_scopes.map((item) => normalizeInventoryScope(item)).filter(Boolean)
         : Object.keys(astrbotScopeSummaries).map((item) => normalizeInventoryScope(item)).filter(Boolean);
@@ -13676,6 +13715,25 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const astrbotRuntimeText = inventoryAstrbotRuntimeSummary(selectedHost, doctor);
       const selectedAstrbotHostId = selectedAstrbotHostIdFromHost(selectedHost, selectedSoftwareId);
       const astrbotSkillName = String(astrbotSkillNameInputEl && astrbotSkillNameInputEl.value || "").trim();
+      const runtimeSelectedWorkspaceId = normalizeWorkspaceId(selectedHostRuntimeSummary.selected_workspace_id);
+      let effectiveAstrbotWorkspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
+      if (
+        effectiveAstrbotWorkspaceId
+        && !astrbotWorkspaceOptions.some((item) => item.id === effectiveAstrbotWorkspaceId)
+      ) {
+        effectiveAstrbotWorkspaceId = "";
+      }
+      if (!effectiveAstrbotWorkspaceId && runtimeSelectedWorkspaceId) {
+        effectiveAstrbotWorkspaceId = runtimeSelectedWorkspaceId;
+      }
+      if (
+        !effectiveAstrbotWorkspaceId
+        && bindingScope === "workspace"
+        && astrbotWorkspaceOptions.length === 1
+      ) {
+        effectiveAstrbotWorkspaceId = astrbotWorkspaceOptions[0].id;
+      }
+      state.inventoryAstrbotSelectedWorkspaceId = effectiveAstrbotWorkspaceId;
       const astrbotActionBusy = state.inventoryAstrbotTogglingSkill
         || state.inventoryAstrbotDeletingSkill
         || state.inventoryAstrbotSyncingSandbox
@@ -13684,10 +13742,11 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const astrbotScopeAvailable = !selectedAstrbotHostId
         ? false
         : !astrbotAvailableScopes.length || astrbotAvailableScopes.includes(bindingScope);
-      const astrbotSkillActionEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && Boolean(astrbotSkillName) && !astrbotActionBusy;
-      const astrbotSandboxSyncEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && !astrbotActionBusy;
-      const astrbotImportZipEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && !astrbotActionBusy;
-      const astrbotExportZipEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && Boolean(astrbotSkillName) && !astrbotActionBusy;
+      const astrbotWorkspaceReady = bindingScope !== "workspace" || Boolean(effectiveAstrbotWorkspaceId);
+      const astrbotSkillActionEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && astrbotWorkspaceReady && Boolean(astrbotSkillName) && !astrbotActionBusy;
+      const astrbotSandboxSyncEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && astrbotWorkspaceReady && !astrbotActionBusy;
+      const astrbotImportZipEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && astrbotWorkspaceReady && !astrbotActionBusy;
+      const astrbotExportZipEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && astrbotWorkspaceReady && Boolean(astrbotSkillName) && !astrbotActionBusy;
       const softMetaLines = [
         `${t("inventory_meta_kind")}: ${selectedSoftware.software_kind || "-"}`,
         `${t("inventory_meta_provider")}: ${selectedSoftware.provider_key || "-"}`,
@@ -13708,6 +13767,21 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       astrbotRuntimeSummaryEl.textContent = astrbotRuntimeSummaryText;
       if (utilityAstrbotSummaryEl) {
         utilityAstrbotSummaryEl.textContent = astrbotRuntimeSummaryText;
+      }
+      if (astrbotWorkspaceSelectEl) {
+        const optionHtml = [
+          `<option value="" id="inventoryAstrbotWorkspaceAutoOption">${escapeHtml(t("inventory_astrbot_workspace_auto"))}</option>`,
+          ...astrbotWorkspaceOptions.map((item) => (
+            `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`
+          )),
+        ];
+        astrbotWorkspaceSelectEl.innerHTML = optionHtml.join("");
+        astrbotWorkspaceSelectEl.value = effectiveAstrbotWorkspaceId || "";
+        astrbotWorkspaceSelectEl.disabled = !selectedAstrbotHostId
+          || bindingScope !== "workspace"
+          || !astrbotScopeAvailable
+          || astrbotActionBusy
+          || !astrbotWorkspaceOptions.length;
       }
       if (astrbotSkillNameInputEl) {
         astrbotSkillNameInputEl.placeholder = t("inventory_astrbot_skill_name_placeholder", {
@@ -13747,6 +13821,8 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             scope: inventoryScopeLabel(bindingScope),
             available_scopes: astrbotAvailableScopeLabels,
           });
+        } else if (!astrbotWorkspaceReady) {
+          astrbotActionNoteEl.textContent = t("inventory_astrbot_workspace_required");
         } else {
           astrbotActionNoteEl.textContent = lastActionNote || t("inventory_astrbot_action_idle", {
             scope: inventoryScopeLabel(bindingScope),
@@ -16388,6 +16464,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         } catch (err) {
           alert(err && err.message ? err.message : t("inventory_install_atom_retry_noop"));
         }
+      });
+
+      $("inventoryAstrbotWorkspaceSelect").addEventListener("change", (evt) => {
+        const workspaceId = evt && evt.target ? String(evt.target.value || "").trim().toLowerCase() : "";
+        state.inventoryAstrbotSelectedWorkspaceId = workspaceId;
+        renderInventoryPanel();
       });
 
       $("inventoryAstrbotEnableBtn").addEventListener("click", async () => {
