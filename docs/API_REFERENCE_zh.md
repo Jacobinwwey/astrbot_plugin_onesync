@@ -190,6 +190,7 @@
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/import-zip` | 导入本地 AstrBot skill ZIP 包 |
 | GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | 导出本地 AstrBot skill ZIP 包 |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | 触发 sandbox 同步 |
+| POST | `/api/skills/hosts/{host_id}/astrbot/workspaces/select` | 设置/清空 AstrBot 持久化选中 workspace |
 | POST | `/api/skills/hosts/{host_id}/astrbot/workspaces/init` | 初始化单个 AstrBot workspace 骨架 |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | 同步 AstrBot Neo source |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/promote` | 提升 AstrBot Neo candidate |
@@ -206,7 +207,9 @@
 - `layout.selected_scope`
   - 默认读取范围。
 - `layout.selected_workspace_id`
-  - 仅当宿主提供显式 `target_paths.workspace` 映射时才会填充；自动发现到的 workspace 候选不会被隐式默认选中。
+  - 优先返回服务端持久化的 AstrBot workspace 选择。
+  - 若未持久化选择，则回退到显式 `target_paths.workspace` 匹配结果。
+  - 自动发现到的 workspace 候选不会被隐式默认选中。
 - `layout.scoped_layouts.{scope}`
   - 每个 scope 下的 `skills_root`、`skills_config_path`、`sandbox_cache_path`、`neo_map_path`、`state_available`。
 - `runtime_state.summary.available_scopes`
@@ -214,7 +217,7 @@
 - `runtime_state.summary.scope_summaries.{scope}`
   - 每个范围各自的 `local_skill_total`、`active_skill_total`、`sandbox_cache_exists`、`sandbox_cache_ready` 等摘要。
 - `runtime_state.summary.selected_workspace_id`
-  - 与 `layout.selected_workspace_id` 保持同一“仅显式 target 才选中”的语义。
+  - 与 `layout.selected_workspace_id` 保持同一“持久化选择优先”的语义。
   - 当其为空且存在 `scope_summaries.workspace` 时，该条目为聚合摘要（`workspace_aggregate=true`），不再回退到“第一个 workspace”。
 - `runtime_state.state_rows[]`
   - 逐 skill 状态行，包含 `scope`、`skill_name`、`state_classification`、`local_exists`、`sandbox_exists`、`active`。
@@ -243,6 +246,16 @@
 建议显式传递 `scope`，不要让前端隐式假设默认范围。
 当 `scope=workspace` 时必须传 `workspace_id`，否则会返回
 `reason_code=workspace_required` 或 `reason_code=workspace_not_found`。
+
+- `POST /api/skills/hosts/{host_id}/astrbot/workspaces/select`
+
+```json
+{
+  "workspace_id": "session_alpha"
+}
+```
+
+`workspace_id` 可以传空字符串（`""`）以清空服务端持久化选择。
 
 - `POST /api/skills/hosts/{host_id}/astrbot/workspaces/init`
 

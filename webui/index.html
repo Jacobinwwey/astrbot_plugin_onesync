@@ -9402,7 +9402,7 @@
         .filter(Boolean);
       const runtimeSelectedWorkspaceId = normalizeWorkspaceId(runtimeSummary.selected_workspace_id);
       let workspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
-      if (!workspaceId && runtimeSelectedWorkspaceId && workspaceIds.includes(runtimeSelectedWorkspaceId)) {
+      if (runtimeSelectedWorkspaceId && workspaceIds.includes(runtimeSelectedWorkspaceId)) {
         workspaceId = runtimeSelectedWorkspaceId;
       }
       if (workspaceId && !workspaceIds.includes(workspaceId)) {
@@ -13962,8 +13962,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       );
       let effectiveAstrbotWorkspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
       if (
-        !effectiveAstrbotWorkspaceId
-        && runtimeSelectedWorkspaceId
+        runtimeSelectedWorkspaceId
         && astrbotWorkspaceOptions.some((item) => item.id === runtimeSelectedWorkspaceId)
       ) {
         effectiveAstrbotWorkspaceId = runtimeSelectedWorkspaceId;

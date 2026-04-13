@@ -189,6 +189,7 @@ Recommendation:
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/import-zip` | import a local AstrBot skill ZIP |
 | GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | export a local AstrBot skill ZIP |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | trigger sandbox sync |
+| POST | `/api/skills/hosts/{host_id}/astrbot/workspaces/select` | set/clear persisted selected AstrBot workspace |
 | POST | `/api/skills/hosts/{host_id}/astrbot/workspaces/init` | initialize one AstrBot workspace scaffold |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | sync one AstrBot Neo source |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/promote` | promote one AstrBot Neo candidate |
@@ -205,7 +206,9 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
 - `layout.selected_scope`
   - the default read scope
 - `layout.selected_workspace_id`
-  - populated only when the host provides an explicit `target_paths.workspace` mapping; discovered workspace candidates are intentionally not auto-selected
+  - resolved from server-persisted AstrBot workspace selection first
+  - if no persisted selection exists, it falls back to explicit `target_paths.workspace` matching
+  - discovered workspace candidates are intentionally not auto-selected
 - `layout.scoped_layouts.{scope}`
   - per-scope paths and availability such as `skills_root`, `skills_config_path`, `sandbox_cache_path`, `neo_map_path`, and `state_available`
 - `runtime_state.summary.available_scopes`
@@ -213,7 +216,7 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
 - `runtime_state.summary.scope_summaries.{scope}`
   - per-scope summaries such as `local_skill_total`, `active_skill_total`, `sandbox_cache_exists`, and `sandbox_cache_ready`
 - `runtime_state.summary.selected_workspace_id`
-  - follows the same explicit-target semantics as `layout.selected_workspace_id`
+  - follows the same persisted-selection-first semantics as `layout.selected_workspace_id`
   - when empty and `scope_summaries.workspace` exists, that workspace scope summary is an aggregate (`workspace_aggregate=true`) instead of an implicit first-workspace fallback
 - `runtime_state.state_rows[]`
   - per-skill rows carrying `scope`, `skill_name`, `state_classification`, `local_exists`, `sandbox_exists`, and `active`
@@ -242,6 +245,16 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
 Pass `scope` explicitly whenever the caller already knows which root it wants.
 When `scope=workspace`, `workspace_id` is required; otherwise the API returns
 `reason_code=workspace_required` or `reason_code=workspace_not_found`.
+
+- `POST /api/skills/hosts/{host_id}/astrbot/workspaces/select`
+
+```json
+{
+  "workspace_id": "session_alpha"
+}
+```
+
+`workspace_id` can be empty (`""`) to clear server-persisted selection.
 
 - `POST /api/skills/hosts/{host_id}/astrbot/workspaces/init`
 
