@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import secrets
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -10,10 +12,11 @@ from astrbot.api import logger
 
 try:
     import uvicorn
-    from fastapi import FastAPI, Request
+    from fastapi import FastAPI, File, Form, Request, UploadFile
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse, PlainTextResponse
+    from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
     from fastapi.staticfiles import StaticFiles
+    from starlette.background import BackgroundTask
 
     FASTAPI_AVAILABLE = True
 except Exception:
@@ -339,6 +342,17 @@ class OneSyncWebUIServer:
                 logger.warning("[onesync] skills payload redaction failed: %s", exc)
                 return payload
 
+        def _cleanup_temp_file(path: str) -> None:
+            try:
+                normalized = Path(str(path or "")).expanduser()
+                if normalized.is_file():
+                    normalized.unlink(missing_ok=True)
+                parent = normalized.parent
+                if parent.name.startswith("onesync-astrbot-export-"):
+                    parent.rmdir()
+            except Exception:
+                return None
+
         @self.app.get("/api/auth-info")
         async def auth_info():
             return {"ok": True, "auth_required": self._auth_enabled}
@@ -461,6 +475,77 @@ class OneSyncWebUIServer:
                 status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
                 return JSONResponse(_public(ret), status_code=status_code)
             return _public(ret)
+
+        @self.app.post("/api/skills/hosts/{host_id}/astrbot/skills/import-zip")
+        async def skills_host_astrbot_import_zip(
+            host_id: str,
+            file: UploadFile | None = File(None),
+            scope: str = Form("global"),
+            overwrite: bool = Form(False),
+            skill_name_hint: str = Form(""),
+        ):
+            if file is None:
+                ret = {"ok": False, "message": "zip file is required", "reason_code": "zip_path_required"}
+                return JSONResponse(_public(ret), status_code=400)
+            filename = Path(str(file.filename or "skill.zip")).name
+            suffix = Path(filename).suffix or ".zip"
+            temp_handle = tempfile.NamedTemporaryFile(prefix="onesync-astrbot-upload-", suffix=suffix, delete=False)
+            temp_path = temp_handle.name
+            temp_handle.close()
+            try:
+                payload = await file.read()
+                with open(temp_path, "wb") as handle:
+                    handle.write(payload)
+                ret = self.plugin.webui_import_astrbot_skill_zip(
+                    host_id,
+                    temp_path,
+                    {
+                        "scope": scope,
+                        "overwrite": overwrite,
+                        "skill_name_hint": skill_name_hint or Path(filename).stem,
+                    },
+                )
+                if not ret.get("ok"):
+                    status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                    return JSONResponse(_public(ret), status_code=status_code)
+                return _public(ret)
+            finally:
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+
+        @self.app.get("/api/skills/hosts/{host_id}/astrbot/skills/export-zip")
+        async def skills_host_astrbot_export_zip(
+            host_id: str,
+            skill_name: str = "",
+            scope: str = "global",
+        ):
+            ret = self.plugin.webui_export_astrbot_skill_zip(
+                host_id,
+                {
+                    "skill_name": skill_name,
+                    "scope": scope,
+                },
+            )
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(_public(ret), status_code=status_code)
+            result = ret.get("result", {}) if isinstance(ret.get("result"), dict) else {}
+            archive_path = Path(str(result.get("archive_path") or "").strip()).expanduser()
+            if not archive_path.is_file():
+                bad_ret = {
+                    "ok": False,
+                    "message": "astrbot zip export did not produce a file",
+                    "reason_code": "zip_export_failed",
+                }
+                return JSONResponse(_public(bad_ret), status_code=400)
+            return FileResponse(
+                str(archive_path),
+                media_type=str(result.get("media_type") or "application/zip"),
+                filename=str(result.get("filename") or archive_path.name),
+                background=BackgroundTask(_cleanup_temp_file, str(archive_path)),
+            )
 
         @self.app.get("/api/skills/sources")
         async def skills_sources():

@@ -153,7 +153,7 @@ WebUI 支持：
 - `立即全部更新（全部纳管）`：更新全部启用目标。
 - 设置中心：在 WebUI 内直接同步查看并修改插件配置（包括 Human/Developer 模式和目标参数），并先展示当前模式、轮询、端口与口令状态摘要卡。
 - `一键完善 Skills`：先刷新可改善 install atom，再推进全部可执行聚合更新；进度条、最近报告与历史回放共用统一进度契约。
-- AstrBot 本地 Skills：若宿主同时暴露 `global / workspace`，启停、删除与 sandbox sync 都会按所选 scope 执行。
+- AstrBot 本地 Skills：若宿主同时暴露 `global / workspace`，启停、删除、ZIP 导入/导出与 sandbox sync 都会按所选 scope 执行。
 - 两个按钮都带确认弹窗，防止误触。
 - 最近任务状态面板（运行中/成功/部分成功/失败）。
 - Debug 日志面板（多标签：运行/目标/调度/系统，支持实时滚动、级别筛选、关键字过滤、清空日志）。

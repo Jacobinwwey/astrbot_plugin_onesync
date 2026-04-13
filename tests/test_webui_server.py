@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import types
 import unittest
+import zipfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -222,7 +224,10 @@ class _FakePlugin:
         self.last_astrbot_toggle_payload = None
         self.last_astrbot_delete_payload = None
         self.last_astrbot_sync_payload = None
+        self.last_astrbot_import_payload = None
+        self.last_astrbot_export_payload = None
         self.last_astrbot_neo_sync_payload = None
+        self._tempdir = tempfile.TemporaryDirectory()
         self.update_all_progress_snapshot = {
             "run_id": "",
             "status": "idle",
@@ -1098,6 +1103,58 @@ class _FakePlugin:
             "inventory": self.inventory_snapshot,
         }
 
+    def webui_import_astrbot_skill_zip(self, host_id: str, zip_path: str, payload: dict | None = None) -> dict:
+        action_payload = payload if isinstance(payload, dict) else {}
+        self.last_astrbot_import_payload = {
+            "host_id": host_id,
+            "zip_path": zip_path,
+            "payload": action_payload,
+        }
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        if not Path(str(zip_path or "")).exists():
+            return {"ok": False, "message": "zip file not found"}
+        return {
+            "ok": True,
+            "action": "import_zip",
+            "result": {
+                "ok": True,
+                "scope": str(action_payload.get("scope") or "global"),
+                "installed_skill_names": ["demo-import"],
+                "installed_count": 1,
+                "archive_path": str(zip_path),
+            },
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
+    def webui_export_astrbot_skill_zip(self, host_id: str, payload: dict | None = None) -> dict:
+        action_payload = payload if isinstance(payload, dict) else {}
+        self.last_astrbot_export_payload = {
+            "host_id": host_id,
+            "payload": action_payload,
+        }
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        skill_name = str(action_payload.get("skill_name") or "").strip()
+        if not skill_name:
+            return {"ok": False, "message": "invalid skill_name"}
+        archive_path = Path(self._tempdir.name) / f"{skill_name}.zip"
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as handle:
+            handle.writestr(f"{skill_name}/SKILL.md", "# demo\n")
+        return {
+            "ok": True,
+            "action": "export_zip",
+            "result": {
+                "ok": True,
+                "scope": str(action_payload.get("scope") or "global"),
+                "skill_name": skill_name,
+                "archive_path": str(archive_path),
+                "filename": f"{skill_name}.zip",
+                "media_type": "application/zip",
+            },
+        }
+
     async def webui_scan_inventory(self) -> dict:
         return self.inventory_snapshot
 
@@ -1718,6 +1775,26 @@ class WebUIServerTests(unittest.TestCase):
         self.assertEqual("workspace", astrbot_sync_resp.json()["result"]["scope"])
         self.assertEqual("workspace", self.plugin.last_astrbot_sync_payload["payload"]["scope"])
 
+        astrbot_import_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/skills/import-zip",
+            data={"scope": "workspace"},
+            files={"file": ("demo-import.zip", b"PK\x05\x06" + b"\x00" * 18, "application/zip")},
+        )
+        self.assertEqual(200, astrbot_import_resp.status_code)
+        self.assertTrue(astrbot_import_resp.json()["ok"])
+        self.assertEqual("import_zip", astrbot_import_resp.json()["action"])
+        self.assertEqual("workspace", astrbot_import_resp.json()["result"]["scope"])
+        self.assertEqual("workspace", self.plugin.last_astrbot_import_payload["payload"]["scope"])
+
+        astrbot_export_resp = self.client.get(
+            "/api/skills/hosts/astrbot/astrbot/skills/export-zip",
+            params={"skill_name": "demo", "scope": "workspace"},
+        )
+        self.assertEqual(200, astrbot_export_resp.status_code)
+        self.assertEqual("application/zip", astrbot_export_resp.headers["content-type"])
+        self.assertIn("demo.zip", astrbot_export_resp.headers.get("content-disposition", ""))
+        self.assertEqual("workspace", self.plugin.last_astrbot_export_payload["payload"]["scope"])
+
 
         astrbot_neo_sync_resp = self.client.post(
             "/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill/sync",
@@ -1755,6 +1832,20 @@ class WebUIServerTests(unittest.TestCase):
         )
         self.assertEqual(404, astrbot_sync_missing_resp.status_code)
         self.assertFalse(astrbot_sync_missing_resp.json()["ok"])
+
+        astrbot_import_bad_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/skills/import-zip",
+            data={"scope": "workspace"},
+        )
+        self.assertEqual(400, astrbot_import_bad_resp.status_code)
+        self.assertFalse(astrbot_import_bad_resp.json()["ok"])
+
+        astrbot_export_bad_resp = self.client.get(
+            "/api/skills/hosts/astrbot/astrbot/skills/export-zip",
+            params={"skill_name": ""},
+        )
+        self.assertEqual(400, astrbot_export_bad_resp.status_code)
+        self.assertFalse(astrbot_export_bad_resp.json()["ok"])
 
         unit_rollback_resp = self.client.post(
             "/api/skills/install-units/install%3Askill_cli/rollback",

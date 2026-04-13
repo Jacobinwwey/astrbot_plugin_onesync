@@ -56,6 +56,8 @@ from .skills_sources_core import (
 from .skills_install_atoms_core import normalize_install_atom_registry
 from .skills_astrbot_actions_core import (
     delete_astrbot_local_skill,
+    export_astrbot_skill_zip,
+    import_astrbot_skill_zip,
     set_astrbot_skill_active,
 )
 from .skills_astrbot_state_core import resolve_astrbot_host_layout
@@ -3398,6 +3400,126 @@ class OneSyncPlugin(Star):
             skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
             extra={"action": "sandbox_sync", "result": sync_result, "scope": requested_scope},
         )
+
+    def webui_import_astrbot_skill_zip(
+        self,
+        host_id: str,
+        zip_path: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action_payload = payload if isinstance(payload, dict) else {}
+        requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
+        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
+        if not context.get("ok"):
+            return context
+
+        skill_name_hint = str(action_payload.get("skill_name_hint") or "").strip() or None
+        overwrite = _to_bool(action_payload.get("overwrite"), False)
+        result = import_astrbot_skill_zip(
+            context.get("action_layout", {}),
+            zip_path=zip_path,
+            scope=requested_scope,
+            overwrite=overwrite,
+            skill_name_hint=skill_name_hint,
+        )
+        if not result.get("ok"):
+            return {
+                "ok": False,
+                "message": str(result.get("message") or "astrbot zip import failed"),
+                "reason_code": str(result.get("reason_code") or "").strip(),
+                "result": result,
+            }
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        normalized_host_id = str(context.get("host_id") or "").strip()
+        installed_skill_names = _to_str_list(result.get("installed_skill_names", []))
+        self._append_skills_audit_event(
+            "astrbot_skill_zip_import",
+            source_id=normalized_host_id,
+            payload={
+                "scope": str(result.get("scope") or requested_scope),
+                "overwrite": overwrite,
+                "skill_name_hint": skill_name_hint or "",
+                "installed_skill_names": installed_skill_names,
+                "installed_count": len(installed_skill_names),
+                "archive_path": str(result.get("archive_path") or zip_path),
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot zip imported: "
+                f"host={normalized_host_id} "
+                f"scope={str(result.get('scope') or requested_scope)} "
+                f"installed={','.join(installed_skill_names) or '-'}"
+            ),
+            source="webui",
+        )
+        return self._build_astrbot_host_mutation_response(
+            normalized_host_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
+            extra={"action": "import_zip", "result": result},
+        )
+
+    def webui_export_astrbot_skill_zip(
+        self,
+        host_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action_payload = payload if isinstance(payload, dict) else {}
+        requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
+        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
+        if not context.get("ok"):
+            return context
+
+        skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
+        result = export_astrbot_skill_zip(
+            context.get("action_layout", {}),
+            skill_name=skill_name,
+            scope=requested_scope,
+        )
+        if not result.get("ok"):
+            return {
+                "ok": False,
+                "message": str(result.get("message") or "astrbot zip export failed"),
+                "reason_code": str(result.get("reason_code") or "").strip(),
+                "result": result,
+            }
+
+        normalized_host_id = str(context.get("host_id") or "").strip()
+        self._append_skills_audit_event(
+            "astrbot_skill_zip_export",
+            source_id=normalized_host_id,
+            payload={
+                "scope": str(result.get("scope") or requested_scope),
+                "skill_name": str(result.get("skill_name") or skill_name),
+                "archive_path": str(result.get("archive_path") or ""),
+                "filename": str(result.get("filename") or ""),
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot zip exported: "
+                f"host={normalized_host_id} "
+                f"scope={str(result.get('scope') or requested_scope)} "
+                f"skill={str(result.get('skill_name') or skill_name)}"
+            ),
+            source="webui",
+        )
+        return {
+            "ok": True,
+            "generated_at": (
+                context.get("snapshot", {}).get("generated_at")
+                if isinstance(context.get("snapshot"), dict)
+                else ""
+            ),
+            "host": context.get("host", {}),
+            "action": "export_zip",
+            "result": result,
+        }
 
     def webui_get_skill_sources_payload(self) -> dict[str, Any]:
         snapshot = self.webui_get_skills_payload()

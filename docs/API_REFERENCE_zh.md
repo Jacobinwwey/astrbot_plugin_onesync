@@ -186,6 +186,8 @@
 | --- | --- | --- |
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/toggle` | 启停本地 AstrBot skill |
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/delete` | 删除本地 AstrBot skill |
+| POST | `/api/skills/hosts/{host_id}/astrbot/skills/import-zip` | 导入本地 AstrBot skill ZIP 包 |
+| GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | 导出本地 AstrBot skill ZIP 包 |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | 触发 sandbox 同步 |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | 同步 AstrBot Neo source |
 
@@ -231,6 +233,19 @@
 }
 ```
 
+- `POST /api/skills/hosts/{host_id}/astrbot/skills/import-zip`
+  - `multipart/form-data`
+  - 字段：
+    - `file`: `.zip` 文件
+    - `scope`: `global` / `workspace`
+    - `overwrite`: 可选，默认 `false`
+    - `skill_name_hint`: 可选，单 skill root archive 时可作为目标目录名提示
+
+- `GET /api/skills/hosts/{host_id}/astrbot/skills/export-zip`
+  - query:
+    - `skill_name=demo`
+    - `scope=workspace`
+
 - `POST /api/skills/hosts/{host_id}/astrbot/sandbox/sync`
 
 ```json
@@ -251,6 +266,8 @@
 
 - `scope` 可取 `global` 或 `workspace`。
 - 若请求了当前宿主未暴露的范围，会返回 `reason_code = "scope_unavailable"`。
+- ZIP 导入当前只接受 `.zip` 文件；无文件时返回 `reason_code = "zip_path_required"`。
+- ZIP 导出会返回 `application/zip` 文件流；若 skill 仅存在于 sandbox cache，会返回 `reason_code = "sandbox_only_skill"`。
 - Neo sync 可省略 `release_id`，省略时按当前后端默认 candidate/release 选择执行。
 
 ## 10. 配置接口
@@ -294,7 +311,7 @@
 
 1. `GET /api/skills/hosts`
 2. `GET /api/skills/hosts/{host_id}/astrbot`
-3. 按显式 `scope` 调用 toggle / delete / sandbox sync
+3. 按显式 `scope` 调用 toggle / delete / import-zip / export-zip / sandbox sync
 4. `GET /api/skills/hosts/{host_id}/astrbot`
 
 ## 12. 相关文档

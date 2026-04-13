@@ -258,6 +258,34 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
 
 - 已完成 Neo source 在 WebUI 的可见与可操作接入（前端）：
   - Source / Bundle 面板现在会合并展示 `astrbot_neo_source_rows`（以 standalone source 形态附加，不覆盖 install-unit 主链路）。
+
+### 2026-04-13 / Step 7
+
+- 已补齐 AstrBot ZIP import / export 的最小闭环：
+  - `skills_astrbot_actions_core.py` 新增：
+    - `import_astrbot_skill_zip(...)`
+    - `export_astrbot_skill_zip(...)`
+  - 约束对齐 AstrBot 上游语义：
+    - 只接受合法 `.zip`
+    - 阻断绝对路径 / `..` 路径穿越
+    - root archive 与 top-level skill folder 两种形态都可处理
+    - `overwrite=false` 时会在冲突前提前失败
+    - `sandbox_only` skill 禁止本地导出
+  - `main.py` 已新增：
+    - `webui_import_astrbot_skill_zip(...)`
+    - `webui_export_astrbot_skill_zip(...)`
+    - 两条写路径都已接入 audit + debug log
+  - `webui_server.py` 已新增：
+    - `POST /api/skills/hosts/{host_id}/astrbot/skills/import-zip`
+    - `GET /api/skills/hosts/{host_id}/astrbot/skills/export-zip`
+  - `webui/index.html` 的 AstrBot runtime 区已新增：
+    - `导入 ZIP`
+    - `导出 ZIP`
+    - 对应 busy state 与成功/失败提示
+- 本轮定向回归：
+  - `pytest -q tests/test_skills_astrbot_actions_core.py` -> `9 passed`
+  - `pytest -q tests/test_webui_server.py -k "astrbot or mutation_routes"` -> `1 passed`
+  - `pytest -q tests/test_webui_inventory_registry_hosts.py -k astrbot` -> `2 passed`
   - 选中 `astrneo:*` 行时，详情加载会自动走：
     - `GET /api/skills/astrbot-neo-sources/{source_id}`
   - Source Sync 按钮已支持 Neo 模式分流：

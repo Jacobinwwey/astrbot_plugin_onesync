@@ -185,6 +185,8 @@ Recommendation:
 | --- | --- | --- |
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/toggle` | enable/disable a local AstrBot skill |
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/delete` | delete a local AstrBot skill |
+| POST | `/api/skills/hosts/{host_id}/astrbot/skills/import-zip` | import a local AstrBot skill ZIP |
+| GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | export a local AstrBot skill ZIP |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | trigger sandbox sync |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | sync one AstrBot Neo source |
 
@@ -230,6 +232,19 @@ Pass `scope` explicitly whenever the caller already knows which root it wants.
 }
 ```
 
+- `POST /api/skills/hosts/{host_id}/astrbot/skills/import-zip`
+  - `multipart/form-data`
+  - fields:
+    - `file`: `.zip` archive
+    - `scope`: `global` / `workspace`
+    - `overwrite`: optional, default `false`
+    - `skill_name_hint`: optional target directory hint for single-skill root archives
+
+- `GET /api/skills/hosts/{host_id}/astrbot/skills/export-zip`
+  - query:
+    - `skill_name=demo`
+    - `scope=workspace`
+
 - `POST /api/skills/hosts/{host_id}/astrbot/sandbox/sync`
 
 ```json
@@ -250,6 +265,8 @@ Notes:
 
 - `scope` should be `global` or `workspace`.
 - Requesting an unavailable scope returns `reason_code = "scope_unavailable"`.
+- ZIP import only accepts `.zip`; missing upload content returns `reason_code = "zip_path_required"`.
+- ZIP export returns an `application/zip` stream; sandbox-only skills return `reason_code = "sandbox_only_skill"`.
 - Neo sync may omit `release_id`; when omitted, backend default candidate/release selection is used.
 
 ## 10. Config routes
@@ -293,7 +310,7 @@ Important note:
 
 1. `GET /api/skills/hosts`
 2. `GET /api/skills/hosts/{host_id}/astrbot`
-3. call toggle / delete / sandbox sync with explicit `scope`
+3. call toggle / delete / import-zip / export-zip / sandbox sync with explicit `scope`
 4. `GET /api/skills/hosts/{host_id}/astrbot`
 
 ## 12. Related documents

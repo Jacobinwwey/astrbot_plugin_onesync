@@ -313,8 +313,9 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 - AstrBot 本地 skill 管理已补齐 scope-aware contract：
   - `GET /api/skills/hosts/{host_id}/astrbot` 会稳定返回 `available_scopes`、`selected_scope`、`scoped_layouts`
   - `runtime_state.summary.scope_summaries` 会分别暴露 `global / workspace` 的本地 skill 摘要
-  - toggle / delete / sandbox sync 全部支持显式 `scope`
+  - toggle / delete / ZIP import / ZIP export / sandbox sync 全部支持显式 `scope`
   - 当前 scope 不可用时，会以 `reason_code = "scope_unavailable"` 明确失败，而不是静默回退到其他根目录
+  - ZIP 导入/导出动作已接入现有审计链路与 WebUI Inspector，不再只是 capability 声明
 - 前端主操作已经收敛到 `一键完善 Skills`：
   - 先刷新可改善的 install atom
   - 再推进全部可执行聚合

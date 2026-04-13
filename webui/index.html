@@ -3517,6 +3517,11 @@
                       <button type="button" id="inventoryAstrbotDeleteBtn">删除</button>
                       <button type="button" id="inventoryAstrbotSyncSandboxBtn">同步沙箱</button>
                     </div>
+                    <div class="inventory-inspector-actions">
+                      <input id="inventoryAstrbotZipInput" type="file" accept=".zip" class="hidden">
+                      <button type="button" id="inventoryAstrbotImportZipBtn">导入 ZIP</button>
+                      <button type="button" id="inventoryAstrbotExportZipBtn">导出 ZIP</button>
+                    </div>
                     <div class="inventory-soft-meta" id="inventoryAstrbotActionNote">待命</div>
                   </div>
                 </details>
@@ -4169,6 +4174,8 @@
       inventoryAstrbotTogglingSkill: false,
       inventoryAstrbotDeletingSkill: false,
       inventoryAstrbotSyncingSandbox: false,
+      inventoryAstrbotImportingZip: false,
+      inventoryAstrbotExportingZip: false,
       inventoryAstrbotLastActionNote: "",
       inventoryRollbackBeforeRevisionsByAggregateId: {},
       inventoryLastUpdateByAggregateId: {},
@@ -4832,17 +4839,26 @@
         inventory_astrbot_delete: "删除",
         inventory_astrbot_sync_sandbox: "同步沙箱",
         inventory_astrbot_syncing_sandbox: "同步中",
+        inventory_astrbot_import_zip: "导入 ZIP",
+        inventory_astrbot_importing_zip: "导入中",
+        inventory_astrbot_export_zip: "导出 ZIP",
+        inventory_astrbot_exporting_zip: "导出中",
         inventory_astrbot_available_scopes: "可用范围",
-        inventory_astrbot_action_idle: "当前可在 {scope} 范围内启停、删除本地 skill，或执行一次沙箱同步。",
+        inventory_astrbot_action_idle: "当前可在 {scope} 范围内启停、删除、导入或导出本地 skill，并执行一次沙箱同步。",
         inventory_astrbot_action_unavailable: "当前软件不是 AstrBot，动作不可用。",
         inventory_astrbot_scope_unavailable: "当前 AstrBot host 未暴露 {scope} 范围，本地 skill 管理已禁用。可用范围：{available_scopes}",
         inventory_astrbot_skill_name_required: "请输入 skill 名称。",
+        inventory_astrbot_zip_required: "请选择一个 .zip 文件。",
         inventory_astrbot_toggle_success: "已在 {scope} 范围更新 skill `{skill}` active={active}",
         inventory_astrbot_delete_success: "已从 {scope} 范围删除 skill `{skill}`",
         inventory_astrbot_sync_success: "已触发 {scope} 范围的 AstrBot 沙箱同步。",
+        inventory_astrbot_import_success: "已向 {scope} 范围导入 {count} 个 skill：{skills}",
+        inventory_astrbot_export_success: "已从 {scope} 范围导出 skill `{skill}`。",
         inventory_astrbot_toggle_error: "AstrBot 启停失败：{msg}",
         inventory_astrbot_delete_error: "AstrBot 删除失败：{msg}",
         inventory_astrbot_sync_error: "AstrBot 沙箱同步失败：{msg}",
+        inventory_astrbot_import_error: "AstrBot ZIP 导入失败：{msg}",
+        inventory_astrbot_export_error: "AstrBot ZIP 导出失败：{msg}",
         inventory_astrbot_delete_confirm: "确认删除 {scope} 范围内的 AstrBot skill `{skill}`？该操作会删除本地目录。",
         inventory_doctor_astrbot: "AstrBot(hosts/missing_config/missing_cache/cache_unready/drift/warn)={hosts}/{missing_config}/{missing_cache}/{cache_unready}/{drift}/{warnings}",
         inventory_skill_meta_id: "ID",
@@ -5598,17 +5614,26 @@
         inventory_astrbot_delete: "Delete",
         inventory_astrbot_sync_sandbox: "Sync Sandbox",
         inventory_astrbot_syncing_sandbox: "Syncing",
+        inventory_astrbot_import_zip: "Import ZIP",
+        inventory_astrbot_importing_zip: "Importing",
+        inventory_astrbot_export_zip: "Export ZIP",
+        inventory_astrbot_exporting_zip: "Exporting",
         inventory_astrbot_available_scopes: "Available Scopes",
-        inventory_astrbot_action_idle: "You can toggle, delete, or sync local AstrBot skills under {scope}.",
+        inventory_astrbot_action_idle: "You can toggle, delete, import, export, or sync local AstrBot skills under {scope}.",
         inventory_astrbot_action_unavailable: "Selected software is not AstrBot. Actions are disabled.",
         inventory_astrbot_scope_unavailable: "The selected AstrBot host does not expose {scope}. Local skill actions are disabled. Available scopes: {available_scopes}",
         inventory_astrbot_skill_name_required: "Please provide a skill name.",
+        inventory_astrbot_zip_required: "Please choose a .zip file.",
         inventory_astrbot_toggle_success: "Updated skill `{skill}` under {scope} active={active}",
         inventory_astrbot_delete_success: "Deleted skill `{skill}` from {scope}",
         inventory_astrbot_sync_success: "AstrBot sandbox sync triggered for {scope}.",
+        inventory_astrbot_import_success: "Imported {count} skill(s) into {scope}: {skills}",
+        inventory_astrbot_export_success: "Exported AstrBot skill `{skill}` from {scope}.",
         inventory_astrbot_toggle_error: "AstrBot toggle failed: {msg}",
         inventory_astrbot_delete_error: "AstrBot delete failed: {msg}",
         inventory_astrbot_sync_error: "AstrBot sandbox sync failed: {msg}",
+        inventory_astrbot_import_error: "AstrBot ZIP import failed: {msg}",
+        inventory_astrbot_export_error: "AstrBot ZIP export failed: {msg}",
         inventory_astrbot_delete_confirm: "Delete AstrBot skill `{skill}` from {scope}? This removes the local directory.",
         inventory_doctor_astrbot: "AstrBot(hosts/missing_config/missing_cache/cache_unready/drift/warn)={hosts}/{missing_config}/{missing_cache}/{cache_unready}/{drift}/{warnings}",
         inventory_skill_meta_id: "id",
@@ -6660,6 +6685,12 @@
       $("inventoryAstrbotSyncSandboxBtn").textContent = state.inventoryAstrbotSyncingSandbox
         ? t("inventory_astrbot_syncing_sandbox")
         : t("inventory_astrbot_sync_sandbox");
+      $("inventoryAstrbotImportZipBtn").textContent = state.inventoryAstrbotImportingZip
+        ? t("inventory_astrbot_importing_zip")
+        : t("inventory_astrbot_import_zip");
+      $("inventoryAstrbotExportZipBtn").textContent = state.inventoryAstrbotExportingZip
+        ? t("inventory_astrbot_exporting_zip")
+        : t("inventory_astrbot_export_zip");
       if (!String(state.inventoryAstrbotLastActionNote || "").trim()) {
         $("inventoryAstrbotActionNote").textContent = t("inventory_astrbot_action_idle", {
           scope: inventoryScopeLabel(normalizeInventoryScope(state.inventorySelectedScope)),
@@ -6918,7 +6949,8 @@
 
     async function api(path, options = {}) {
       const headers = Object.assign({}, options.headers || {});
-      if (!headers["Content-Type"] && options.method && options.method !== "GET") {
+      const hasFormDataBody = typeof FormData !== "undefined" && options.body instanceof FormData;
+      if (!headers["Content-Type"] && options.method && options.method !== "GET" && !hasFormDataBody) {
         headers["Content-Type"] = "application/json";
       }
       if (state.token) {
@@ -6948,6 +6980,54 @@
         }
       }
       throw lastError || new Error("Request failed");
+    }
+
+    async function apiBlob(path, options = {}) {
+      const headers = Object.assign({}, options.headers || {});
+      if (state.token) {
+        headers["Authorization"] = `Bearer ${state.token}`;
+      }
+      const fetchOptions = Object.assign({}, options, { headers });
+      const tryPaths = [String(path || "")];
+      if (typeof path === "string" && path.startsWith("/api/")) {
+        tryPaths.push("." + path);
+      }
+
+      let lastError = null;
+      for (const targetPath of tryPaths) {
+        const resp = await fetch(targetPath, fetchOptions);
+        if (resp.ok) {
+          return resp;
+        }
+        const payload = await resp.json().catch(() => ({}));
+        const err = new Error(
+          payload.message || payload.error || `${resp.status} ${resp.statusText}`,
+        );
+        err.statusCode = resp.status;
+        lastError = err;
+        if (resp.status !== 404) {
+          break;
+        }
+      }
+      throw lastError || new Error("Request failed");
+    }
+
+    function filenameFromContentDisposition(headerValue, fallback = "download.zip") {
+      const raw = String(headerValue || "").trim();
+      if (!raw) return fallback;
+      const utf8Match = raw.match(/filename\\*=UTF-8''([^;]+)/i);
+      if (utf8Match && utf8Match[1]) {
+        try {
+          return decodeURIComponent(utf8Match[1]);
+        } catch (err) {
+          return utf8Match[1];
+        }
+      }
+      const plainMatch = raw.match(/filename=\"?([^\";]+)\"?/i);
+      if (plainMatch && plainMatch[1]) {
+        return plainMatch[1];
+      }
+      return fallback;
     }
 
     async function ensureAuth() {
@@ -10767,7 +10847,7 @@
 
     async function syncSelectedAstrbotSandbox() {
       const context = getSelectedAstrbotHostActionContext();
-      if (!context || !context.hostId || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill) {
+      if (!context || !context.hostId || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotImportingZip || state.inventoryAstrbotExportingZip) {
         return null;
       }
       const scopeLabel = inventoryScopeLabel(context.scope);
@@ -10789,6 +10869,91 @@
         return result;
       } finally {
         state.inventoryAstrbotSyncingSandbox = false;
+        renderInventoryPanel();
+      }
+    }
+
+    async function importSelectedAstrbotSkillZip(file) {
+      const context = getSelectedAstrbotHostActionContext();
+      if (!context || !context.hostId || state.inventoryAstrbotImportingZip || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotExportingZip) {
+        return null;
+      }
+      const zipFile = file instanceof File ? file : null;
+      if (!zipFile) {
+        alert(t("inventory_astrbot_zip_required"));
+        return null;
+      }
+      const scopeLabel = inventoryScopeLabel(context.scope);
+      const form = new FormData();
+      form.append("file", zipFile);
+      form.append("scope", context.scope);
+      state.inventoryAstrbotImportingZip = true;
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/skills/import-zip`, {
+          method: "POST",
+          body: form,
+        });
+        const installedSkillNames = Array.isArray(result && result.result && result.result.installed_skill_names)
+          ? result.result.installed_skill_names.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventorySourceDetail = null;
+        state.inventoryAstrbotLastActionNote = t("inventory_astrbot_import_success", {
+          scope: scopeLabel,
+          count: installedSkillNames.length,
+          skills: installedSkillNames.join(", ") || zipFile.name,
+        });
+        renderInventoryPanel();
+        await refreshSelectedInventorySourceDetail();
+        await refreshSelectedDeployTargetDetail();
+        return result;
+      } finally {
+        state.inventoryAstrbotImportingZip = false;
+        renderInventoryPanel();
+      }
+    }
+
+    async function exportSelectedAstrbotSkillZip() {
+      const context = getSelectedAstrbotHostActionContext();
+      if (!context || !context.hostId || state.inventoryAstrbotExportingZip || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotImportingZip) {
+        return null;
+      }
+      const scopeLabel = inventoryScopeLabel(context.scope);
+      const inputEl = $("inventoryAstrbotSkillNameInput");
+      const skillName = String(inputEl && inputEl.value || "").trim();
+      if (!skillName) {
+        alert(t("inventory_astrbot_skill_name_required"));
+        return null;
+      }
+      state.inventoryAstrbotExportingZip = true;
+      renderInventoryPanel();
+      try {
+        const resp = await apiBlob(
+          `/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/skills/export-zip?skill_name=${encodeURIComponent(skillName)}&scope=${encodeURIComponent(context.scope)}`,
+          { method: "GET" },
+        );
+        const blob = await resp.blob();
+        const filename = filenameFromContentDisposition(
+          resp.headers.get("content-disposition"),
+          `${skillName}.zip`,
+        );
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(objectUrl);
+        state.inventoryAstrbotLastActionNote = t("inventory_astrbot_export_success", {
+          scope: scopeLabel,
+          skill: skillName,
+        });
+        renderInventoryPanel();
+        return true;
+      } finally {
+        state.inventoryAstrbotExportingZip = false;
         renderInventoryPanel();
       }
     }
@@ -11194,6 +11359,9 @@
       const astrbotDisableBtn = $("inventoryAstrbotDisableBtn");
       const astrbotDeleteBtn = $("inventoryAstrbotDeleteBtn");
       const astrbotSyncSandboxBtn = $("inventoryAstrbotSyncSandboxBtn");
+      const astrbotImportZipBtn = $("inventoryAstrbotImportZipBtn");
+      const astrbotExportZipBtn = $("inventoryAstrbotExportZipBtn");
+      const astrbotZipInputEl = $("inventoryAstrbotZipInput");
       const astrbotActionNoteEl = $("inventoryAstrbotActionNote");
       const targetHeroEl = $("inventoryTargetHero");
       const repairNoteEl = $("inventoryRepairNote");
@@ -12214,6 +12382,9 @@ ${escapeHtml(t("inventory_skill_meta_resolver"))}: ${escapeHtml(resolverPath)}
         if (astrbotDisableBtn) astrbotDisableBtn.disabled = true;
         if (astrbotDeleteBtn) astrbotDeleteBtn.disabled = true;
         if (astrbotSyncSandboxBtn) astrbotSyncSandboxBtn.disabled = true;
+        if (astrbotImportZipBtn) astrbotImportZipBtn.disabled = true;
+        if (astrbotExportZipBtn) astrbotExportZipBtn.disabled = true;
+        if (astrbotZipInputEl) astrbotZipInputEl.value = "";
         if (astrbotActionNoteEl) {
           astrbotActionNoteEl.textContent = t("inventory_astrbot_action_unavailable");
         }
@@ -12434,12 +12605,18 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const astrbotRuntimeText = inventoryAstrbotRuntimeSummary(selectedHost, doctor);
       const selectedAstrbotHostId = selectedAstrbotHostIdFromHost(selectedHost, selectedSoftwareId);
       const astrbotSkillName = String(astrbotSkillNameInputEl && astrbotSkillNameInputEl.value || "").trim();
-      const astrbotActionBusy = state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox;
+      const astrbotActionBusy = state.inventoryAstrbotTogglingSkill
+        || state.inventoryAstrbotDeletingSkill
+        || state.inventoryAstrbotSyncingSandbox
+        || state.inventoryAstrbotImportingZip
+        || state.inventoryAstrbotExportingZip;
       const astrbotScopeAvailable = !selectedAstrbotHostId
         ? false
         : !astrbotAvailableScopes.length || astrbotAvailableScopes.includes(bindingScope);
       const astrbotSkillActionEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && Boolean(astrbotSkillName) && !astrbotActionBusy;
       const astrbotSandboxSyncEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && !astrbotActionBusy;
+      const astrbotImportZipEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && !astrbotActionBusy;
+      const astrbotExportZipEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && Boolean(astrbotSkillName) && !astrbotActionBusy;
       const softMetaLines = [
         `${t("inventory_meta_kind")}: ${selectedSoftware.software_kind || "-"}`,
         `${t("inventory_meta_provider")}: ${selectedSoftware.provider_key || "-"}`,
@@ -12474,6 +12651,21 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           ? t("inventory_astrbot_syncing_sandbox")
           : t("inventory_astrbot_sync_sandbox");
         astrbotSyncSandboxBtn.disabled = !astrbotSandboxSyncEnabled;
+      }
+      if (astrbotImportZipBtn) {
+        astrbotImportZipBtn.textContent = state.inventoryAstrbotImportingZip
+          ? t("inventory_astrbot_importing_zip")
+          : t("inventory_astrbot_import_zip");
+        astrbotImportZipBtn.disabled = !astrbotImportZipEnabled;
+      }
+      if (astrbotExportZipBtn) {
+        astrbotExportZipBtn.textContent = state.inventoryAstrbotExportingZip
+          ? t("inventory_astrbot_exporting_zip")
+          : t("inventory_astrbot_export_zip");
+        astrbotExportZipBtn.disabled = !astrbotExportZipEnabled;
+      }
+      if (astrbotZipInputEl && (!selectedAstrbotHostId || !astrbotScopeAvailable)) {
+        astrbotZipInputEl.value = "";
       }
       if (astrbotActionNoteEl) {
         const lastActionNote = String(state.inventoryAstrbotLastActionNote || "").trim();
@@ -14990,6 +15182,37 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           await syncSelectedAstrbotSandbox();
         } catch (err) {
           alert(t("inventory_astrbot_sync_error", { msg: err.message }));
+        }
+      });
+
+      $("inventoryAstrbotImportZipBtn").addEventListener("click", () => {
+        const inputEl = $("inventoryAstrbotZipInput");
+        if (inputEl) {
+          inputEl.click();
+        }
+      });
+
+      $("inventoryAstrbotZipInput").addEventListener("change", async (evt) => {
+        const file = evt && evt.target && evt.target.files && evt.target.files[0]
+          ? evt.target.files[0]
+          : null;
+        if (!file) {
+          return;
+        }
+        try {
+          await importSelectedAstrbotSkillZip(file);
+        } catch (err) {
+          alert(t("inventory_astrbot_import_error", { msg: err.message }));
+        } finally {
+          evt.target.value = "";
+        }
+      });
+
+      $("inventoryAstrbotExportZipBtn").addEventListener("click", async () => {
+        try {
+          await exportSelectedAstrbotSkillZip();
+        } catch (err) {
+          alert(t("inventory_astrbot_export_error", { msg: err.message }));
         }
       });
 

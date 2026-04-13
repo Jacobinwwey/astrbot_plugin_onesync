@@ -313,8 +313,9 @@ To call the feature "complete", the next implementation steps should be:
 - AstrBot local skill management now has a scope-aware contract end to end:
   - `GET /api/skills/hosts/{host_id}/astrbot` now reliably exposes `available_scopes`, `selected_scope`, and `scoped_layouts`
   - `runtime_state.summary.scope_summaries` carries separate `global / workspace` local-skill summaries
-  - toggle / delete / sandbox sync all accept explicit `scope`
+  - toggle / delete / ZIP import / ZIP export / sandbox sync all accept explicit `scope`
   - unavailable scopes now fail explicitly with `reason_code = "scope_unavailable"` instead of silently drifting to another root
+  - ZIP import/export is now wired into the existing audit trail and WebUI Inspector instead of remaining a capability-only declaration
 - The frontend primary action is now converged on `Improve All Skills`:
   - refresh improve-able install atoms first
   - then execute all actionable aggregates

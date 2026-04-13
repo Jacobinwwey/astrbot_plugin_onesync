@@ -465,6 +465,8 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_astrbot_disable", html)
         self.assertIn("inventory_astrbot_delete", html)
         self.assertIn("inventory_astrbot_sync_sandbox", html)
+        self.assertIn("inventory_astrbot_import_zip", html)
+        self.assertIn("inventory_astrbot_export_zip", html)
         self.assertIn("inventory_doctor_astrbot", html)
         self.assertIn('id="inventoryAstrbotRuntimeSummary"', html)
         self.assertIn('id="inventoryAstrbotSkillNameInput"', html)
@@ -472,6 +474,9 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn('id="inventoryAstrbotDisableBtn"', html)
         self.assertIn('id="inventoryAstrbotDeleteBtn"', html)
         self.assertIn('id="inventoryAstrbotSyncSandboxBtn"', html)
+        self.assertIn('id="inventoryAstrbotImportZipBtn"', html)
+        self.assertIn('id="inventoryAstrbotExportZipBtn"', html)
+        self.assertIn('id="inventoryAstrbotZipInput"', html)
         self.assertIn('id="inventoryAstrbotActionNote"', html)
 
     def test_inventory_panel_exposes_astrbot_runtime_rendering_helpers(self) -> None:
@@ -487,6 +492,8 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("async function toggleSelectedAstrbotSkill(", html)
         self.assertIn("async function deleteSelectedAstrbotSkill(", html)
         self.assertIn("async function syncSelectedAstrbotSandbox(", html)
+        self.assertIn("async function importSelectedAstrbotSkillZip(", html)
+        self.assertIn("async function exportSelectedAstrbotSkillZip(", html)
 
     def test_inventory_panel_supports_aggregate_selection_rows(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
