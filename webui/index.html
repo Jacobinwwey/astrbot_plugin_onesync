@@ -5104,6 +5104,7 @@
         inventory_astrbot_scope_unavailable: "当前 AstrBot host 未暴露 {scope} 范围，本地 skill 管理已禁用。可用范围：{available_scopes}",
         inventory_astrbot_skill_name_required: "请输入 skill 名称。",
         inventory_astrbot_workspace_required: "当前范围需要 workspace_id，请先选择或初始化 Workspace。",
+        inventory_astrbot_workspace_required_with_candidates: "当前范围需要 workspace_id。可选 workspace：{workspaces}。请先选择或初始化 Workspace。",
         inventory_astrbot_workspace_init_required: "请输入或选择要初始化的 workspace_id。",
         inventory_astrbot_zip_required: "请选择一个 .zip 文件。",
         inventory_astrbot_init_success: "已初始化 Workspace `{workspace}`（{root}）。",
@@ -5966,6 +5967,7 @@
         inventory_astrbot_scope_unavailable: "The selected AstrBot host does not expose {scope}. Local skill actions are disabled. Available scopes: {available_scopes}",
         inventory_astrbot_skill_name_required: "Please provide a skill name.",
         inventory_astrbot_workspace_required: "workspace_id is required for the current scope. Select or initialize a workspace first.",
+        inventory_astrbot_workspace_required_with_candidates: "workspace_id is required for the current scope. Available workspaces: {workspaces}. Select or initialize one first.",
         inventory_astrbot_workspace_init_required: "Please provide or select a workspace_id to initialize.",
         inventory_astrbot_zip_required: "Please choose a .zip file.",
         inventory_astrbot_init_success: "Workspace `{workspace}` initialized at {root}.",
@@ -11691,6 +11693,20 @@
       }
     }
 
+    function notifyAstrbotWorkspaceRequired(context) {
+      const availableWorkspaceIds = Array.isArray(context && context.availableWorkspaceIds)
+        ? context.availableWorkspaceIds.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const message = availableWorkspaceIds.length
+        ? t("inventory_astrbot_workspace_required_with_candidates", {
+          workspaces: availableWorkspaceIds.join(", "),
+        })
+        : t("inventory_astrbot_workspace_required");
+      state.inventoryAstrbotLastActionNote = message;
+      renderInventoryPanel();
+      alert(message);
+    }
+
     async function toggleSelectedAstrbotSkill(active) {
       const context = getSelectedAstrbotHostActionContext();
       if (
@@ -11704,7 +11720,7 @@
         return null;
       }
       if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
-        alert(t("inventory_astrbot_workspace_required"));
+        notifyAstrbotWorkspaceRequired(context);
         return null;
       }
       const scopeLabel = inventoryScopeLabel(context.scope);
@@ -11756,7 +11772,7 @@
         return null;
       }
       if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
-        alert(t("inventory_astrbot_workspace_required"));
+        notifyAstrbotWorkspaceRequired(context);
         return null;
       }
       const scopeLabel = inventoryScopeLabel(context.scope);
@@ -11814,7 +11830,7 @@
         return null;
       }
       if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
-        alert(t("inventory_astrbot_workspace_required"));
+        notifyAstrbotWorkspaceRequired(context);
         return null;
       }
       const scopeLabel = inventoryScopeLabel(context.scope);
@@ -11858,7 +11874,7 @@
         return null;
       }
       if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
-        alert(t("inventory_astrbot_workspace_required"));
+        notifyAstrbotWorkspaceRequired(context);
         return null;
       }
       const zipFile = file instanceof File ? file : null;
@@ -11913,7 +11929,7 @@
         return null;
       }
       if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
-        alert(t("inventory_astrbot_workspace_required"));
+        notifyAstrbotWorkspaceRequired(context);
         return null;
       }
       const scopeLabel = inventoryScopeLabel(context.scope);
