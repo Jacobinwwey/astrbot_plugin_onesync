@@ -9373,11 +9373,8 @@
         .map((item) => normalizeWorkspaceId(item))
         .filter(Boolean);
       let workspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
-      if (!workspaceId) {
-        workspaceId = normalizeWorkspaceId(runtimeSummary.selected_workspace_id);
-      }
-      if (scope === "workspace" && !workspaceId && workspaceIds.length) {
-        workspaceId = workspaceIds[0];
+      if (workspaceId && !workspaceIds.includes(workspaceId)) {
+        workspaceId = "";
       }
       return {
         hostId,
@@ -13884,23 +13881,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const typedWorkspaceRoot = String(
         astrbotWorkspaceRootInputEl && astrbotWorkspaceRootInputEl.value || "",
       ).trim();
-      const runtimeSelectedWorkspaceId = normalizeWorkspaceId(selectedHostRuntimeSummary.selected_workspace_id);
       let effectiveAstrbotWorkspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
       if (
         effectiveAstrbotWorkspaceId
         && !astrbotWorkspaceOptions.some((item) => item.id === effectiveAstrbotWorkspaceId)
       ) {
         effectiveAstrbotWorkspaceId = "";
-      }
-      if (!effectiveAstrbotWorkspaceId && runtimeSelectedWorkspaceId) {
-        effectiveAstrbotWorkspaceId = runtimeSelectedWorkspaceId;
-      }
-      if (
-        !effectiveAstrbotWorkspaceId
-        && bindingScope === "workspace"
-        && astrbotWorkspaceOptions.length === 1
-      ) {
-        effectiveAstrbotWorkspaceId = astrbotWorkspaceOptions[0].id;
       }
       state.inventoryAstrbotSelectedWorkspaceId = effectiveAstrbotWorkspaceId;
       const selectedAstrbotWorkspaceOption = astrbotWorkspaceOptions.find((item) => item.id === effectiveAstrbotWorkspaceId) || null;
