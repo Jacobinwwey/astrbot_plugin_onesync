@@ -5099,6 +5099,9 @@
         inventory_astrbot_export_zip: "导出 ZIP",
         inventory_astrbot_exporting_zip: "导出中",
         inventory_astrbot_available_scopes: "可用范围",
+        inventory_astrbot_workspace_selected: "当前 Workspace",
+        inventory_astrbot_workspace_aggregate: "当前 Workspace: 未显式选择（聚合 {count} 个 workspace）",
+        inventory_astrbot_workspace_unset: "当前 Workspace: 未选择",
         inventory_astrbot_action_idle: "当前可在 {scope} 范围内启停、删除、导入或导出本地 skill，并执行一次沙箱同步。",
         inventory_astrbot_action_unavailable: "当前软件不是 AstrBot，动作不可用。",
         inventory_astrbot_scope_unavailable: "当前 AstrBot host 未暴露 {scope} 范围，本地 skill 管理已禁用。可用范围：{available_scopes}",
@@ -5962,6 +5965,9 @@
         inventory_astrbot_export_zip: "Export ZIP",
         inventory_astrbot_exporting_zip: "Exporting",
         inventory_astrbot_available_scopes: "Available Scopes",
+        inventory_astrbot_workspace_selected: "Selected Workspace",
+        inventory_astrbot_workspace_aggregate: "Selected Workspace: unset (aggregate across {count} workspaces)",
+        inventory_astrbot_workspace_unset: "Selected Workspace: unset",
         inventory_astrbot_action_idle: "You can toggle, delete, import, export, or sync local AstrBot skills under {scope}.",
         inventory_astrbot_action_unavailable: "Selected software is not AstrBot. Actions are disabled.",
         inventory_astrbot_scope_unavailable: "The selected AstrBot host does not expose {scope}. Local skill actions are disabled. Available scopes: {available_scopes}",
@@ -9296,6 +9302,11 @@
         ? scopeSummaries[selectedScope]
         : {};
       const effectiveSummary = Object.keys(scopedSummary).length ? scopedSummary : summary;
+      const selectedWorkspaceId = String(summary.selected_workspace_id || "").trim();
+      const workspaceSummaryMap = summary.workspace_summaries && typeof summary.workspace_summaries === "object"
+        ? summary.workspace_summaries
+        : {};
+      const workspaceTotal = Number(effectiveSummary.workspace_total) || Object.keys(workspaceSummaryMap).length;
       const availableScopes = Array.isArray(hostRow.available_scopes)
         ? hostRow.available_scopes.map((item) => normalizeInventoryScope(item)).filter(Boolean)
         : Object.keys(scopeSummaries).map((item) => normalizeInventoryScope(item)).filter(Boolean);
@@ -9329,12 +9340,23 @@
       const lines = [
         `${t("inventory_scope_label")}: ${inventoryScopeLabel(selectedScope)}`,
         `${t("inventory_astrbot_available_scopes")}: ${availableScopeLabels}`,
+        selectedScope === "workspace"
+          ? (
+            effectiveSummary.workspace_aggregate
+              ? t("inventory_astrbot_workspace_aggregate", { count: workspaceTotal || 0 })
+              : (
+                selectedWorkspaceId
+                  ? `${t("inventory_astrbot_workspace_selected")}: ${selectedWorkspaceId}`
+                  : t("inventory_astrbot_workspace_unset")
+              )
+          )
+          : "",
         `${t("inventory_meta_runtime_backend")}: ${backend || "-"}`,
         `${t("inventory_meta_host_capabilities")}: ${capabilities.length ? capabilities.join(", ") : "-"}`,
         `${t("inventory_meta_runtime_state")}: ${stateParts.join(" | ")}`,
         `${t("inventory_meta_runtime_paths")}: ${pathParts.length ? pathParts.join(" | ") : "-"}`,
         `${t("inventory_meta_runtime_warnings")}: ${Number(hostRow.runtime_state_warning_count) || 0}`,
-      ];
+      ].filter((item) => String(item || "").trim());
       const doctorSummary = inventoryAstrbotDoctorSummary(doctor);
       if (doctorSummary) {
         lines.push(doctorSummary);
@@ -14027,7 +14049,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             available_scopes: astrbotAvailableScopeLabels,
           });
         } else if (!astrbotWorkspaceReady) {
-          astrbotActionNoteEl.textContent = t("inventory_astrbot_workspace_required");
+          const workspaceCandidates = astrbotWorkspaceOptions
+            .map((item) => String(item && item.id || "").trim())
+            .filter(Boolean);
+          astrbotActionNoteEl.textContent = workspaceCandidates.length
+            ? t("inventory_astrbot_workspace_required_with_candidates", {
+              workspaces: workspaceCandidates.join(", "),
+            })
+            : t("inventory_astrbot_workspace_required");
         } else {
           astrbotActionNoteEl.textContent = lastActionNote || t("inventory_astrbot_action_idle", {
             scope: inventoryScopeLabel(bindingScope),
