@@ -4050,6 +4050,152 @@ class OneSyncPlugin(Star):
             "warnings": snapshot.get("warnings", []),
         }
 
+    def webui_init_astrbot_workspace(
+        self,
+        host_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action_payload = payload if isinstance(payload, dict) else {}
+        requested_workspace_id = _normalize_astrbot_workspace_id(
+            action_payload.get("workspace_id")
+            or action_payload.get("workspaceId")
+            or action_payload.get("workspace")
+        )
+        if not requested_workspace_id:
+            return {
+                "ok": False,
+                "message": "workspace_id is required",
+                "reason_code": "workspace_required",
+            }
+
+        context = self._resolve_astrbot_host_action_context(host_id)
+        if not context.get("ok"):
+            return context
+
+        normalized_host_id = str(context.get("host_id") or "").strip()
+        layout = context.get("layout", {}) if isinstance(context.get("layout"), dict) else {}
+        scoped_layouts = (
+            layout.get("scoped_layouts", {})
+            if isinstance(layout.get("scoped_layouts", {}), dict)
+            else {}
+        )
+        global_layout = (
+            scoped_layouts.get("global", {})
+            if isinstance(scoped_layouts.get("global", {}), dict)
+            else {}
+        )
+        astrbot_data_dir_text = str(
+            global_layout.get("astrbot_data_dir")
+            or layout.get("astrbot_data_dir")
+            or "",
+        ).strip()
+        if not astrbot_data_dir_text:
+            return {
+                "ok": False,
+                "message": (
+                    "astrbot data dir unavailable for "
+                    f"host={normalized_host_id or str(host_id or '').strip()}"
+                ),
+                "reason_code": "astrbot_data_dir_unavailable",
+                "workspace_id": requested_workspace_id,
+            }
+
+        astrbot_data_dir = Path(astrbot_data_dir_text).expanduser()
+        workspace_root = astrbot_data_dir / "workspaces" / requested_workspace_id
+        skills_root = workspace_root / "skills"
+        skills_config_path = workspace_root / "skills.json"
+        sandbox_cache_path = workspace_root / "sandbox_skills_cache.json"
+        extra_prompt_path = workspace_root / "EXTRA_PROMPT.md"
+
+        workspace_root_exists_before = workspace_root.is_dir()
+        skills_root_exists_before = skills_root.is_dir()
+        skills_config_exists_before = skills_config_path.is_file()
+        sandbox_cache_exists_before = sandbox_cache_path.is_file()
+        extra_prompt_exists_before = extra_prompt_path.is_file()
+
+        try:
+            skills_root.mkdir(parents=True, exist_ok=True)
+            if not skills_config_exists_before:
+                self._write_json_file(skills_config_path, {"skills": {}})
+            if not sandbox_cache_exists_before:
+                self._write_json_file(
+                    sandbox_cache_path,
+                    {
+                        "updated_at": _now_iso(),
+                        "skills": [],
+                    },
+                )
+            if not extra_prompt_exists_before:
+                extra_prompt_path.parent.mkdir(parents=True, exist_ok=True)
+                extra_prompt_path.write_text(
+                    "# EXTRA PROMPT\n\n# Workspace-level prompt extensions.\n",
+                    encoding="utf-8",
+                )
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot workspace init failed: {exc}",
+                "reason_code": "workspace_init_failed",
+                "host_id": normalized_host_id,
+                "workspace_id": requested_workspace_id,
+                "workspace_root": str(workspace_root),
+            }
+
+        result = {
+            "workspace_id": requested_workspace_id,
+            "workspace_root": str(workspace_root),
+            "skills_root": str(skills_root),
+            "skills_config_path": str(skills_config_path),
+            "sandbox_cache_path": str(sandbox_cache_path),
+            "extra_prompt_path": str(extra_prompt_path),
+            "created_workspace_root": not workspace_root_exists_before,
+            "created_skills_root": not skills_root_exists_before,
+            "created_skills_config": not skills_config_exists_before,
+            "created_sandbox_cache": not sandbox_cache_exists_before,
+            "created_extra_prompt": not extra_prompt_exists_before,
+        }
+
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+
+        self._append_skills_audit_event(
+            "astrbot_workspace_init",
+            source_id=normalized_host_id,
+            payload={
+                "scope": "workspace",
+                "workspace_id": requested_workspace_id,
+                "workspace_root": str(workspace_root),
+                "created_workspace_root": result["created_workspace_root"],
+                "created_skills_root": result["created_skills_root"],
+                "created_skills_config": result["created_skills_config"],
+                "created_sandbox_cache": result["created_sandbox_cache"],
+                "created_extra_prompt": result["created_extra_prompt"],
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot workspace initialized: "
+                f"host={normalized_host_id} "
+                f"workspace={requested_workspace_id} "
+                f"root={workspace_root}"
+            ),
+            source="webui",
+        )
+
+        return self._build_astrbot_host_mutation_response(
+            normalized_host_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
+            extra={
+                "action": "init_workspace",
+                "scope": "workspace",
+                "workspace_id": requested_workspace_id,
+                "workspace_root": str(workspace_root),
+                "result": result,
+            },
+        )
+
     def _build_astrbot_host_mutation_response(
         self,
         host_id: str,

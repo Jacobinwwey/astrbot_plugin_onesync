@@ -1558,3 +1558,97 @@ class OneSyncPluginAstrbotWorkspaceContextTests(unittest.TestCase):
             self.assertEqual(str(workspace_skills_root), action_layout["skills_root"])
             self.assertEqual(str(workspace_root / "skills.json"), action_layout["skills_config_path"])
             self.assertEqual(str(workspace_root / "sandbox_skills_cache.json"), action_layout["sandbox_cache_path"])
+
+
+class OneSyncPluginAstrbotWorkspaceInitTests(unittest.TestCase):
+    def test_webui_init_astrbot_workspace_creates_workspace_assets_and_is_idempotent(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            global_skills_root = tmp_path / "astrbot" / "data" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host_row = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "runtime_state_backend": "astrbot",
+                "target_paths": {
+                    "global": str(global_skills_root),
+                    "workspace": "",
+                },
+                "resolved_skill_roots": [str(global_skills_root)],
+                "declared_skill_roots": [str(global_skills_root)],
+            }
+            snapshot = {
+                "generated_at": "2026-04-13T00:00:00+00:00",
+                "host_rows": [host_row],
+                "astrbot_state_by_host": {
+                    "astrbot": {
+                        "summary": {
+                            "selected_scope": "global",
+                            "available_scopes": ["global"],
+                            "selected_workspace_id": "",
+                            "workspace_summaries": {},
+                        },
+                    },
+                },
+            }
+            plugin.webui_get_skills_payload = lambda: snapshot
+            plugin._refresh_inventory_snapshot = lambda sync_skills=True: snapshot
+            plugin._skills_state = lambda: {"last_overview": snapshot}
+            plugin._push_debug_log = lambda *_args, **_kwargs: None
+            plugin._append_skills_audit_event = lambda *_args, **_kwargs: "audit-demo"
+
+            first_result = OneSyncPlugin.webui_init_astrbot_workspace(
+                plugin,
+                "astrbot",
+                {"workspace_id": "session-alpha"},
+            )
+            self.assertTrue(first_result["ok"])
+            self.assertEqual("init_workspace", first_result["action"])
+            self.assertEqual("session_alpha", first_result["workspace_id"])
+
+            first_payload = first_result["result"]
+            self.assertTrue(first_payload["created_workspace_root"])
+            self.assertTrue(first_payload["created_skills_root"])
+            self.assertTrue(first_payload["created_skills_config"])
+            self.assertTrue(first_payload["created_sandbox_cache"])
+            self.assertTrue(first_payload["created_extra_prompt"])
+
+            workspace_root = Path(first_payload["workspace_root"])
+            self.assertTrue((workspace_root / "skills").is_dir())
+            self.assertTrue((workspace_root / "skills.json").is_file())
+            self.assertTrue((workspace_root / "sandbox_skills_cache.json").is_file())
+            self.assertTrue((workspace_root / "EXTRA_PROMPT.md").is_file())
+
+            skills_config_payload = json.loads((workspace_root / "skills.json").read_text(encoding="utf-8"))
+            self.assertEqual({"skills": {}}, skills_config_payload)
+
+            sandbox_cache_payload = json.loads(
+                (workspace_root / "sandbox_skills_cache.json").read_text(encoding="utf-8")
+            )
+            self.assertIsInstance(sandbox_cache_payload.get("skills"), list)
+
+            second_result = OneSyncPlugin.webui_init_astrbot_workspace(
+                plugin,
+                "astrbot",
+                {"workspace_id": "session-alpha"},
+            )
+            self.assertTrue(second_result["ok"])
+            second_payload = second_result["result"]
+            self.assertFalse(second_payload["created_workspace_root"])
+            self.assertFalse(second_payload["created_skills_root"])
+            self.assertFalse(second_payload["created_skills_config"])
+            self.assertFalse(second_payload["created_sandbox_cache"])
+            self.assertFalse(second_payload["created_extra_prompt"])
+
+    def test_webui_init_astrbot_workspace_requires_workspace_id(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        result = OneSyncPlugin.webui_init_astrbot_workspace(
+            plugin,
+            "astrbot",
+            {},
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual("workspace_required", result["reason_code"])

@@ -480,6 +480,16 @@ class OneSyncWebUIServer:
                 return JSONResponse(_public(ret), status_code=status_code)
             return _public(ret)
 
+        @self.app.post("/api/skills/hosts/{host_id}/astrbot/workspaces/init")
+        async def skills_host_astrbot_workspaces_init(host_id: str, payload: dict[str, Any]):
+            ret = self.plugin.webui_init_astrbot_workspace(host_id, payload)
+            if asyncio.iscoroutine(ret):
+                ret = await ret
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(_public(ret), status_code=status_code)
+            return _public(ret)
+
         @self.app.post("/api/skills/hosts/{host_id}/astrbot/skills/toggle")
         async def skills_host_astrbot_toggle_skill(host_id: str, payload: dict[str, Any]):
             ret = self.plugin.webui_set_astrbot_skill_active(host_id, payload)

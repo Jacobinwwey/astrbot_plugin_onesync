@@ -124,6 +124,7 @@
 | GET | `/api/skills/astrbot-neo-sources` | AstrBot Neo source 列表 |
 | GET | `/api/skills/astrbot-neo-sources/{source_id}` | 单个 AstrBot Neo source 详情 |
 | GET | `/api/skills/hosts/{host_id}/astrbot` | AstrBot 宿主运行态详情 |
+| GET | `/api/skills/hosts/{host_id}/astrbot/workspaces` | AstrBot workspace 索引详情 |
 
 ## 7. Skills 变更接口
 
@@ -189,6 +190,7 @@
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/import-zip` | 导入本地 AstrBot skill ZIP 包 |
 | GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | 导出本地 AstrBot skill ZIP 包 |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | 触发 sandbox 同步 |
+| POST | `/api/skills/hosts/{host_id}/astrbot/workspaces/init` | 初始化单个 AstrBot workspace 骨架 |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | 同步 AstrBot Neo source |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/promote` | 提升 AstrBot Neo candidate |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/rollback` | 回滚 AstrBot Neo release |
@@ -236,6 +238,14 @@
 建议显式传递 `scope`，不要让前端隐式假设默认范围。
 当 `scope=workspace` 时必须传 `workspace_id`，否则会返回
 `reason_code=workspace_required` 或 `reason_code=workspace_not_found`。
+
+- `POST /api/skills/hosts/{host_id}/astrbot/workspaces/init`
+
+```json
+{
+  "workspace_id": "session_alpha"
+}
+```
 
 - `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
 

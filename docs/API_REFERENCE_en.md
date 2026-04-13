@@ -123,6 +123,7 @@ Current note:
 | GET | `/api/skills/astrbot-neo-sources` | AstrBot Neo source list |
 | GET | `/api/skills/astrbot-neo-sources/{source_id}` | one AstrBot Neo source detail |
 | GET | `/api/skills/hosts/{host_id}/astrbot` | AstrBot host runtime detail |
+| GET | `/api/skills/hosts/{host_id}/astrbot/workspaces` | AstrBot workspace index detail |
 
 ## 7. Skills mutation routes
 
@@ -188,6 +189,7 @@ Recommendation:
 | POST | `/api/skills/hosts/{host_id}/astrbot/skills/import-zip` | import a local AstrBot skill ZIP |
 | GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | export a local AstrBot skill ZIP |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | trigger sandbox sync |
+| POST | `/api/skills/hosts/{host_id}/astrbot/workspaces/init` | initialize one AstrBot workspace scaffold |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | sync one AstrBot Neo source |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/promote` | promote one AstrBot Neo candidate |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/rollback` | roll back one AstrBot Neo release |
@@ -235,6 +237,14 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
 Pass `scope` explicitly whenever the caller already knows which root it wants.
 When `scope=workspace`, `workspace_id` is required; otherwise the API returns
 `reason_code=workspace_required` or `reason_code=workspace_not_found`.
+
+- `POST /api/skills/hosts/{host_id}/astrbot/workspaces/init`
+
+```json
+{
+  "workspace_id": "session_alpha"
+}
+```
 
 - `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
 
