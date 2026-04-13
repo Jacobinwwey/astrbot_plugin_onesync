@@ -79,12 +79,34 @@
 NO_PUSH=1 ./scripts/release.sh v0.2.2
 ```
 
-### 4.3 版本策略建议
+### 4.3 GitHub Release 说明要求
+
+GitHub release 页面默认应提供中英双语说明，而不是只写英文。
+
+建议做法：
+
+1. 在仓库中新增或更新 `docs/releases/vX.Y.Z.md`
+2. 文件结构保持 “完整英文 + 完整中文”
+3. 使用 `gh release create` 或 `gh release edit` 的 `--notes-file` 引用该文件
+
+推荐命令：
+
+```bash
+gh release edit v0.2.2 \
+  --title "v0.2.2 · english title / 中文标题" \
+  --notes-file docs/releases/v0.2.2.md
+```
+
+模板文件：
+
+- [docs/releases/RELEASE_TEMPLATE.md](./releases/RELEASE_TEMPLATE.md)
+
+### 4.4 版本策略建议
 
 - 功能新增：`MINOR` 递增（例如 `v0.2.0`）
 - 兼容性修复：`PATCH` 递增（例如 `v0.1.1`）
 
-### 4.4 当前仓库基线
+### 4.5 当前仓库基线
 
 - `metadata.yaml` 当前版本：`v0.2.2`
 - 内置 WebUI OpenAPI 版本：`0.2.2`
@@ -126,6 +148,7 @@ git push origin main --tags
 
 - `README.md` / `README_en.md`
 - `docs/SKILLS_UPDATE_STATUS_zh.md` / `docs/SKILLS_UPDATE_STATUS_en.md`
+- `docs/releases/vX.Y.Z.md`
 - 相关 `docs/plans/*` 与 `docs/brainstorms/*`
 
 如果本机 live 插件目录与开发仓库并行存在，还要额外确认：

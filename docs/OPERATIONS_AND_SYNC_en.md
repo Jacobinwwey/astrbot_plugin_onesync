@@ -77,12 +77,34 @@ This script will:
 NO_PUSH=1 ./scripts/release.sh v0.2.2
 ```
 
-### 4.3 Versioning strategy
+### 4.3 GitHub release notes requirement
+
+GitHub releases should default to bilingual notes, not English-only notes.
+
+Recommended process:
+
+1. create or update `docs/releases/vX.Y.Z.md`
+2. keep the file structured as “complete English + complete Chinese”
+3. publish or edit the GitHub release with `--notes-file`
+
+Recommended command:
+
+```bash
+gh release edit v0.2.2 \
+  --title "v0.2.2 · english title / 中文标题" \
+  --notes-file docs/releases/v0.2.2.md
+```
+
+Template file:
+
+- [docs/releases/RELEASE_TEMPLATE.md](./releases/RELEASE_TEMPLATE.md)
+
+### 4.4 Versioning strategy
 
 - New features: bump `MINOR` (for example `v0.2.0`)
 - Bugfix/compatibility: bump `PATCH` (for example `v0.1.1`)
 
-### 4.4 Current repository baseline
+### 4.5 Current repository baseline
 
 - `metadata.yaml` version: `v0.2.2`
 - Embedded WebUI OpenAPI version: `0.2.2`
@@ -125,6 +147,7 @@ At minimum, keep these entry documents aligned:
 
 - `README.md` / `README_en.md`
 - `docs/SKILLS_UPDATE_STATUS_zh.md` / `docs/SKILLS_UPDATE_STATUS_en.md`
+- `docs/releases/vX.Y.Z.md`
 - relevant `docs/plans/*` and `docs/brainstorms/*`
 
 If a live plugin checkout exists beside the development repository, also verify:
