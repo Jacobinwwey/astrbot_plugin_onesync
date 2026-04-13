@@ -350,6 +350,61 @@ def _build_workspace_profiles(workspace_roots: list[Path]) -> tuple[list[dict[st
     return profiles, ""
 
 
+def _build_workspace_scope_aggregate_summary(
+    workspace_summaries: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    if not workspace_summaries:
+        return {}
+    summaries = [
+        item
+        for item in workspace_summaries.values()
+        if isinstance(item, dict)
+    ]
+    if not summaries:
+        return {}
+
+    aggregate = copy.deepcopy(summaries[0])
+    aggregate["workspace_id"] = ""
+    aggregate["workspace_root"] = ""
+    aggregate["extra_prompt_path"] = ""
+    aggregate["workspace_aggregate"] = True
+    aggregate["workspace_total"] = len(summaries)
+    aggregate["workspace_exists"] = any(_to_bool(item.get("workspace_exists"), False) for item in summaries)
+    aggregate["state_available"] = any(_to_bool(item.get("state_available"), False) for item in summaries)
+    aggregate["skills_root"] = aggregate.get("skills_root", "") if len(summaries) == 1 else ""
+
+    for key in (
+        "local_skill_total",
+        "active_skill_total",
+        "sandbox_cached_total",
+        "local_only_total",
+        "synced_total",
+        "sandbox_only_total",
+        "neo_managed_total",
+        "drifted_total",
+        "state_row_total",
+    ):
+        aggregate[key] = sum(
+            int(item.get(key) or 0)
+            for item in summaries
+        )
+
+    aggregate["skills_config_exists"] = any(_to_bool(item.get("skills_config_exists"), False) for item in summaries)
+    aggregate["sandbox_cache_exists"] = any(_to_bool(item.get("sandbox_cache_exists"), False) for item in summaries)
+    aggregate["sandbox_cache_ready"] = any(_to_bool(item.get("sandbox_cache_ready"), False) for item in summaries)
+    aggregate["neo_map_exists"] = any(_to_bool(item.get("neo_map_exists"), False) for item in summaries)
+
+    cache_updated_values = sorted(
+        [
+            str(item.get("sandbox_cache_updated_at") or "").strip()
+            for item in summaries
+            if str(item.get("sandbox_cache_updated_at") or "").strip()
+        ],
+    )
+    aggregate["sandbox_cache_updated_at"] = cache_updated_values[-1] if cache_updated_values else ""
+    return aggregate
+
+
 def _merged_scope_root_candidates(host: dict[str, Any]) -> list[str]:
     resolved_roots = _to_str_list(host.get("resolved_skill_roots", []))
     declared_roots = _to_str_list(host.get("declared_skill_roots", []))
@@ -688,10 +743,9 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
         )
 
     if "workspace" not in scope_summaries and workspace_summaries:
-        fallback_workspace_id = selected_workspace_id or next(iter(workspace_summaries), "")
-        fallback_summary = workspace_summaries.get(fallback_workspace_id, {})
-        if isinstance(fallback_summary, dict):
-            scope_summaries["workspace"] = copy.deepcopy(fallback_summary)
+        aggregate_workspace_summary = _build_workspace_scope_aggregate_summary(workspace_summaries)
+        if aggregate_workspace_summary:
+            scope_summaries["workspace"] = aggregate_workspace_summary
 
     selected_scope = _normalize_astrbot_scope(
         layout.get("selected_scope"),

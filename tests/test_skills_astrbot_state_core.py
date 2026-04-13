@@ -321,6 +321,45 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
             {str(item.get("workspace_id") or "") for item in workspace_rows},
         )
 
+    def test_build_astrbot_host_runtime_state_uses_workspace_aggregate_when_no_explicit_selected_workspace(self) -> None:
+        workspace_beta_root = self.root / "data" / "workspaces" / "session-beta"
+        workspace_beta_skills_root = workspace_beta_root / "skills"
+        workspace_beta_skills_root.mkdir(parents=True, exist_ok=True)
+
+        self._write_skill("workspace-alpha", "workspace alpha", scope="workspace")
+        skill_dir_beta = workspace_beta_skills_root / "workspace-beta"
+        skill_dir_beta.mkdir(parents=True, exist_ok=True)
+        (skill_dir_beta / "SKILL.md").write_text("# workspace-beta\n", encoding="utf-8")
+
+        (self.workspace_root / "skills.json").write_text(
+            json.dumps({"skills": {"workspace-alpha": {"active": True}}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (workspace_beta_root / "skills.json").write_text(
+            json.dumps({"skills": {"workspace-beta": {"active": False}}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        host = self._build_host()
+        host["target_paths"] = {
+            "global": str(self.skills_root),
+            "workspace": "",
+        }
+        host["declared_skill_roots"] = [
+            str(self.skills_root),
+            str(self.workspace_skills_root),
+            str(workspace_beta_skills_root),
+        ]
+
+        state = build_astrbot_host_runtime_state(host)
+        workspace_scope_summary = state["summary"]["scope_summaries"]["workspace"]
+
+        self.assertEqual("", state["summary"]["selected_workspace_id"])
+        self.assertTrue(workspace_scope_summary["workspace_aggregate"])
+        self.assertEqual(2, workspace_scope_summary["workspace_total"])
+        self.assertEqual(2, workspace_scope_summary["local_skill_total"])
+        self.assertEqual(1, workspace_scope_summary["active_skill_total"])
+
 
 if __name__ == "__main__":
     unittest.main()
