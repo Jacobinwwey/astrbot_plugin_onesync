@@ -54,6 +54,24 @@ def _summarize_ids(values: list[str], *, limit: int = 5) -> str:
     return ", ".join(clean[:limit]) + f" (+{len(clean) - limit} more)"
 
 
+def _astrbot_scope_summary_items(item: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    summary = item.get("summary", {}) if isinstance(item.get("summary", {}), dict) else {}
+    scope_summaries = (
+        summary.get("scope_summaries", {})
+        if isinstance(summary.get("scope_summaries", {}), dict)
+        else {}
+    )
+    pairs = [
+        (str(scope or "").strip(), scope_summary)
+        for scope, scope_summary in scope_summaries.items()
+        if str(scope or "").strip() and isinstance(scope_summary, dict)
+    ]
+    if pairs:
+        return pairs
+    fallback_scope = str(summary.get("selected_scope") or "global").strip() or "global"
+    return [(fallback_scope, summary)]
+
+
 def build_skills_runtime_health(
     skills_snapshot: dict[str, Any],
     *,
@@ -114,17 +132,20 @@ def build_skills_runtime_health(
     astrbot_missing_skills_config_total = sum(
         1
         for item in astrbot_hosts
-        if not bool(item.get("summary", {}).get("skills_config_exists", False))
+        for _scope, scope_summary in _astrbot_scope_summary_items(item)
+        if not bool(scope_summary.get("skills_config_exists", False))
     )
     astrbot_missing_sandbox_cache_total = sum(
         1
         for item in astrbot_hosts
-        if not bool(item.get("summary", {}).get("sandbox_cache_exists", False))
+        for _scope, scope_summary in _astrbot_scope_summary_items(item)
+        if not bool(scope_summary.get("sandbox_cache_exists", False))
     )
     astrbot_sandbox_unready_total = sum(
         1
         for item in astrbot_hosts
-        if not bool(item.get("summary", {}).get("sandbox_cache_ready", False))
+        for _scope, scope_summary in _astrbot_scope_summary_items(item)
+        if not bool(scope_summary.get("sandbox_cache_ready", False))
     )
     astrbot_drifted_total = sum(
         int(item.get("summary", {}).get("drifted_total", 0) or 0)
@@ -180,12 +201,14 @@ def build_skills_runtime_health(
         if not isinstance(item, dict):
             continue
         summary = item.get("summary", {}) if isinstance(item.get("summary", {}), dict) else {}
-        if not summary.get("skills_config_exists", False):
-            warnings.append(f"astrbot[{host_id}] missing skills.json")
-        if not summary.get("sandbox_cache_exists", False):
-            warnings.append(f"astrbot[{host_id}] missing sandbox_skills_cache.json")
-        elif not summary.get("sandbox_cache_ready", False):
-            warnings.append(f"astrbot[{host_id}] sandbox cache exists but is empty")
+        scope_summary_items = _astrbot_scope_summary_items(item)
+        for scope, scope_summary in scope_summary_items:
+            if not scope_summary.get("skills_config_exists", False):
+                warnings.append(f"astrbot[{host_id}][{scope}] missing skills.json")
+            if not scope_summary.get("sandbox_cache_exists", False):
+                warnings.append(f"astrbot[{host_id}][{scope}] missing sandbox_skills_cache.json")
+            elif not scope_summary.get("sandbox_cache_ready", False):
+                warnings.append(f"astrbot[{host_id}][{scope}] sandbox cache exists but is empty")
         drifted_total = int(summary.get("drifted_total", 0) or 0)
         if drifted_total:
             warnings.append(f"astrbot[{host_id}] has {drifted_total} drifted runtime skill rows")

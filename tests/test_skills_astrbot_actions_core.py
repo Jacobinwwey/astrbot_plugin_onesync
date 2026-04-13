@@ -21,6 +21,10 @@ class SkillsAstrBotActionsCoreTests(unittest.TestCase):
         self.data_dir = self.root / "data"
         self.skills_root = self.data_dir / "skills"
         self.skills_root.mkdir(parents=True, exist_ok=True)
+        self.workspace_root = Path(self._tempdir.name) / "workspace-astrbot"
+        self.workspace_data_dir = self.workspace_root / "data"
+        self.workspace_skills_root = self.workspace_data_dir / "skills"
+        self.workspace_skills_root.mkdir(parents=True, exist_ok=True)
         self.layout = {
             "host_id": "astrbot",
             "provider_key": "astrbot",
@@ -29,17 +33,34 @@ class SkillsAstrBotActionsCoreTests(unittest.TestCase):
             "skills_root": str(self.skills_root),
             "skills_config_path": str(self.data_dir / "skills.json"),
             "sandbox_cache_path": str(self.data_dir / "sandbox_skills_cache.json"),
+            "scoped_layouts": {
+                "global": {
+                    "scope": "global",
+                    "state_available": True,
+                    "skills_root": str(self.skills_root),
+                    "skills_config_path": str(self.data_dir / "skills.json"),
+                    "sandbox_cache_path": str(self.data_dir / "sandbox_skills_cache.json"),
+                },
+                "workspace": {
+                    "scope": "workspace",
+                    "state_available": True,
+                    "skills_root": str(self.workspace_skills_root),
+                    "skills_config_path": str(self.workspace_data_dir / "skills.json"),
+                    "sandbox_cache_path": str(self.workspace_data_dir / "sandbox_skills_cache.json"),
+                },
+            },
         }
 
-    def _write_skill(self, skill_name: str) -> None:
-        skill_dir = self.skills_root / skill_name
+    def _write_skill(self, skill_name: str, *, scope: str = "global") -> None:
+        skill_root = self.skills_root if scope != "workspace" else self.workspace_skills_root
+        skill_dir = skill_root / skill_name
         skill_dir.mkdir(parents=True, exist_ok=True)
         (skill_dir / "SKILL.md").write_text(
             f"# {skill_name}\n",
             encoding="utf-8",
         )
 
-    def _write_sandbox_cache(self, skill_names: list[str]) -> None:
+    def _write_sandbox_cache(self, skill_names: list[str], *, scope: str = "global") -> None:
         payload = {
             "version": 1,
             "skills": [
@@ -51,7 +72,8 @@ class SkillsAstrBotActionsCoreTests(unittest.TestCase):
                 for skill_name in skill_names
             ],
         }
-        (self.data_dir / "sandbox_skills_cache.json").write_text(
+        data_dir = self.data_dir if scope != "workspace" else self.workspace_data_dir
+        (data_dir / "sandbox_skills_cache.json").write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
@@ -109,6 +131,37 @@ class SkillsAstrBotActionsCoreTests(unittest.TestCase):
         cache_payload = json.loads((self.data_dir / "sandbox_skills_cache.json").read_text(encoding="utf-8"))
         cached_names = [str(item.get("name") or "") for item in cache_payload.get("skills", []) if isinstance(item, dict)]
         self.assertEqual(["keep"], cached_names)
+
+    def test_set_astrbot_skill_active_updates_requested_workspace_scope(self) -> None:
+        self._write_skill("workspace-demo", scope="workspace")
+        self._write_sandbox_cache(["workspace-demo"], scope="workspace")
+
+        result = set_astrbot_skill_active(self.layout, "workspace-demo", False, scope="workspace")
+        self.assertTrue(result["ok"])
+        self.assertEqual("workspace", result["scope"])
+
+        workspace_payload = json.loads((self.workspace_data_dir / "skills.json").read_text(encoding="utf-8"))
+        self.assertFalse(workspace_payload["skills"]["workspace-demo"]["active"])
+        self.assertFalse((self.data_dir / "skills.json").exists())
+
+    def test_delete_astrbot_local_skill_uses_requested_scope(self) -> None:
+        self._write_skill("workspace-demo", scope="workspace")
+        self._write_sandbox_cache(["workspace-demo"], scope="workspace")
+
+        result = delete_astrbot_local_skill(self.layout, "workspace-demo", scope="workspace")
+        self.assertTrue(result["ok"])
+        self.assertEqual("workspace", result["scope"])
+        self.assertFalse((self.workspace_skills_root / "workspace-demo").exists())
+
+    def test_set_astrbot_skill_active_rejects_unavailable_scope(self) -> None:
+        layout = dict(self.layout)
+        layout["scoped_layouts"] = {
+            "global": dict(self.layout["scoped_layouts"]["global"]),
+        }
+
+        result = set_astrbot_skill_active(layout, "demo", True, scope="workspace")
+        self.assertFalse(result["ok"])
+        self.assertEqual("scope_unavailable", result["reason_code"])
 
 
 if __name__ == "__main__":

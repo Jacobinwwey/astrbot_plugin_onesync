@@ -94,6 +94,23 @@ class SkillsHostsCoreTests(unittest.TestCase):
         self.assertEqual("astrbot", adapter["runtime_state_backend"])
         self.assertEqual(ASTRBOT_HOST_CAPABILITIES, adapter["capabilities"])
 
+    def test_resolve_host_target_path_prefers_hidden_root_for_astrbot_global_and_checkout_for_workspace(self) -> None:
+        host = {
+            "id": "astrbot",
+            "host_id": "astrbot",
+            "provider_key": "astrbot",
+            "declared_skill_roots": [
+                "/root/astrbot/data/skills",
+                "/root/.astrbot/data/skills",
+            ],
+            "resolved_skill_roots": [
+                "/root/astrbot/data/skills",
+            ],
+        }
+
+        self.assertEqual("/root/.astrbot/data/skills", resolve_host_target_path(host, "global"))
+        self.assertEqual("/root/astrbot/data/skills", resolve_host_target_path(host, "workspace"))
+
 
 if __name__ == "__main__":
     unittest.main()

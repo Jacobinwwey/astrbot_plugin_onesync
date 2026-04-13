@@ -201,16 +201,66 @@ def _collect_neo_map(neo_map_path: Path, warnings: list[str]) -> dict[str, dict[
     return result
 
 
-def _skills_root_candidates(host: dict[str, Any]) -> list[Path]:
-    candidates: list[str] = []
+ASTRBOT_SCOPE_ORDER = ("global", "workspace")
+
+
+def _normalize_astrbot_scope(value: Any, default: str = "global") -> str:
+    normalized = _slug(value, default=default)
+    if normalized in ASTRBOT_SCOPE_ORDER:
+        return normalized
+    return default
+
+
+def _merged_scope_root_candidates(host: dict[str, Any]) -> list[str]:
+    resolved_roots = _to_str_list(host.get("resolved_skill_roots", []))
+    declared_roots = _to_str_list(host.get("declared_skill_roots", []))
+    merged: list[str] = []
+    max_len = max(len(resolved_roots), len(declared_roots))
+    for index in range(max_len):
+        resolved = str(resolved_roots[index] or "").strip() if index < len(resolved_roots) else ""
+        declared = str(declared_roots[index] or "").strip() if index < len(declared_roots) else ""
+        if resolved:
+            merged.append(resolved)
+            continue
+        if declared:
+            merged.append(declared)
+    if merged:
+        return _dedupe_keep_order(merged)
+    return _dedupe_keep_order(resolved_roots + declared_roots)
+
+
+def _skills_root_candidates_by_scope(host: dict[str, Any]) -> dict[str, list[Path]]:
+    candidates: dict[str, list[str]] = {scope: [] for scope in ASTRBOT_SCOPE_ORDER}
     target_paths = host.get("target_paths", {})
     if isinstance(target_paths, dict):
-        candidates.extend(_to_str_list(target_paths.get("global", "")))
-        candidates.extend(_to_str_list(target_paths.get("workspace", "")))
-    candidates.extend(_to_str_list(host.get("resolved_skill_roots", [])))
-    candidates.extend(_to_str_list(host.get("declared_skill_roots", [])))
-    unique = _dedupe_keep_order(candidates)
-    return [Path(Path(text).expanduser()) for text in unique if text]
+        for scope in ASTRBOT_SCOPE_ORDER:
+            candidates[scope].extend(_to_str_list(target_paths.get(scope, "")))
+
+    merged = _merged_scope_root_candidates(host)
+    if merged:
+        if not candidates["global"]:
+            candidates["global"].append(merged[0])
+        if not candidates["workspace"]:
+            workspace_candidate = merged[1] if len(merged) > 1 else merged[0]
+            candidates["workspace"].append(workspace_candidate)
+
+    resolved = {
+        scope: [
+            Path(Path(text).expanduser())
+            for text in _dedupe_keep_order(candidates.get(scope, []))
+            if str(text or "").strip()
+        ]
+        for scope in ASTRBOT_SCOPE_ORDER
+    }
+    global_root = resolved.get("global", [None])[0]
+    workspace_root = resolved.get("workspace", [None])[0]
+    if global_root is not None and workspace_root is not None and global_root == workspace_root:
+        remaining_workspace = [
+            item for item in resolved.get("workspace", [])
+            if item != global_root
+        ]
+        resolved["workspace"] = remaining_workspace
+    return resolved
 
 
 def _derive_astrbot_layout(skills_root: Path) -> tuple[Path, Path]:
@@ -224,29 +274,18 @@ def _derive_astrbot_layout(skills_root: Path) -> tuple[Path, Path]:
     return root_dir, data_dir
 
 
-def resolve_astrbot_host_layout(host: dict[str, Any] | None) -> dict[str, Any]:
-    normalized_host = host if isinstance(host, dict) else {}
-    host_id = str(normalized_host.get("host_id") or normalized_host.get("id") or "").strip()
-    provider_key = str(normalized_host.get("provider_key") or host_id).strip()
-    is_astrbot = _slug(provider_key or host_id, default="") == "astrbot"
-
-    candidates = _skills_root_candidates(normalized_host) if is_astrbot else []
-    selected_skills_root = candidates[0] if candidates else Path()
+def _build_scoped_astrbot_layout(scope: str, skills_root: Path) -> dict[str, Any]:
+    normalized_scope = _normalize_astrbot_scope(scope)
     root_dir = Path()
     data_dir = Path()
-    if str(selected_skills_root):
-        root_dir, data_dir = _derive_astrbot_layout(selected_skills_root)
-
-    skills_root = selected_skills_root
+    if str(skills_root):
+        root_dir, data_dir = _derive_astrbot_layout(skills_root)
     skills_config_path = data_dir / "skills.json" if str(data_dir) else Path()
     sandbox_cache_path = data_dir / "sandbox_skills_cache.json" if str(data_dir) else Path()
     neo_map_path = skills_root / "neo_skill_map.json" if str(skills_root) else Path()
-
     return {
-        "host_id": host_id,
-        "provider_key": provider_key,
-        "is_astrbot": is_astrbot,
-        "state_available": bool(candidates),
+        "scope": normalized_scope,
+        "state_available": bool(str(skills_root)),
         "skills_root": str(skills_root) if str(skills_root) else "",
         "astrbot_root": str(root_dir) if str(root_dir) else "",
         "astrbot_data_dir": str(data_dir) if str(data_dir) else "",
@@ -256,15 +295,14 @@ def resolve_astrbot_host_layout(host: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
-    layout = resolve_astrbot_host_layout(host)
-    if not _to_bool(layout.get("is_astrbot"), False):
-        return {}
-    host_id = str(layout.get("host_id") or "").strip()
-    provider_key = str(layout.get("provider_key") or host_id).strip()
-
+def _build_scope_runtime_state(
+    *,
+    host_id: str,
+    provider_key: str,
+    scope: str,
+    layout: dict[str, Any],
+) -> dict[str, Any]:
     warnings: list[str] = []
-    installed = _to_bool(host.get("installed", False), False)
     skills_root = Path(str(layout.get("skills_root") or "").strip()).expanduser()
     skills_config_path = Path(str(layout.get("skills_config_path") or "").strip()).expanduser()
     sandbox_cache_path = Path(str(layout.get("sandbox_cache_path") or "").strip()).expanduser()
@@ -308,6 +346,8 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
         row = {
             "host_id": host_id,
             "provider_key": provider_key,
+            "scope": scope,
+            "row_id": f"{scope}:{skill_name}",
             "skill_name": skill_name,
             "active": active,
             "local_exists": local_exists,
@@ -325,11 +365,11 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
             "neo_updated_at": str(neo_entry.get("updated_at") or ""),
         }
         if drift_reasons:
-            warnings.append(f"state drift for {skill_name}: {', '.join(drift_reasons)}")
+            warnings.append(f"[{scope}] state drift for {skill_name}: {', '.join(drift_reasons)}")
         state_rows.append(row)
 
     summary = {
-        "host_installed": installed,
+        "scope": scope,
         "state_available": _to_bool(layout.get("state_available"), False),
         "skills_root": str(skills_root) if str(skills_root) else "",
         "astrbot_root": str(layout.get("astrbot_root") or "").strip(),
@@ -339,6 +379,109 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
         "sandbox_cache_ready": bool(sandbox_cache),
         "sandbox_cache_updated_at": sandbox_updated_at,
         "neo_map_exists": bool(neo_map_path) and neo_map_path.exists(),
+        "local_skill_total": sum(1 for item in state_rows if item["local_exists"]),
+        "active_skill_total": sum(1 for item in state_rows if item["active"]),
+        "sandbox_cached_total": sum(1 for item in state_rows if item["sandbox_exists"]),
+        "local_only_total": sum(1 for item in state_rows if item["state_classification"] == "local_only"),
+        "synced_total": sum(1 for item in state_rows if item["state_classification"] == "synced"),
+        "sandbox_only_total": sum(1 for item in state_rows if item["state_classification"] == "sandbox_only"),
+        "neo_managed_total": sum(1 for item in state_rows if item["state_classification"] == "neo_managed"),
+        "drifted_total": sum(1 for item in state_rows if item["state_classification"] == "drifted"),
+        "state_row_total": len(state_rows),
+    }
+    return {
+        "summary": summary,
+        "state_rows": state_rows,
+        "warnings": warnings,
+    }
+
+
+def resolve_astrbot_host_layout(host: dict[str, Any] | None) -> dict[str, Any]:
+    normalized_host = host if isinstance(host, dict) else {}
+    host_id = str(normalized_host.get("host_id") or normalized_host.get("id") or "").strip()
+    provider_key = str(normalized_host.get("provider_key") or host_id).strip()
+    is_astrbot = _slug(provider_key or host_id, default="") == "astrbot"
+
+    scoped_candidates = _skills_root_candidates_by_scope(normalized_host) if is_astrbot else {}
+    scoped_layouts = {
+        scope: _build_scoped_astrbot_layout(scope, candidates[0] if candidates else Path())
+        for scope, candidates in scoped_candidates.items()
+    }
+    available_scopes = [
+        scope
+        for scope in ASTRBOT_SCOPE_ORDER
+        if _to_bool(scoped_layouts.get(scope, {}).get("state_available"), False)
+    ]
+    selected_scope = "global" if "global" in available_scopes else (available_scopes[0] if available_scopes else "global")
+    selected_layout = scoped_layouts.get(selected_scope, _build_scoped_astrbot_layout(selected_scope, Path()))
+
+    return {
+        "host_id": host_id,
+        "provider_key": provider_key,
+        "is_astrbot": is_astrbot,
+        "state_available": bool(available_scopes),
+        "available_scopes": available_scopes,
+        "selected_scope": selected_scope,
+        "scoped_layouts": scoped_layouts,
+        "skills_root": str(selected_layout.get("skills_root") or "").strip(),
+        "astrbot_root": str(selected_layout.get("astrbot_root") or "").strip(),
+        "astrbot_data_dir": str(selected_layout.get("astrbot_data_dir") or "").strip(),
+        "skills_config_path": str(selected_layout.get("skills_config_path") or "").strip(),
+        "sandbox_cache_path": str(selected_layout.get("sandbox_cache_path") or "").strip(),
+        "neo_map_path": str(selected_layout.get("neo_map_path") or "").strip(),
+    }
+
+
+def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
+    layout = resolve_astrbot_host_layout(host)
+    if not _to_bool(layout.get("is_astrbot"), False):
+        return {}
+    host_id = str(layout.get("host_id") or "").strip()
+    provider_key = str(layout.get("provider_key") or host_id).strip()
+
+    warnings: list[str] = []
+    installed = _to_bool(host.get("installed", False), False)
+    state_rows: list[dict[str, Any]] = []
+    scope_summaries: dict[str, dict[str, Any]] = {}
+    scoped_layouts = layout.get("scoped_layouts", {}) if isinstance(layout.get("scoped_layouts", {}), dict) else {}
+    for scope in ASTRBOT_SCOPE_ORDER:
+        scope_layout = scoped_layouts.get(scope, {})
+        if not isinstance(scope_layout, dict) or not _to_bool(scope_layout.get("state_available"), False):
+            continue
+        scope_state = _build_scope_runtime_state(
+            host_id=host_id,
+            provider_key=provider_key,
+            scope=scope,
+            layout=scope_layout,
+        )
+        scope_summaries[scope] = copy.deepcopy(scope_state.get("summary", {}))
+        state_rows.extend(copy.deepcopy(scope_state.get("state_rows", [])))
+        warnings.extend(_to_str_list(scope_state.get("warnings", [])))
+
+    selected_scope = _normalize_astrbot_scope(
+        layout.get("selected_scope"),
+        default="global",
+    )
+    selected_summary = (
+        scope_summaries.get(selected_scope, {})
+        if isinstance(scope_summaries.get(selected_scope, {}), dict)
+        else {}
+    )
+
+    summary = {
+        "host_installed": installed,
+        "state_available": _to_bool(layout.get("state_available"), False),
+        "available_scopes": list(layout.get("available_scopes", [])) if isinstance(layout.get("available_scopes", []), list) else [],
+        "selected_scope": selected_scope,
+        "scope_summaries": scope_summaries,
+        "skills_root": str(selected_summary.get("skills_root") or layout.get("skills_root") or "").strip(),
+        "astrbot_root": str(selected_summary.get("astrbot_root") or layout.get("astrbot_root") or "").strip(),
+        "astrbot_data_dir": str(selected_summary.get("astrbot_data_dir") or layout.get("astrbot_data_dir") or "").strip(),
+        "skills_config_exists": bool(selected_summary.get("skills_config_exists", False)),
+        "sandbox_cache_exists": bool(selected_summary.get("sandbox_cache_exists", False)),
+        "sandbox_cache_ready": bool(selected_summary.get("sandbox_cache_ready", False)),
+        "sandbox_cache_updated_at": str(selected_summary.get("sandbox_cache_updated_at") or "").strip(),
+        "neo_map_exists": bool(selected_summary.get("neo_map_exists", False)),
         "local_skill_total": sum(1 for item in state_rows if item["local_exists"]),
         "active_skill_total": sum(1 for item in state_rows if item["active"]),
         "sandbox_cached_total": sum(1 for item in state_rows if item["sandbox_exists"]),

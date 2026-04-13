@@ -687,6 +687,84 @@
       overflow: auto;
     }
 
+    .cfg-shell {
+      display: grid;
+      gap: 12px;
+    }
+
+    .cfg-overview {
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 12px;
+      padding: 12px;
+      background:
+        radial-gradient(180px 100px at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 72%),
+        linear-gradient(160deg, color-mix(in srgb, var(--panel-soft) 78%, transparent), color-mix(in srgb, var(--panel-strong) 74%, transparent));
+      display: grid;
+      gap: 12px;
+    }
+
+    .cfg-kicker {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .cfg-overview-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .cfg-overview-note {
+      margin: 0;
+      max-width: 820px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .cfg-overview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .cfg-overview-item {
+      border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+      border-radius: 12px;
+      padding: 10px 11px;
+      background: color-mix(in srgb, var(--panel) 74%, transparent);
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .cfg-overview-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .cfg-overview-value {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .cfg-section-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+
     .cfg-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -697,15 +775,37 @@
       margin-bottom: 10px;
       border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
       border-radius: 10px;
-      padding: 8px;
+      padding: 10px;
       background: color-mix(in srgb, var(--panel-strong) 62%, transparent);
     }
 
+    .cfg-shell > .cfg-block:last-child {
+      margin-bottom: 0;
+    }
+
+    .cfg-section-grid > .cfg-block {
+      margin-bottom: 0;
+      height: 100%;
+    }
+
+    .cfg-block-head {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
     .cfg-title {
-      margin: 0 0 8px;
+      margin: 0;
       font-size: 13px;
-      color: var(--muted);
+      color: var(--text);
       font-weight: 700;
+    }
+
+    .cfg-note {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--muted);
     }
 
     .cfg-row {
@@ -794,7 +894,7 @@
       min-height: 18px;
       font-size: 12px;
       color: var(--muted);
-      margin-top: 8px;
+      margin-top: 2px;
       white-space: pre-wrap;
     }
 
@@ -906,6 +1006,133 @@
     .guide-doc-link:hover {
       border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
       color: var(--text);
+    }
+
+    .guide-doc-workbench {
+      margin-top: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 10px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--panel-soft) 62%, var(--input) 38%);
+      display: grid;
+      gap: 8px;
+    }
+
+    .guide-doc-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .guide-doc-toolbar .cfg-label {
+      margin: 0;
+      min-width: 180px;
+      max-width: 260px;
+    }
+
+    .guide-doc-status {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .guide-doc-browser {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.95fr) minmax(0, 1.45fr);
+      gap: 8px;
+    }
+
+    .guide-doc-list {
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+      padding: 6px;
+      max-height: 360px;
+      overflow: auto;
+      display: grid;
+      gap: 6px;
+    }
+
+    .guide-doc-item {
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel-soft) 78%, var(--input) 22%);
+      color: var(--text);
+      text-align: left;
+      padding: 7px 8px;
+      cursor: pointer;
+      display: grid;
+      gap: 4px;
+    }
+
+    .guide-doc-item:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+      background: color-mix(in srgb, var(--accent) 12%, var(--panel-soft));
+    }
+
+    .guide-doc-item.active {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+      background: color-mix(in srgb, var(--accent) 16%, var(--panel-soft));
+    }
+
+    .guide-doc-item-title {
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .guide-doc-item-meta {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .guide-doc-content {
+      border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+      padding: 8px;
+      min-height: 360px;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 6px;
+    }
+
+    .guide-doc-content h4 {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .guide-doc-content-meta {
+      margin: 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .guide-doc-content-body {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text);
+      font-family: var(--mono);
+      white-space: pre-wrap;
+      overflow: auto;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+      background: color-mix(in srgb, var(--panel-soft) 70%, var(--input) 30%);
+    }
+
+    @media (max-width: 1080px) {
+      .guide-doc-browser {
+        grid-template-columns: 1fr;
+      }
+
+      .guide-doc-list {
+        max-height: 240px;
+      }
     }
 
     .inventory-panel {
@@ -2692,7 +2919,9 @@
         grid-template-columns: 1fr;
       }
       .cfg-grid,
-      .cfg-row {
+      .cfg-row,
+      .cfg-section-grid,
+      .cfg-overview-grid {
         grid-template-columns: 1fr;
       }
       .inventory-display-settings-grid {
@@ -3096,13 +3325,14 @@
                   <p class="inventory-utility-copy" id="inventoryUtilitySettingsNote">将卡片视图、字体与尺寸偏好收进 Utility，避免主工作区被低频设置占据。</p>
                   <details class="inventory-display-settings" id="inventoryDisplaySettings">
                     <summary id="inventoryDisplaySettingsSummary">面板设置</summary>
-                    <div class="inventory-display-settings-grid">
-                      <div class="inventory-display-panel-group">
-                        <div class="inventory-display-panel-head">
-                          <p class="inventory-display-panel-title" id="inventorySourceDisplayTitle">Source / Bundle 视图</p>
-                        </div>
-                        <div class="inventory-segment-block">
-                          <span class="inventory-segment-label" id="inventorySourceViewModeLabel">面板视图</span>
+                      <div class="inventory-display-settings-grid">
+                        <div class="inventory-display-panel-group">
+                          <div class="inventory-display-panel-head">
+                            <p class="inventory-display-panel-title" id="inventorySourceDisplayTitle">Source / Bundle 视图</p>
+                            <span class="inventory-display-panel-note" id="inventorySourceDisplayNote">调整 Source 卡片的阅读密度与横向占用。</span>
+                          </div>
+                          <div class="inventory-segment-block">
+                            <span class="inventory-segment-label" id="inventorySourceViewModeLabel">面板视图</span>
                           <div class="inventory-segmented" id="inventorySourcePanelViewTabs">
                             <button type="button" id="inventorySourceViewModeSingle" data-inventory-source-view="single">单列卡片</button>
                             <button type="button" id="inventorySourceViewModeDouble" data-inventory-source-view="double">双列卡片</button>
@@ -3139,6 +3369,7 @@
                       <div class="inventory-display-panel-group">
                         <div class="inventory-display-panel-head">
                           <p class="inventory-display-panel-title" id="inventoryDeployDisplayTitle">Deploy Targets</p>
+                          <span class="inventory-display-panel-note" id="inventoryDeployDisplayNote">调整 Deploy 目标卡片的密度，避免信息过疏或过挤。</span>
                         </div>
                         <div class="inventory-segment-block">
                           <span class="inventory-segment-label" id="inventoryDeployViewModeLabel">面板视图</span>
@@ -3278,7 +3509,7 @@
                     <div class="inventory-soft-meta" id="inventoryAstrbotRuntimeSummary">当前软件不是 AstrBot，或运行态尚不可用。</div>
                     <div class="inventory-soft-meta">
                       <label for="inventoryAstrbotSkillNameInput" id="inventoryAstrbotSkillNameLabel">Skill 名称</label>
-                      <input id="inventoryAstrbotSkillNameInput" type="text" placeholder="输入 AstrBot skill 名称">
+                      <input id="inventoryAstrbotSkillNameInput" type="text" placeholder="输入当前范围内的 AstrBot skill 名称">
                     </div>
                     <div class="inventory-inspector-actions">
                       <button type="button" id="inventoryAstrbotEnableBtn">启用</button>
@@ -3345,123 +3576,161 @@
         </div>
       </div>
       <div class="modal-body">
-        <div class="cfg-block">
-          <p class="cfg-title" id="cfgGeneralTitle">基础设置</p>
-          <div class="cfg-grid">
-            <label class="cfg-label">
-              <span id="cfgLabelEnabled">启用插件</span>
-              <select id="cfgEnabled">
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelTargetMode">目标配置模式</span>
-              <select id="cfgTargetMode">
-                <option value="human">human</option>
-                <option value="developer">developer</option>
-              </select>
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelPoll">轮询间隔（分钟）</span>
-              <input id="cfgPollInterval" type="number" min="1" step="1">
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelDefaultCheck">默认检查间隔（小时）</span>
-              <input id="cfgDefaultCheckInterval" type="number" min="0" step="0.5">
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelAutoUpdate">定时自动更新</span>
-              <select id="cfgAutoUpdate">
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelNotifyAdmin">定时通知管理员</span>
-              <select id="cfgNotifyAdmin">
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelNotifyNoop">无更新也通知</span>
-              <select id="cfgNotifyNoop">
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            </label>
-            <label class="cfg-label" id="cfgDryRunWrap">
-              <span id="cfgLabelDryRun">演练模式</span>
-              <select id="cfgDryRun">
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            </label>
-            <label class="cfg-label" id="cfgEnvTimeoutWrap">
-              <span id="cfgLabelEnvTimeout">环境检测超时（秒）</span>
-              <input id="cfgEnvTimeout" type="number" min="1" step="1">
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelAdminSid">管理员 SID 列表（逗号或换行）</span>
-              <textarea id="cfgAdminSidList"></textarea>
-            </label>
-          </div>
-        </div>
-
-        <div class="cfg-block">
-          <p class="cfg-title" id="cfgWebTitle">WebUI 设置</p>
-          <div class="cfg-row">
-            <label class="cfg-label">
-              <span id="cfgLabelWebEnabled">启用 WebUI</span>
-              <select id="cfgWebEnabled">
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelWebPort">WebUI 端口</span>
-              <input id="cfgWebPort" type="number" min="1" max="65535" step="1">
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelWebHost">WebUI Host</span>
-              <input id="cfgWebHost" type="text" placeholder="127.0.0.1">
-            </label>
-            <label class="cfg-label">
-              <span id="cfgLabelWebPassword">WebUI 密码（可选）</span>
-              <input id="cfgWebPassword" type="password" autocomplete="new-password" placeholder="">
-              <span class="cfg-mini" id="cfgWebPasswordHint">留空表示保持当前密码。</span>
-              <label class="cfg-check">
-                <input id="cfgWebPasswordClear" type="checkbox">
-                <span id="cfgLabelWebPasswordClear">清除已配置密码</span>
-              </label>
-            </label>
-          </div>
-        </div>
-
-        <div class="cfg-block" id="cfgHumanWrap">
-          <div class="cfg-target-head">
-            <p class="cfg-title" id="cfgHumanTitle">软件目标（Human 模式）</p>
-            <div class="modal-actions">
-              <select id="cfgAddTargetType">
-                <option value="cargo_path_git">cargo_path_git</option>
-                <option value="command">command</option>
-                <option value="system_package">system_package</option>
-              </select>
-              <button id="cfgAddTargetBtn" class="primary">添加目标</button>
+        <div class="cfg-shell">
+          <div class="cfg-overview">
+            <div class="cfg-overview-copy">
+              <p class="cfg-kicker" id="cfgOverviewKicker">设置中心</p>
+              <h3 class="cfg-overview-title" id="cfgOverviewTitle">集中管理调度、Web 控制台与目标编排</h3>
+              <p class="cfg-overview-note" id="cfgOverviewNote">这里处理的是 OneSync 的运行方式，不是具体 skill 内容。主线只有三件事：定义更新节奏、控制 Web 控制台入口、维护目标配置。</p>
+            </div>
+            <div class="cfg-overview-grid">
+              <div class="cfg-overview-item">
+                <span class="cfg-overview-label" id="cfgRuntimeSummaryLabel">运行摘要</span>
+                <strong class="cfg-overview-value" id="cfgRuntimeSummaryValue">Human · 插件启用 · 轮询 30 分钟</strong>
+              </div>
+              <div class="cfg-overview-item">
+                <span class="cfg-overview-label" id="cfgWebSummaryLabel">控制台入口</span>
+                <strong class="cfg-overview-value" id="cfgWebSummaryValue">127.0.0.1:8099 · 免口令</strong>
+              </div>
+              <div class="cfg-overview-item">
+                <span class="cfg-overview-label" id="cfgTargetsSummaryLabel">目标维护</span>
+                <strong class="cfg-overview-value" id="cfgTargetsSummaryValue">Human 编辑 · 0 个目标</strong>
+              </div>
             </div>
           </div>
-          <div class="cfg-target-list" id="cfgHumanTargetList"></div>
-          <p class="cfg-mini" id="cfgHumanHint">可添加任意数量目标；字段会按 strategy 自动切换。</p>
-        </div>
 
-        <div class="cfg-block hidden" id="cfgDeveloperWrap">
-          <p class="cfg-title" id="cfgDeveloperTitle">开发者模式（targets_json）</p>
-          <textarea id="cfgTargetsJson" spellcheck="false"></textarea>
-          <p class="cfg-mini" id="cfgDeveloperHint">此 JSON 会直接写回插件配置。建议先在 Human 模式编辑常规字段。</p>
-        </div>
+          <div class="cfg-section-grid">
+            <div class="cfg-block">
+              <div class="cfg-block-head">
+                <p class="cfg-title" id="cfgGeneralTitle">基础设置</p>
+                <p class="cfg-note" id="cfgGeneralNote">控制插件是否运行、何时轮询，以及运维通知策略。</p>
+              </div>
+              <div class="cfg-grid">
+                <label class="cfg-label">
+                  <span id="cfgLabelEnabled">启用插件</span>
+                  <select id="cfgEnabled">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelTargetMode">目标配置模式</span>
+                  <select id="cfgTargetMode">
+                    <option value="human">human</option>
+                    <option value="developer">developer</option>
+                  </select>
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelPoll">轮询间隔（分钟）</span>
+                  <input id="cfgPollInterval" type="number" min="1" step="1">
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelDefaultCheck">默认检查间隔（小时）</span>
+                  <input id="cfgDefaultCheckInterval" type="number" min="0" step="0.5">
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelAutoUpdate">定时自动更新</span>
+                  <select id="cfgAutoUpdate">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelNotifyAdmin">定时通知管理员</span>
+                  <select id="cfgNotifyAdmin">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelNotifyNoop">无更新也通知</span>
+                  <select id="cfgNotifyNoop">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                <label class="cfg-label" id="cfgDryRunWrap">
+                  <span id="cfgLabelDryRun">演练模式</span>
+                  <select id="cfgDryRun">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                <label class="cfg-label" id="cfgEnvTimeoutWrap">
+                  <span id="cfgLabelEnvTimeout">环境检测超时（秒）</span>
+                  <input id="cfgEnvTimeout" type="number" min="1" step="1">
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelAdminSid">管理员 SID 列表（逗号或换行）</span>
+                  <textarea id="cfgAdminSidList"></textarea>
+                </label>
+              </div>
+            </div>
 
-        <div class="cfg-status" id="cfgStatus"></div>
+            <div class="cfg-block">
+              <div class="cfg-block-head">
+                <p class="cfg-title" id="cfgWebTitle">WebUI 设置</p>
+                <p class="cfg-note" id="cfgWebNote">控制 8099 WebUI 的监听入口与访问方式。</p>
+              </div>
+              <div class="cfg-row">
+                <label class="cfg-label">
+                  <span id="cfgLabelWebEnabled">启用 WebUI</span>
+                  <select id="cfgWebEnabled">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelWebPort">WebUI 端口</span>
+                  <input id="cfgWebPort" type="number" min="1" max="65535" step="1">
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelWebHost">WebUI Host</span>
+                  <input id="cfgWebHost" type="text" placeholder="127.0.0.1">
+                </label>
+                <label class="cfg-label">
+                  <span id="cfgLabelWebPassword">WebUI 密码（可选）</span>
+                  <input id="cfgWebPassword" type="password" autocomplete="new-password" placeholder="">
+                  <span class="cfg-mini" id="cfgWebPasswordHint">留空表示保持当前密码。</span>
+                  <label class="cfg-check">
+                    <input id="cfgWebPasswordClear" type="checkbox">
+                    <span id="cfgLabelWebPasswordClear">清除已配置密码</span>
+                  </label>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="cfg-block" id="cfgHumanWrap">
+            <div class="cfg-block-head">
+              <div class="cfg-target-head">
+                <p class="cfg-title" id="cfgHumanTitle">软件目标（Human 模式）</p>
+                <div class="modal-actions">
+                  <select id="cfgAddTargetType">
+                    <option value="cargo_path_git">cargo_path_git</option>
+                    <option value="command">command</option>
+                    <option value="system_package">system_package</option>
+                  </select>
+                  <button id="cfgAddTargetBtn" class="primary">添加目标</button>
+                </div>
+              </div>
+              <p class="cfg-note" id="cfgHumanNote">面向日常运维，按目标逐条管理。</p>
+            </div>
+            <div class="cfg-target-list" id="cfgHumanTargetList"></div>
+            <p class="cfg-mini" id="cfgHumanHint">可添加任意数量目标；字段会按 strategy 自动切换。</p>
+          </div>
+
+          <div class="cfg-block hidden" id="cfgDeveloperWrap">
+            <div class="cfg-block-head">
+              <p class="cfg-title" id="cfgDeveloperTitle">开发者模式（targets_json）</p>
+              <p class="cfg-note" id="cfgDeveloperNote">面向复杂场景，直接维护原始 JSON。</p>
+            </div>
+            <textarea id="cfgTargetsJson" spellcheck="false"></textarea>
+            <p class="cfg-mini" id="cfgDeveloperHint">此 JSON 会直接写回插件配置。建议先在 Human 模式编辑常规字段。</p>
+          </div>
+
+          <div class="cfg-status" id="cfgStatus"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -3700,6 +3969,31 @@
             <a class="guide-doc-link" id="guideInstallDocLink" href="https://github.com/Jacobinwwey/astrbot_plugin_onesync/blob/main/docs/INSTALL_AND_CONFIG_zh.md" target="_blank" rel="noopener">安装与配置手册</a>
             <a class="guide-doc-link" id="guideOpsDocLink" href="https://github.com/Jacobinwwey/astrbot_plugin_onesync/blob/main/docs/OPERATIONS_AND_SYNC_zh.md" target="_blank" rel="noopener">操作与同步手册</a>
           </div>
+          <div class="guide-doc-workbench">
+            <div class="guide-doc-toolbar">
+              <label class="cfg-label">
+                <span id="guideDocLanguageLabel">文档语言</span>
+                <select id="guideDocLanguageSelect">
+                  <option value="auto">跟随界面</option>
+                  <option value="zh">中文优先</option>
+                  <option value="en">English first</option>
+                  <option value="all">全部</option>
+                </select>
+              </label>
+              <button id="guideDocsRefreshBtn" type="button">刷新文档列表</button>
+              <p class="guide-doc-status" id="guideDocStatus">等待加载文档列表...</p>
+            </div>
+            <div class="guide-doc-browser">
+              <div class="guide-doc-list" id="guideDocList">
+                <div class="debug-empty" id="guideDocListPlaceholder">等待加载文档列表...</div>
+              </div>
+              <div class="guide-doc-content">
+                <h4 id="guideDocActiveTitle">文档正文</h4>
+                <p class="guide-doc-content-meta" id="guideDocActiveMeta">请选择左侧文档。</p>
+                <pre class="guide-doc-content-body" id="guideDocContent"></pre>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -3801,6 +4095,11 @@
       configMeta: null,
       configSaving: false,
       guideTab: "user",
+      guideDocFilter: "auto",
+      guideDocsIndex: [],
+      guideDocsLoading: false,
+      guideDocSelectedPath: "",
+      guideDocContentMeta: null,
       aiAutogenAfterLoad: false,
       inventoryOverview: null,
       inventorySelectedSoftwareId: "",
@@ -3960,38 +4259,59 @@
         err_login_cancel: "登录已取消",
         confirm_clear_logs: "确认清空当前 WebUI 调试日志？",
         open_config_modal: "打开配置中心",
-        cfg_modal_title: "OneSync 插件配置",
-        cfg_reload: "重新加载",
-        cfg_save: "保存配置",
+        cfg_modal_title: "OneSync 设置中心",
+        cfg_reload: "重新读取",
+        cfg_save: "保存设置",
         cfg_close: "关闭",
-        cfg_general_title: "基础设置",
-        cfg_enabled: "启用插件",
-        cfg_target_mode: "目标配置模式",
-        cfg_poll: "轮询间隔（分钟）",
-        cfg_default_check: "默认检查间隔（小时）",
-        cfg_auto_update: "定时自动更新",
-        cfg_notify_admin: "定时通知管理员",
-        cfg_notify_noop: "无更新也通知",
-        cfg_dry_run: "演练模式（developer）",
-        cfg_env_timeout: "环境检测超时（秒，developer）",
+        cfg_overview_kicker: "设置中心",
+        cfg_overview_title: "集中管理调度、Web 控制台与目标编排",
+        cfg_overview_note: "这里处理的是 OneSync 的运行方式，不是具体 skill 内容。主线只有三件事：更新节奏、Web 控制台入口、目标配置。",
+        cfg_runtime_summary_label: "运行摘要",
+        cfg_runtime_summary_value: "{mode} · 插件{enabled} · 轮询 {poll} 分钟",
+        cfg_runtime_mode_human: "Human",
+        cfg_runtime_mode_developer: "Developer",
+        cfg_runtime_enabled_on: "启用",
+        cfg_runtime_enabled_off: "停用",
+        cfg_web_summary_label: "控制台入口",
+        cfg_web_summary_value: "{host}:{port} · {access}",
+        cfg_web_access_disabled: "未启用",
+        cfg_web_access_open: "免口令",
+        cfg_web_access_protected: "口令保护",
+        cfg_targets_summary_label: "目标维护",
+        cfg_targets_summary_value_human: "Human 编辑 · {count} 个目标",
+        cfg_targets_summary_value_developer: "Developer JSON · 直接维护 targets_json",
+        cfg_general_title: "运行与调度",
+        cfg_general_note: "控制插件是否运行、何时轮询，以及计划任务的通知策略。",
+        cfg_enabled: "插件状态",
+        cfg_target_mode: "目标编排模式",
+        cfg_poll: "轮询周期（分钟）",
+        cfg_default_check: "默认检查周期（小时）",
+        cfg_auto_update: "按计划自动更新",
+        cfg_notify_admin: "按计划通知管理员",
+        cfg_notify_noop: "无更新也发送通知",
+        cfg_dry_run: "演练模式（Developer）",
+        cfg_env_timeout: "环境探测超时（秒，Developer）",
         cfg_admin_sid: "管理员 SID 列表（逗号或换行）",
-        cfg_web_title: "WebUI 设置",
-        cfg_web_enabled: "启用 WebUI",
-        cfg_web_port: "WebUI 端口",
-        cfg_web_host: "WebUI Host",
-        cfg_web_password: "WebUI 密码（可选）",
-        cfg_web_password_clear: "清除已配置密码",
-        cfg_web_password_hint_keep: "留空表示保持当前密码。",
-        cfg_web_password_hint_set: "当前未配置密码；留空表示继续无密码访问。",
-        cfg_web_password_hint_clear: "已选择清除当前密码，保存后将无需密码登录。",
-        cfg_web_password_hint_new: "将使用新密码覆盖当前配置。",
-        cfg_web_password_placeholder_configured: "已配置（留空保持不变）",
-        cfg_web_password_placeholder_empty: "未配置",
-        cfg_human_title: "软件目标（Human 模式）",
-        cfg_human_add: "添加目标",
-        cfg_human_hint: "可添加任意数量目标；字段会按 strategy 自动切换。",
-        cfg_dev_title: "开发者模式（targets_json）",
-        cfg_dev_hint: "此 JSON 会直接写回插件配置。建议先在 Human 模式编辑常规字段。",
+        cfg_web_title: "Web 控制台",
+        cfg_web_note: "控制 8099 WebUI 的监听入口与访问方式。",
+        cfg_web_enabled: "启用 Web 控制台",
+        cfg_web_port: "监听端口",
+        cfg_web_host: "监听地址",
+        cfg_web_password: "访问口令（可选）",
+        cfg_web_password_clear: "清除现有口令",
+        cfg_web_password_hint_keep: "留空表示继续使用当前口令。",
+        cfg_web_password_hint_set: "当前未设置口令；留空则继续允许免口令访问。",
+        cfg_web_password_hint_clear: "保存后将移除当前口令。",
+        cfg_web_password_hint_new: "保存后会用新口令覆盖当前口令。",
+        cfg_web_password_placeholder_configured: "已设置口令（留空保持不变）",
+        cfg_web_password_placeholder_empty: "未设置口令",
+        cfg_human_title: "软件目标编排（Human 模式）",
+        cfg_human_note: "面向日常运维，按目标逐条管理。",
+        cfg_human_add: "新增目标",
+        cfg_human_hint: "面向常规运维。按策略填写字段，OneSync 会直接生成可保存的目标配置。",
+        cfg_dev_title: "目标 JSON（Developer 模式）",
+        cfg_dev_note: "面向复杂场景，直接维护原始 JSON。",
+        cfg_dev_hint: "适合直接维护 `targets_json`。保存前会做 JSON 校验，但不会替你纠正结构问题。",
         cfg_field_name: "目标名",
         cfg_field_enabled: "启用",
         cfg_field_strategy: "策略",
@@ -4010,13 +4330,13 @@
         cfg_field_require_sudo: "需要 sudo",
         cfg_field_sudo_prefix: "sudo 前缀",
         cfg_target_remove: "删除目标",
-        cfg_status_loading: "正在加载配置...",
-        cfg_status_saving: "正在保存配置...",
-        cfg_status_saved: "配置保存成功。",
-        cfg_status_load_failed: "加载配置失败: {msg}",
-        cfg_status_save_failed: "保存配置失败: {msg}",
+        cfg_status_loading: "正在读取当前设置...",
+        cfg_status_saving: "正在保存设置...",
+        cfg_status_saved: "设置已保存。",
+        cfg_status_load_failed: "读取设置失败: {msg}",
+        cfg_status_save_failed: "保存设置失败: {msg}",
         cfg_status_invalid_json: "targets_json 不是合法 JSON：{msg}",
-        cfg_no_targets: "当前没有目标，点击“添加目标”开始配置。",
+        cfg_no_targets: "还没有软件目标，点击“新增目标”开始配置。",
         open_ai_assistant: "AI 配置助手",
         open_guide: "使用指引",
         ops_brand_title: "OneSync Ops",
@@ -4113,6 +4433,30 @@
         guide_doc_readme: "README",
         guide_doc_install: "安装与配置手册",
         guide_doc_ops: "操作与同步手册",
+        guide_doc_language_label: "文档语言",
+        guide_doc_language_auto: "跟随界面",
+        guide_doc_language_zh: "中文优先",
+        guide_doc_language_en: "English first",
+        guide_doc_language_all: "全部",
+        guide_docs_refresh: "刷新文档列表",
+        guide_docs_loading: "正在加载文档列表...",
+        guide_docs_load_failed: "文档列表加载失败: {msg}",
+        guide_docs_ready: "已加载 {count} 份文档",
+        guide_docs_empty: "当前筛选没有可显示的文档。",
+        guide_doc_content_title: "文档正文",
+        guide_doc_content_hint: "请选择左侧文档。",
+        guide_doc_content_loading: "正在加载文档正文...",
+        guide_doc_content_failed: "文档正文加载失败: {msg}",
+        guide_doc_category_root: "根文档",
+        guide_doc_category_guide: "指南",
+        guide_doc_category_plan: "计划",
+        guide_doc_category_brainstorm: "讨论",
+        guide_doc_category_release: "发布",
+        guide_doc_category_other: "其他",
+        guide_doc_lang_zh: "中文",
+        guide_doc_lang_en: "英文",
+        guide_doc_lang_multi: "双语/通用",
+        guide_doc_meta: "{category} · {lang} · 更新 {updated_at}",
         inventory_title: "Skills管理",
         inventory_head_note: "按 Source package 管理可部署 Skills，统一查看宿主软件、部署选择与 drift 修复动作。",
         inventory_panel_collapse_hint: "默认收起，需要时再展开 Skills 运维台。",
@@ -4189,12 +4533,14 @@
         inventory_utility_open_ai: "AI 助手",
         inventory_utility_drawers_title: "抽屉入口",
         inventory_utility_drawers_note: "把导入、配置、使用指引和 AI 助手统一收进右侧抽屉，减少主界面的上下跳转和信息打断。",
-        inventory_utility_settings_title: "显示与面板设置",
-        inventory_utility_settings_note: "将卡片视图、字体与尺寸偏好收进 Utility，避免主工作区被低频设置占据。",
+        inventory_utility_settings_title: "工作区显示设置",
+        inventory_utility_settings_note: "这里只放影响阅读效率的低频偏好：视图、字体和卡片尺寸。主工作区继续聚焦 Source、Deploy 与执行状态。",
         inventory_utility_summary_title: "运行摘要",
         inventory_utility_summary_note: "主工作区只保留精简状态线，完整统计与筛选摘要在这里查看。",
         inventory_utility_health_title: "运行健康",
-        inventory_display_settings_summary: "面板设置",
+        inventory_display_settings_summary: "显示偏好",
+        inventory_source_display_note: "调整 Source / Bundle 卡片的阅读密度与横向占用。",
+        inventory_deploy_display_note: "调整 Deploy Targets 的阅读密度，避免目标卡片过大或过挤。",
         inventory_view_mode_label: "面板视图",
         inventory_view_mode_single: "单列卡片",
         inventory_view_mode_double: "双列卡片",
@@ -4477,25 +4823,27 @@
         inventory_meta_runtime_state: "运行态摘要",
         inventory_meta_runtime_paths: "运行路径",
         inventory_meta_runtime_warnings: "运行警告",
-        inventory_astrbot_runtime_title: "AstrBot 运行态",
+        inventory_astrbot_runtime_title: "AstrBot 本地技能",
         inventory_astrbot_runtime_empty: "当前软件不是 AstrBot，或运行态尚不可用。",
         inventory_astrbot_skill_name_label: "Skill 名称",
-        inventory_astrbot_skill_name_placeholder: "输入 AstrBot skill 名称",
+        inventory_astrbot_skill_name_placeholder: "输入 {scope} 范围内的 AstrBot skill 名称",
         inventory_astrbot_enable: "启用",
         inventory_astrbot_disable: "禁用",
         inventory_astrbot_delete: "删除",
         inventory_astrbot_sync_sandbox: "同步沙箱",
         inventory_astrbot_syncing_sandbox: "同步中",
-        inventory_astrbot_action_idle: "可对当前 AstrBot host 执行 skill 启停、删除与沙箱同步。",
+        inventory_astrbot_available_scopes: "可用范围",
+        inventory_astrbot_action_idle: "当前可在 {scope} 范围内启停、删除本地 skill，或执行一次沙箱同步。",
         inventory_astrbot_action_unavailable: "当前软件不是 AstrBot，动作不可用。",
+        inventory_astrbot_scope_unavailable: "当前 AstrBot host 未暴露 {scope} 范围，本地 skill 管理已禁用。可用范围：{available_scopes}",
         inventory_astrbot_skill_name_required: "请输入 skill 名称。",
-        inventory_astrbot_toggle_success: "已更新 skill `{skill}` active={active}",
-        inventory_astrbot_delete_success: "已删除 skill `{skill}`",
-        inventory_astrbot_sync_success: "已触发 AstrBot 沙箱同步。",
+        inventory_astrbot_toggle_success: "已在 {scope} 范围更新 skill `{skill}` active={active}",
+        inventory_astrbot_delete_success: "已从 {scope} 范围删除 skill `{skill}`",
+        inventory_astrbot_sync_success: "已触发 {scope} 范围的 AstrBot 沙箱同步。",
         inventory_astrbot_toggle_error: "AstrBot 启停失败：{msg}",
         inventory_astrbot_delete_error: "AstrBot 删除失败：{msg}",
         inventory_astrbot_sync_error: "AstrBot 沙箱同步失败：{msg}",
-        inventory_astrbot_delete_confirm: "确认删除 AstrBot skill `{skill}`？该操作会删除本地目录。",
+        inventory_astrbot_delete_confirm: "确认删除 {scope} 范围内的 AstrBot skill `{skill}`？该操作会删除本地目录。",
         inventory_doctor_astrbot: "AstrBot(hosts/missing_config/missing_cache/cache_unready/drift/warn)={hosts}/{missing_config}/{missing_cache}/{cache_unready}/{drift}/{warnings}",
         inventory_skill_meta_id: "ID",
         inventory_skill_meta_discovered: "已发现",
@@ -4677,38 +5025,59 @@
         err_login_cancel: "Login canceled",
         confirm_clear_logs: "Clear current WebUI debug logs?",
         open_config_modal: "Open Config Center",
-        cfg_modal_title: "OneSync Plugin Configuration",
+        cfg_modal_title: "OneSync Settings",
         cfg_reload: "Reload",
-        cfg_save: "Save Config",
+        cfg_save: "Save Settings",
         cfg_close: "Close",
-        cfg_general_title: "General Settings",
-        cfg_enabled: "Enable Plugin",
-        cfg_target_mode: "Target Config Mode",
+        cfg_overview_kicker: "Settings",
+        cfg_overview_title: "Control runtime cadence, Web console access, and target authoring",
+        cfg_overview_note: "This panel changes how OneSync operates. Keep it focused on three things: update cadence, Web console exposure, and target configuration.",
+        cfg_runtime_summary_label: "Runtime",
+        cfg_runtime_summary_value: "{mode} · plugin {enabled} · poll {poll} min",
+        cfg_runtime_mode_human: "Human",
+        cfg_runtime_mode_developer: "Developer",
+        cfg_runtime_enabled_on: "on",
+        cfg_runtime_enabled_off: "off",
+        cfg_web_summary_label: "Console Access",
+        cfg_web_summary_value: "{host}:{port} · {access}",
+        cfg_web_access_disabled: "disabled",
+        cfg_web_access_open: "no password",
+        cfg_web_access_protected: "password protected",
+        cfg_targets_summary_label: "Target Editing",
+        cfg_targets_summary_value_human: "Human editor · {count} targets",
+        cfg_targets_summary_value_developer: "Developer JSON · direct `targets_json` editing",
+        cfg_general_title: "Runtime & Schedule",
+        cfg_general_note: "Controls whether the plugin runs, how often it polls, and how schedule notifications behave.",
+        cfg_enabled: "Plugin Status",
+        cfg_target_mode: "Target Authoring Mode",
         cfg_poll: "Polling Interval (minutes)",
         cfg_default_check: "Default Check Interval (hours)",
-        cfg_auto_update: "Auto-update on schedule",
+        cfg_auto_update: "Run scheduled updates",
         cfg_notify_admin: "Notify admins on schedule",
-        cfg_notify_noop: "Notify even when no update",
-        cfg_dry_run: "Dry-run mode (developer)",
-        cfg_env_timeout: "Env check timeout (seconds, developer)",
+        cfg_notify_noop: "Notify even when nothing changed",
+        cfg_dry_run: "Dry-run mode (Developer)",
+        cfg_env_timeout: "Environment probe timeout (seconds, Developer)",
         cfg_admin_sid: "Admin SID list (comma or newline)",
-        cfg_web_title: "WebUI Settings",
-        cfg_web_enabled: "Enable WebUI",
-        cfg_web_port: "WebUI Port",
-        cfg_web_host: "WebUI Host",
-        cfg_web_password: "WebUI Password (optional)",
-        cfg_web_password_clear: "Clear configured password",
+        cfg_web_title: "Web Console",
+        cfg_web_note: "Controls the 8099 WebUI listener and access policy.",
+        cfg_web_enabled: "Enable Web Console",
+        cfg_web_port: "Listen Port",
+        cfg_web_host: "Listen Host",
+        cfg_web_password: "Access Password (optional)",
+        cfg_web_password_clear: "Clear current password",
         cfg_web_password_hint_keep: "Leave blank to keep current password.",
-        cfg_web_password_hint_set: "No password is configured. Leave blank to keep password-free access.",
-        cfg_web_password_hint_clear: "Current password will be cleared after saving.",
-        cfg_web_password_hint_new: "A new password will replace the current one.",
-        cfg_web_password_placeholder_configured: "Configured (leave blank to keep)",
-        cfg_web_password_placeholder_empty: "Not configured",
-        cfg_human_title: "Software Targets (Human Mode)",
+        cfg_web_password_hint_set: "No password is configured. Leave blank to keep open access.",
+        cfg_web_password_hint_clear: "The current password will be removed after saving.",
+        cfg_web_password_hint_new: "The new password will replace the current one after saving.",
+        cfg_web_password_placeholder_configured: "Password configured (leave blank to keep)",
+        cfg_web_password_placeholder_empty: "No password configured",
+        cfg_human_title: "Target Authoring (Human Mode)",
+        cfg_human_note: "Best for day-to-day operations. Manage targets one by one.",
         cfg_human_add: "Add Target",
-        cfg_human_hint: "No fixed slot limit. Fields switch automatically by strategy.",
-        cfg_dev_title: "Developer Mode (targets_json)",
-        cfg_dev_hint: "This JSON is written directly to plugin config. Use Human mode for common edits.",
+        cfg_human_hint: "For normal operations. Fill fields by strategy and save the generated target config directly.",
+        cfg_dev_title: "Raw Target JSON (Developer Mode)",
+        cfg_dev_note: "Best for complex rollouts. Edit raw JSON directly.",
+        cfg_dev_hint: "For direct `targets_json` editing. JSON is validated before save, but structure is not repaired for you.",
         cfg_field_name: "Target Name",
         cfg_field_enabled: "Enabled",
         cfg_field_strategy: "Strategy",
@@ -4727,13 +5096,13 @@
         cfg_field_require_sudo: "Require sudo",
         cfg_field_sudo_prefix: "sudo Prefix",
         cfg_target_remove: "Remove Target",
-        cfg_status_loading: "Loading configuration...",
-        cfg_status_saving: "Saving configuration...",
-        cfg_status_saved: "Configuration saved.",
-        cfg_status_load_failed: "Failed to load config: {msg}",
-        cfg_status_save_failed: "Failed to save config: {msg}",
+        cfg_status_loading: "Loading current settings...",
+        cfg_status_saving: "Saving settings...",
+        cfg_status_saved: "Settings saved.",
+        cfg_status_load_failed: "Failed to load settings: {msg}",
+        cfg_status_save_failed: "Failed to save settings: {msg}",
         cfg_status_invalid_json: "targets_json is invalid JSON: {msg}",
-        cfg_no_targets: "No target configured yet. Click \"Add Target\" to start.",
+        cfg_no_targets: "No targets yet. Click \"Add Target\" to start.",
         open_ai_assistant: "AI Assistant",
         open_guide: "Guide",
         ops_brand_title: "OneSync Ops",
@@ -4830,6 +5199,30 @@
         guide_doc_readme: "README",
         guide_doc_install: "Installation & Config Guide",
         guide_doc_ops: "Operations and Sync Manual",
+        guide_doc_language_label: "Docs language",
+        guide_doc_language_auto: "Follow UI",
+        guide_doc_language_zh: "Chinese first",
+        guide_doc_language_en: "English first",
+        guide_doc_language_all: "All",
+        guide_docs_refresh: "Refresh Docs List",
+        guide_docs_loading: "Loading document index...",
+        guide_docs_load_failed: "Document index load failed: {msg}",
+        guide_docs_ready: "{count} documents loaded",
+        guide_docs_empty: "No documents match the current filter.",
+        guide_doc_content_title: "Document Content",
+        guide_doc_content_hint: "Select a document from the left list.",
+        guide_doc_content_loading: "Loading document content...",
+        guide_doc_content_failed: "Document content load failed: {msg}",
+        guide_doc_category_root: "Root",
+        guide_doc_category_guide: "Guide",
+        guide_doc_category_plan: "Plan",
+        guide_doc_category_brainstorm: "Brainstorm",
+        guide_doc_category_release: "Release",
+        guide_doc_category_other: "Other",
+        guide_doc_lang_zh: "Chinese",
+        guide_doc_lang_en: "English",
+        guide_doc_lang_multi: "Bilingual/General",
+        guide_doc_meta: "{category} · {lang} · updated {updated_at}",
         inventory_title: "Skills Management",
         inventory_head_note: "Manage deployable skills as source packages, with unified host visibility, deployment selection, and drift repair.",
         inventory_panel_collapse_hint: "Collapsed by default so software operators can expand the skills console only when needed.",
@@ -4906,12 +5299,14 @@
         inventory_utility_open_ai: "AI Assistant",
         inventory_utility_drawers_title: "Drawers",
         inventory_utility_drawers_note: "Keep import, config, guide, and AI actions in the right-side drawer so the main workspace stays focused.",
-        inventory_utility_settings_title: "Display & Panel Settings",
-        inventory_utility_settings_note: "Keep view mode, typography, and card sizing preferences in Utility instead of spending main workspace attention on them.",
+        inventory_utility_settings_title: "Workspace Display Settings",
+        inventory_utility_settings_note: "Keep low-frequency reading preferences here: view mode, typography, and card size. The main workspace stays focused on sources, deploy targets, and execution state.",
         inventory_utility_summary_title: "Runtime Summary",
         inventory_utility_summary_note: "The primary workspace keeps only a compact status line. Full inventory counts and filters stay here.",
         inventory_utility_health_title: "Runtime Health",
-        inventory_display_settings_summary: "Panel Settings",
+        inventory_display_settings_summary: "Display Preferences",
+        inventory_source_display_note: "Tune the reading density and horizontal footprint of Source / Bundle cards.",
+        inventory_deploy_display_note: "Tune Deploy Targets density so target cards do not feel oversized or cramped.",
         inventory_view_mode_label: "Panel View",
         inventory_view_mode_single: "Single Column",
         inventory_view_mode_double: "Two Columns",
@@ -5194,25 +5589,27 @@
         inventory_meta_runtime_state: "runtime_state",
         inventory_meta_runtime_paths: "runtime_paths",
         inventory_meta_runtime_warnings: "runtime_warnings",
-        inventory_astrbot_runtime_title: "AstrBot Runtime",
+        inventory_astrbot_runtime_title: "AstrBot Local Skills",
         inventory_astrbot_runtime_empty: "Selected host is not AstrBot or runtime state is unavailable.",
         inventory_astrbot_skill_name_label: "Skill Name",
-        inventory_astrbot_skill_name_placeholder: "Enter AstrBot skill name",
+        inventory_astrbot_skill_name_placeholder: "Enter an AstrBot skill name under {scope}",
         inventory_astrbot_enable: "Enable",
         inventory_astrbot_disable: "Disable",
         inventory_astrbot_delete: "Delete",
         inventory_astrbot_sync_sandbox: "Sync Sandbox",
         inventory_astrbot_syncing_sandbox: "Syncing",
-        inventory_astrbot_action_idle: "You can toggle/delete local skills and trigger sandbox sync for the selected AstrBot host.",
+        inventory_astrbot_available_scopes: "Available Scopes",
+        inventory_astrbot_action_idle: "You can toggle, delete, or sync local AstrBot skills under {scope}.",
         inventory_astrbot_action_unavailable: "Selected software is not AstrBot. Actions are disabled.",
+        inventory_astrbot_scope_unavailable: "The selected AstrBot host does not expose {scope}. Local skill actions are disabled. Available scopes: {available_scopes}",
         inventory_astrbot_skill_name_required: "Please provide a skill name.",
-        inventory_astrbot_toggle_success: "Updated skill `{skill}` active={active}",
-        inventory_astrbot_delete_success: "Deleted skill `{skill}`",
-        inventory_astrbot_sync_success: "AstrBot sandbox sync triggered.",
+        inventory_astrbot_toggle_success: "Updated skill `{skill}` under {scope} active={active}",
+        inventory_astrbot_delete_success: "Deleted skill `{skill}` from {scope}",
+        inventory_astrbot_sync_success: "AstrBot sandbox sync triggered for {scope}.",
         inventory_astrbot_toggle_error: "AstrBot toggle failed: {msg}",
         inventory_astrbot_delete_error: "AstrBot delete failed: {msg}",
         inventory_astrbot_sync_error: "AstrBot sandbox sync failed: {msg}",
-        inventory_astrbot_delete_confirm: "Delete AstrBot skill `{skill}`? This removes the local directory.",
+        inventory_astrbot_delete_confirm: "Delete AstrBot skill `{skill}` from {scope}? This removes the local directory.",
         inventory_doctor_astrbot: "AstrBot(hosts/missing_config/missing_cache/cache_unready/drift/warn)={hosts}/{missing_config}/{missing_cache}/{cache_unready}/{drift}/{warnings}",
         inventory_skill_meta_id: "id",
         inventory_skill_meta_discovered: "discovered",
@@ -5951,6 +6348,9 @@
         if (typeof parsed.aiAutogenAfterLoad === "boolean") {
           state.aiAutogenAfterLoad = parsed.aiAutogenAfterLoad;
         }
+        if (typeof parsed.guideDocFilter === "string") {
+          state.guideDocFilter = normalizeGuideDocFilter(parsed.guideDocFilter);
+        }
         if (typeof parsed.inventoryScope === "string") {
           state.inventorySelectedScope = normalizeInventoryScope(parsed.inventoryScope);
         }
@@ -6032,6 +6432,7 @@
       document.body.dataset.density = state.density;
       $("densitySelect").value = state.density;
       $("langSelect").value = state.lang;
+      syncGuideDocFilterControls();
       applyInventoryDisplayPreferences();
     }
 
@@ -6041,6 +6442,7 @@
         density: state.density,
         lang: state.lang,
         aiAutogenAfterLoad: Boolean(state.aiAutogenAfterLoad),
+        guideDocFilter: normalizeGuideDocFilter(state.guideDocFilter),
         inventoryScope: normalizeInventoryScope(state.inventorySelectedScope),
         inventoryPanelExpanded: Boolean(state.inventoryPanelExpanded),
         inventorySourceCardView: normalizeInventoryCardView(state.inventorySourceCardView),
@@ -6175,6 +6577,7 @@
       $("inventoryUtilityHealthSummary").textContent = t("inventory_doctor_waiting");
       $("inventoryDisplaySettingsSummary").textContent = t("inventory_display_settings_summary");
       $("inventorySourceDisplayTitle").textContent = t("inventory_sources_title");
+      $("inventorySourceDisplayNote").textContent = t("inventory_source_display_note");
       $("inventorySourceViewModeLabel").textContent = t("inventory_view_mode_label");
       $("inventorySourceViewModeSingle").textContent = t("inventory_view_mode_single");
       $("inventorySourceViewModeDouble").textContent = t("inventory_view_mode_double");
@@ -6192,6 +6595,7 @@
       $("inventorySourceCardHeightOptStandard").textContent = t("inventory_card_height_standard");
       $("inventorySourceCardHeightOptTall").textContent = t("inventory_card_height_tall");
       $("inventoryDeployDisplayTitle").textContent = t("inventory_deploy_title");
+      $("inventoryDeployDisplayNote").textContent = t("inventory_deploy_display_note");
       $("inventoryDeployViewModeLabel").textContent = t("inventory_view_mode_label");
       $("inventoryDeployViewModeSingle").textContent = t("inventory_view_mode_single");
       $("inventoryDeployViewModeDouble").textContent = t("inventory_view_mode_double");
@@ -6246,7 +6650,9 @@
         : t("inventory_install_atom_retry_failed");
       $("inventoryInstallAtomRefreshReportTitle").textContent = t("inventory_install_atom_refresh_report_title");
       $("inventoryAstrbotSkillNameLabel").textContent = t("inventory_astrbot_skill_name_label");
-      $("inventoryAstrbotSkillNameInput").placeholder = t("inventory_astrbot_skill_name_placeholder");
+      $("inventoryAstrbotSkillNameInput").placeholder = t("inventory_astrbot_skill_name_placeholder", {
+        scope: inventoryScopeLabel(normalizeInventoryScope(state.inventorySelectedScope)),
+      });
       $("inventoryAstrbotEnableBtn").textContent = t("inventory_astrbot_enable");
       $("inventoryAstrbotDisableBtn").textContent = t("inventory_astrbot_disable");
       $("inventoryAstrbotDeleteBtn").textContent = t("inventory_astrbot_delete");
@@ -6255,7 +6661,9 @@
         ? t("inventory_astrbot_syncing_sandbox")
         : t("inventory_astrbot_sync_sandbox");
       if (!String(state.inventoryAstrbotLastActionNote || "").trim()) {
-        $("inventoryAstrbotActionNote").textContent = t("inventory_astrbot_action_idle");
+        $("inventoryAstrbotActionNote").textContent = t("inventory_astrbot_action_idle", {
+          scope: inventoryScopeLabel(normalizeInventoryScope(state.inventorySelectedScope)),
+        });
       }
       const inventoryInstallAtomRowsEmptyEl = $("inventoryInstallAtomRowsEmpty");
       if (inventoryInstallAtomRowsEmptyEl) {
@@ -6348,7 +6756,14 @@
       $("cfgReloadBtn").textContent = t("cfg_reload");
       $("cfgSaveBtn").textContent = t("cfg_save");
       $("cfgCloseBtn").textContent = t("cfg_close");
+      $("cfgOverviewKicker").textContent = t("cfg_overview_kicker");
+      $("cfgOverviewTitle").textContent = t("cfg_overview_title");
+      $("cfgOverviewNote").textContent = t("cfg_overview_note");
+      $("cfgRuntimeSummaryLabel").textContent = t("cfg_runtime_summary_label");
+      $("cfgWebSummaryLabel").textContent = t("cfg_web_summary_label");
+      $("cfgTargetsSummaryLabel").textContent = t("cfg_targets_summary_label");
       $("cfgGeneralTitle").textContent = t("cfg_general_title");
+      $("cfgGeneralNote").textContent = t("cfg_general_note");
       $("cfgLabelEnabled").textContent = t("cfg_enabled");
       $("cfgLabelTargetMode").textContent = t("cfg_target_mode");
       $("cfgLabelPoll").textContent = t("cfg_poll");
@@ -6360,6 +6775,7 @@
       $("cfgLabelEnvTimeout").textContent = t("cfg_env_timeout");
       $("cfgLabelAdminSid").textContent = t("cfg_admin_sid");
       $("cfgWebTitle").textContent = t("cfg_web_title");
+      $("cfgWebNote").textContent = t("cfg_web_note");
       $("cfgLabelWebEnabled").textContent = t("cfg_web_enabled");
       $("cfgLabelWebPort").textContent = t("cfg_web_port");
       $("cfgLabelWebHost").textContent = t("cfg_web_host");
@@ -6367,9 +6783,11 @@
       $("cfgLabelWebPasswordClear").textContent = t("cfg_web_password_clear");
       syncWebPasswordControls();
       $("cfgHumanTitle").textContent = t("cfg_human_title");
+      $("cfgHumanNote").textContent = t("cfg_human_note");
       $("cfgAddTargetBtn").textContent = t("cfg_human_add");
       $("cfgHumanHint").textContent = t("cfg_human_hint");
       $("cfgDeveloperTitle").textContent = t("cfg_dev_title");
+      $("cfgDeveloperNote").textContent = t("cfg_dev_note");
       $("cfgDeveloperHint").textContent = t("cfg_dev_hint");
 
       $("aiModalTitle").textContent = t("ai_modal_title");
@@ -6448,8 +6866,27 @@
       $("guideReadmeLink").textContent = t("guide_doc_readme");
       $("guideInstallDocLink").textContent = t("guide_doc_install");
       $("guideOpsDocLink").textContent = t("guide_doc_ops");
+      $("guideDocLanguageLabel").textContent = t("guide_doc_language_label");
+      $("guideDocLanguageSelect").options[0].textContent = t("guide_doc_language_auto");
+      $("guideDocLanguageSelect").options[1].textContent = t("guide_doc_language_zh");
+      $("guideDocLanguageSelect").options[2].textContent = t("guide_doc_language_en");
+      $("guideDocLanguageSelect").options[3].textContent = t("guide_doc_language_all");
+      $("guideDocsRefreshBtn").textContent = t("guide_docs_refresh");
+      $("guideDocActiveTitle").textContent = t("guide_doc_content_title");
+      syncGuideDocFilterControls();
       syncGuideDocLinks();
       syncGuideTabs();
+      if (!state.guideDocSelectedPath) {
+        $("guideDocActiveMeta").textContent = t("guide_doc_content_hint");
+      } else if (state.guideDocContentMeta && typeof state.guideDocContentMeta === "object") {
+        $("guideDocActiveMeta").textContent = guideDocMetaText(state.guideDocContentMeta);
+      }
+      renderGuideDocList();
+      if (state.guideDocsLoading) {
+        setGuideDocStatus(t("guide_docs_loading"));
+      } else if ((state.guideDocsIndex || []).length === 0) {
+        setGuideDocStatus(t("guide_doc_content_hint"));
+      }
 
       syncDebugAutoScrollBtn();
       if (!state.inventoryOverview) {
@@ -8163,7 +8600,25 @@
       const summary = hostRow.runtime_state_summary && typeof hostRow.runtime_state_summary === "object"
         ? hostRow.runtime_state_summary
         : {};
-      const hasAstrbotState = backend === "astrbot" || Boolean(summary.state_available) || Boolean(summary.skills_root);
+      const selectedScope = normalizeInventoryScope(state.inventorySelectedScope);
+      const scopeSummaries = summary.scope_summaries && typeof summary.scope_summaries === "object"
+        ? summary.scope_summaries
+        : {};
+      const scopedSummary = scopeSummaries[selectedScope] && typeof scopeSummaries[selectedScope] === "object"
+        ? scopeSummaries[selectedScope]
+        : {};
+      const effectiveSummary = Object.keys(scopedSummary).length ? scopedSummary : summary;
+      const availableScopes = Array.isArray(hostRow.available_scopes)
+        ? hostRow.available_scopes.map((item) => normalizeInventoryScope(item)).filter(Boolean)
+        : Object.keys(scopeSummaries).map((item) => normalizeInventoryScope(item)).filter(Boolean);
+      const availableScopeLabels = availableScopes.length
+        ? availableScopes.map((item) => inventoryScopeLabel(item)).join(" / ")
+        : "-";
+      const hasAstrbotState = backend === "astrbot"
+        || Boolean(summary.state_available)
+        || Boolean(effectiveSummary.state_available)
+        || Boolean(effectiveSummary.skills_root)
+        || Boolean(summary.skills_root);
       if (!hasAstrbotState) {
         return "";
       }
@@ -8171,19 +8626,21 @@
         ? hostRow.capabilities.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
       const pathParts = [
-        String(summary.astrbot_root || "").trim() ? `root=${String(summary.astrbot_root || "").trim()}` : "",
-        String(summary.astrbot_data_dir || "").trim() ? `data=${String(summary.astrbot_data_dir || "").trim()}` : "",
-        String(summary.skills_root || "").trim() ? `skills=${String(summary.skills_root || "").trim()}` : "",
+        String(effectiveSummary.astrbot_root || "").trim() ? `root=${String(effectiveSummary.astrbot_root || "").trim()}` : "",
+        String(effectiveSummary.astrbot_data_dir || "").trim() ? `data=${String(effectiveSummary.astrbot_data_dir || "").trim()}` : "",
+        String(effectiveSummary.skills_root || "").trim() ? `skills=${String(effectiveSummary.skills_root || "").trim()}` : "",
       ].filter(Boolean);
       const stateParts = [
-        `local=${Number(summary.local_skill_total) || 0}`,
-        `active=${Number(summary.active_skill_total) || 0}`,
-        `synced=${Number(summary.synced_total) || 0}`,
-        `sandbox_only=${Number(summary.sandbox_only_total) || 0}`,
-        `neo=${Number(summary.neo_managed_total) || 0}`,
-        `drift=${Number(summary.drifted_total) || 0}`,
+        `local=${Number(effectiveSummary.local_skill_total) || 0}`,
+        `active=${Number(effectiveSummary.active_skill_total) || 0}`,
+        `synced=${Number(effectiveSummary.synced_total) || 0}`,
+        `sandbox_only=${Number(effectiveSummary.sandbox_only_total) || 0}`,
+        `neo=${Number(effectiveSummary.neo_managed_total) || 0}`,
+        `drift=${Number(effectiveSummary.drifted_total) || 0}`,
       ];
       const lines = [
+        `${t("inventory_scope_label")}: ${inventoryScopeLabel(selectedScope)}`,
+        `${t("inventory_astrbot_available_scopes")}: ${availableScopeLabels}`,
         `${t("inventory_meta_runtime_backend")}: ${backend || "-"}`,
         `${t("inventory_meta_host_capabilities")}: ${capabilities.length ? capabilities.join(", ") : "-"}`,
         `${t("inventory_meta_runtime_state")}: ${stateParts.join(" | ")}`,
@@ -8222,7 +8679,11 @@
       }) || {};
       const hostId = selectedAstrbotHostIdFromHost(selectedHost, selectedSoftwareId);
       if (!hostId) return null;
-      return { hostId, host: selectedHost };
+      return {
+        hostId,
+        host: selectedHost,
+        scope: normalizeInventoryScope(state.inventorySelectedScope),
+      };
     }
 
     function inventoryDoctorSummaryText(doctor) {
@@ -10225,6 +10686,7 @@
       if (!context || !context.hostId || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox) {
         return null;
       }
+      const scopeLabel = inventoryScopeLabel(context.scope);
       const inputEl = $("inventoryAstrbotSkillNameInput");
       const skillName = String(inputEl && inputEl.value || "").trim();
       if (!skillName) {
@@ -10239,6 +10701,7 @@
           body: JSON.stringify({
             skill_name: skillName,
             active: Boolean(active),
+            scope: context.scope,
           }),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
@@ -10246,6 +10709,7 @@
         state.inventoryAstrbotLastActionNote = t("inventory_astrbot_toggle_success", {
           skill: skillName,
           active: active ? t("yes") : t("no"),
+          scope: scopeLabel,
         });
         renderInventoryPanel();
         await refreshSelectedInventorySourceDetail();
@@ -10262,6 +10726,7 @@
       if (!context || !context.hostId || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotSyncingSandbox) {
         return null;
       }
+      const scopeLabel = inventoryScopeLabel(context.scope);
       const inputEl = $("inventoryAstrbotSkillNameInput");
       const skillName = String(inputEl && inputEl.value || "").trim();
       if (!skillName) {
@@ -10269,7 +10734,7 @@
         return null;
       }
       const confirmed = window.confirm(
-        t("inventory_astrbot_delete_confirm", { skill: skillName }),
+        t("inventory_astrbot_delete_confirm", { skill: skillName, scope: scopeLabel }),
       );
       if (!confirmed) {
         return null;
@@ -10281,12 +10746,14 @@
           method: "POST",
           body: JSON.stringify({
             skill_name: skillName,
+            scope: context.scope,
           }),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
         state.inventorySourceDetail = null;
         state.inventoryAstrbotLastActionNote = t("inventory_astrbot_delete_success", {
           skill: skillName,
+          scope: scopeLabel,
         });
         renderInventoryPanel();
         await refreshSelectedInventorySourceDetail();
@@ -10303,16 +10770,19 @@
       if (!context || !context.hostId || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill) {
         return null;
       }
+      const scopeLabel = inventoryScopeLabel(context.scope);
       state.inventoryAstrbotSyncingSandbox = true;
       renderInventoryPanel();
       try {
         const result = await api(`/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/sandbox/sync`, {
           method: "POST",
-          body: JSON.stringify({}),
+          body: JSON.stringify({ scope: context.scope }),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
         state.inventorySourceDetail = null;
-        state.inventoryAstrbotLastActionNote = t("inventory_astrbot_sync_success");
+        state.inventoryAstrbotLastActionNote = t("inventory_astrbot_sync_success", {
+          scope: scopeLabel,
+        });
         renderInventoryPanel();
         await refreshSelectedInventorySourceDetail();
         await refreshSelectedDeployTargetDetail();
@@ -11949,12 +12419,27 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const supportedSourceKinds = Array.isArray(selectedHost.supports_source_kinds)
         ? selectedHost.supports_source_kinds.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
+      const selectedHostRuntimeSummary = selectedHost.runtime_state_summary && typeof selectedHost.runtime_state_summary === "object"
+        ? selectedHost.runtime_state_summary
+        : {};
+      const astrbotScopeSummaries = selectedHostRuntimeSummary.scope_summaries && typeof selectedHostRuntimeSummary.scope_summaries === "object"
+        ? selectedHostRuntimeSummary.scope_summaries
+        : {};
+      const astrbotAvailableScopes = Array.isArray(selectedHost.available_scopes)
+        ? selectedHost.available_scopes.map((item) => normalizeInventoryScope(item)).filter(Boolean)
+        : Object.keys(astrbotScopeSummaries).map((item) => normalizeInventoryScope(item)).filter(Boolean);
+      const astrbotAvailableScopeLabels = astrbotAvailableScopes.length
+        ? astrbotAvailableScopes.map((item) => inventoryScopeLabel(item)).join(" / ")
+        : "-";
       const astrbotRuntimeText = inventoryAstrbotRuntimeSummary(selectedHost, doctor);
       const selectedAstrbotHostId = selectedAstrbotHostIdFromHost(selectedHost, selectedSoftwareId);
       const astrbotSkillName = String(astrbotSkillNameInputEl && astrbotSkillNameInputEl.value || "").trim();
       const astrbotActionBusy = state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox;
-      const astrbotSkillActionEnabled = Boolean(selectedAstrbotHostId) && Boolean(astrbotSkillName) && !astrbotActionBusy;
-      const astrbotSandboxSyncEnabled = Boolean(selectedAstrbotHostId) && !astrbotActionBusy;
+      const astrbotScopeAvailable = !selectedAstrbotHostId
+        ? false
+        : !astrbotAvailableScopes.length || astrbotAvailableScopes.includes(bindingScope);
+      const astrbotSkillActionEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && Boolean(astrbotSkillName) && !astrbotActionBusy;
+      const astrbotSandboxSyncEnabled = Boolean(selectedAstrbotHostId) && astrbotScopeAvailable && !astrbotActionBusy;
       const softMetaLines = [
         `${t("inventory_meta_kind")}: ${selectedSoftware.software_kind || "-"}`,
         `${t("inventory_meta_provider")}: ${selectedSoftware.provider_key || "-"}`,
@@ -11976,6 +12461,11 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       if (utilityAstrbotSummaryEl) {
         utilityAstrbotSummaryEl.textContent = astrbotRuntimeSummaryText;
       }
+      if (astrbotSkillNameInputEl) {
+        astrbotSkillNameInputEl.placeholder = t("inventory_astrbot_skill_name_placeholder", {
+          scope: inventoryScopeLabel(bindingScope),
+        });
+      }
       if (astrbotEnableBtn) astrbotEnableBtn.disabled = !astrbotSkillActionEnabled;
       if (astrbotDisableBtn) astrbotDisableBtn.disabled = !astrbotSkillActionEnabled;
       if (astrbotDeleteBtn) astrbotDeleteBtn.disabled = !astrbotSkillActionEnabled;
@@ -11987,9 +12477,18 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       }
       if (astrbotActionNoteEl) {
         const lastActionNote = String(state.inventoryAstrbotLastActionNote || "").trim();
-        astrbotActionNoteEl.textContent = selectedAstrbotHostId
-          ? (lastActionNote || t("inventory_astrbot_action_idle"))
-          : t("inventory_astrbot_action_unavailable");
+        if (!selectedAstrbotHostId) {
+          astrbotActionNoteEl.textContent = t("inventory_astrbot_action_unavailable");
+        } else if (!astrbotScopeAvailable) {
+          astrbotActionNoteEl.textContent = t("inventory_astrbot_scope_unavailable", {
+            scope: inventoryScopeLabel(bindingScope),
+            available_scopes: astrbotAvailableScopeLabels,
+          });
+        } else {
+          astrbotActionNoteEl.textContent = lastActionNote || t("inventory_astrbot_action_idle", {
+            scope: inventoryScopeLabel(bindingScope),
+          });
+        }
       }
 
       if (selectedDeployRow) {
@@ -13284,17 +13783,191 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       });
     }
 
+    function normalizeGuideDocFilter(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (normalized === "zh" || normalized === "en" || normalized === "all" || normalized === "auto") {
+        return normalized;
+      }
+      return "auto";
+    }
+
+    function effectiveGuideDocLangFilter() {
+      if (state.guideDocFilter === "auto") {
+        return state.lang === "en" ? "en" : "zh";
+      }
+      return normalizeGuideDocFilter(state.guideDocFilter);
+    }
+
+    function guideDocCategoryLabel(category) {
+      const normalized = String(category || "").trim().toLowerCase();
+      if (normalized === "root") return t("guide_doc_category_root");
+      if (normalized === "guide") return t("guide_doc_category_guide");
+      if (normalized === "plan") return t("guide_doc_category_plan");
+      if (normalized === "brainstorm") return t("guide_doc_category_brainstorm");
+      if (normalized === "release") return t("guide_doc_category_release");
+      return t("guide_doc_category_other");
+    }
+
+    function guideDocLangLabel(lang) {
+      const normalized = String(lang || "").trim().toLowerCase();
+      if (normalized === "zh") return t("guide_doc_lang_zh");
+      if (normalized === "en") return t("guide_doc_lang_en");
+      return t("guide_doc_lang_multi");
+    }
+
+    function guideDocMetaText(item) {
+      const doc = item && typeof item === "object" ? item : {};
+      return t("guide_doc_meta", {
+        category: guideDocCategoryLabel(doc.category),
+        lang: guideDocLangLabel(doc.lang),
+        updated_at: String(doc.updated_at || "-"),
+      });
+    }
+
+    function setGuideDocStatus(message = "", level = "info") {
+      const el = $("guideDocStatus");
+      if (!el) return;
+      el.textContent = String(message || "");
+      if (level === "error") {
+        el.style.color = "var(--danger)";
+      } else if (level === "success") {
+        el.style.color = "var(--accent-2)";
+      } else {
+        el.style.color = "var(--muted)";
+      }
+    }
+
+    function syncGuideDocFilterControls() {
+      $("guideDocLanguageSelect").value = normalizeGuideDocFilter(state.guideDocFilter);
+    }
+
+    function renderGuideDocList() {
+      const docs = Array.isArray(state.guideDocsIndex) ? state.guideDocsIndex : [];
+      const listEl = $("guideDocList");
+      if (state.guideDocsLoading) {
+        listEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("guide_docs_loading"))}</div>`;
+        return;
+      }
+      if (!docs.length) {
+        listEl.innerHTML = `<div class="debug-empty">${escapeHtml(t("guide_docs_empty"))}</div>`;
+        return;
+      }
+      listEl.innerHTML = docs.map((item) => {
+        const path = String(item.path || "").trim();
+        const title = String(item.title || path || "").trim();
+        const active = path && path === String(state.guideDocSelectedPath || "").trim();
+        return `
+          <button class="guide-doc-item${active ? " active" : ""}" type="button" data-guide-doc-path="${escapeHtml(path)}">
+            <span class="guide-doc-item-title">${escapeHtml(title || path)}</span>
+            <span class="guide-doc-item-meta">${escapeHtml(guideDocMetaText(item))}</span>
+          </button>
+        `;
+      }).join("");
+    }
+
+    function renderGuideDocContentPlaceholder() {
+      $("guideDocActiveTitle").textContent = t("guide_doc_content_title");
+      $("guideDocActiveMeta").textContent = t("guide_doc_content_hint");
+      $("guideDocContent").textContent = "";
+      state.guideDocContentMeta = null;
+    }
+
+    function renderGuideDocContent(payload) {
+      const doc = payload && typeof payload === "object" ? payload : {};
+      const title = String(doc.title || doc.path || "").trim() || t("guide_doc_content_title");
+      $("guideDocActiveTitle").textContent = title;
+      $("guideDocActiveMeta").textContent = guideDocMetaText(doc);
+      $("guideDocContent").textContent = String(doc.content || "");
+      state.guideDocContentMeta = {
+        category: String(doc.category || ""),
+        lang: String(doc.lang || ""),
+        updated_at: String(doc.updated_at || ""),
+      };
+    }
+
+    async function loadGuideDocContent(path, options = {}) {
+      const docPath = String(path || "").trim();
+      if (!docPath) {
+        renderGuideDocContentPlaceholder();
+        return;
+      }
+      if (!options.silentStatus) {
+        setGuideDocStatus(t("guide_doc_content_loading"));
+      }
+      state.guideDocSelectedPath = docPath;
+      renderGuideDocList();
+      try {
+        const payload = await api(`/api/docs/content?path=${encodeURIComponent(docPath)}`);
+        renderGuideDocContent(payload);
+        if (!options.silentStatus) {
+          setGuideDocStatus(t("guide_docs_ready", { count: (state.guideDocsIndex || []).length }), "success");
+        }
+      } catch (err) {
+        setGuideDocStatus(t("guide_doc_content_failed", { msg: err.message }), "error");
+        $("guideDocActiveTitle").textContent = t("guide_doc_content_title");
+        $("guideDocActiveMeta").textContent = t("guide_doc_content_failed", { msg: err.message });
+        $("guideDocContent").textContent = "";
+      }
+    }
+
+    async function loadGuideDocsIndex(options = {}) {
+      const preserveSelection = options.preserveSelection !== false;
+      if (state.guideDocsLoading) return;
+      state.guideDocsLoading = true;
+      renderGuideDocList();
+      setGuideDocStatus(t("guide_docs_loading"));
+      try {
+        const langFilter = effectiveGuideDocLangFilter();
+        const payload = await api(
+          `/api/docs/index?lang=${encodeURIComponent(langFilter)}&limit=300`,
+        );
+        state.guideDocsIndex = Array.isArray(payload.items) ? payload.items : [];
+        const availablePaths = state.guideDocsIndex
+          .map((item) => String(item.path || "").trim())
+          .filter(Boolean);
+        const currentPath = String(state.guideDocSelectedPath || "").trim();
+        const nextPath = preserveSelection && availablePaths.includes(currentPath)
+          ? currentPath
+          : (availablePaths[0] || "");
+        state.guideDocSelectedPath = nextPath;
+        state.guideDocsLoading = false;
+        renderGuideDocList();
+        setGuideDocStatus(t("guide_docs_ready", { count: state.guideDocsIndex.length }), "success");
+        if (nextPath) {
+          await loadGuideDocContent(nextPath, { silentStatus: true });
+        } else {
+          renderGuideDocContentPlaceholder();
+        }
+      } catch (err) {
+        state.guideDocsLoading = false;
+        state.guideDocsIndex = [];
+        renderGuideDocList();
+        renderGuideDocContentPlaceholder();
+        setGuideDocStatus(t("guide_docs_load_failed", { msg: err.message }), "error");
+      }
+    }
+
     function syncGuideDocLinks() {
       const isEn = state.lang === "en";
-      const base = "https://github.com/Jacobinwwey/astrbot_plugin_onesync/blob/main";
-      $("guideReadmeLink").setAttribute("href", isEn ? `${base}/README_en.md` : `${base}/README.md`);
+      const rawDocUrl = (path) => {
+        const params = new URLSearchParams();
+        params.set("path", path);
+        if (state.token) {
+          params.set("token", state.token);
+        }
+        return `/api/docs/raw?${params.toString()}`;
+      };
+      $("guideReadmeLink").setAttribute(
+        "href",
+        rawDocUrl(isEn ? "README_en.md" : "README.md"),
+      );
       $("guideInstallDocLink").setAttribute(
         "href",
-        isEn ? `${base}/docs/INSTALL_AND_CONFIG_en.md` : `${base}/docs/INSTALL_AND_CONFIG_zh.md`,
+        rawDocUrl(isEn ? "docs/INSTALL_AND_CONFIG_en.md" : "docs/INSTALL_AND_CONFIG_zh.md"),
       );
       $("guideOpsDocLink").setAttribute(
         "href",
-        isEn ? `${base}/docs/OPERATIONS_AND_SYNC_en.md` : `${base}/docs/OPERATIONS_AND_SYNC_zh.md`,
+        rawDocUrl(isEn ? "docs/OPERATIONS_AND_SYNC_en.md" : "docs/OPERATIONS_AND_SYNC_zh.md"),
       );
     }
 
@@ -13434,8 +14107,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
     function openGuideModal(tab = "user") {
       state.guideTab = tab || state.guideTab;
       syncGuideTabs();
+      syncGuideDocFilterControls();
       syncGuideDocLinks();
       $("guideModal").classList.remove("hidden");
+      void loadGuideDocsIndex({ preserveSelection: true });
     }
 
     function closeGuideModal() {
@@ -13654,6 +14329,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const targets = Array.isArray(draft.human_targets) ? draft.human_targets : [];
       if (!targets.length) {
         listEl.innerHTML = `<div class="debug-empty">${t("cfg_no_targets")}</div>`;
+        syncConfigOverview();
         return;
       }
       listEl.innerHTML = targets.map((rawTarget, index) => {
@@ -13693,6 +14369,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           </div>
         `;
       }).join("");
+      syncConfigOverview();
     }
 
     function updateTargetFieldFromEvent(target, field, value) {
@@ -13731,6 +14408,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       if (state.configDraft) {
         state.configDraft.target_config_mode = mode;
       }
+      syncConfigOverview();
     }
 
     function syncWebPasswordControls() {
@@ -13758,6 +14436,71 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           hintEl.textContent = t("cfg_web_password_hint_set");
         }
       }
+      syncConfigOverview();
+    }
+
+    function syncConfigOverview() {
+      const runtimeEl = $("cfgRuntimeSummaryValue");
+      const webEl = $("cfgWebSummaryValue");
+      const targetsEl = $("cfgTargetsSummaryValue");
+      if (!runtimeEl || !webEl || !targetsEl) {
+        return;
+      }
+
+      const draft = state.configDraft && typeof state.configDraft === "object"
+        ? state.configDraft
+        : {};
+      const webDraft = draft.web_admin && typeof draft.web_admin === "object"
+        ? draft.web_admin
+        : {};
+      const mode = String($("cfgTargetMode")?.value || state.configDraft?.target_config_mode || "human").trim().toLowerCase();
+      const modeLabel = mode === "developer"
+        ? t("cfg_runtime_mode_developer")
+        : t("cfg_runtime_mode_human");
+      const enabledValue = String($("cfgEnabled")?.value || "").trim();
+      const enabledLabel = parseBoolValue(enabledValue || draft.enabled, true)
+        ? t("cfg_runtime_enabled_on")
+        : t("cfg_runtime_enabled_off");
+      const pollText = String($("cfgPollInterval")?.value || "").trim();
+      const pollValue = pollText
+        ? toNumber(pollText, 30, 1)
+        : toNumber(draft.poll_interval_minutes, 30, 1);
+      runtimeEl.textContent = t("cfg_runtime_summary_value", {
+        mode: modeLabel,
+        enabled: enabledLabel,
+        poll: pollValue,
+      });
+
+      const webEnabledText = String($("cfgWebEnabled")?.value || "").trim();
+      const webEnabled = parseBoolValue(
+        webEnabledText || webDraft.enabled,
+        false,
+      );
+      const webHost = String($("cfgWebHost")?.value || webDraft.host || "127.0.0.1").trim() || "127.0.0.1";
+      const webPortText = String($("cfgWebPort")?.value || "").trim();
+      const webPort = webPortText
+        ? toNumber(webPortText, 8099, 1)
+        : toNumber(webDraft.port, 8099, 1);
+      const hasConfiguredPassword = Boolean(state.configMeta?.web_admin_password_configured);
+      const willClearPassword = Boolean($("cfgWebPasswordClear")?.checked);
+      const hasNewPassword = Boolean(String($("cfgWebPassword")?.value || "").trim());
+      const accessLabel = !webEnabled
+        ? t("cfg_web_access_disabled")
+        : (hasNewPassword || (hasConfiguredPassword && !willClearPassword))
+          ? t("cfg_web_access_protected")
+          : t("cfg_web_access_open");
+      webEl.textContent = t("cfg_web_summary_value", {
+        host: webHost,
+        port: webPort,
+        access: accessLabel,
+      });
+
+      const targetCount = Array.isArray(draft.human_targets)
+        ? draft.human_targets.length
+        : 0;
+      targetsEl.textContent = mode === "developer"
+        ? t("cfg_targets_summary_value_developer")
+        : t("cfg_targets_summary_value_human", { count: targetCount });
     }
 
     function fillConfigForm(config) {
@@ -14733,6 +15476,26 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         });
       });
 
+      $("guideDocsRefreshBtn").addEventListener("click", async () => {
+        await loadGuideDocsIndex({ preserveSelection: true });
+      });
+
+      $("guideDocLanguageSelect").addEventListener("change", async (evt) => {
+        state.guideDocFilter = normalizeGuideDocFilter(evt.target.value);
+        persistPreferences();
+        await loadGuideDocsIndex({ preserveSelection: false });
+      });
+
+      $("guideDocList").addEventListener("click", async (evt) => {
+        const itemEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-guide-doc-path]")
+          : null;
+        if (!itemEl) return;
+        const docPath = String(itemEl.getAttribute("data-guide-doc-path") || "").trim();
+        if (!docPath || docPath === String(state.guideDocSelectedPath || "").trim()) return;
+        await loadGuideDocContent(docPath);
+      });
+
       $("cfgCloseBtn").addEventListener("click", () => {
         closeConfigModal();
       });
@@ -14765,6 +15528,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           $("cfgWebPassword").value = "";
         }
         syncWebPasswordControls();
+      });
+
+      $("configModal").addEventListener("input", () => {
+        syncConfigOverview();
+      });
+
+      $("configModal").addEventListener("change", () => {
+        syncConfigOverview();
       });
 
       $("cfgAddTargetBtn").addEventListener("click", () => {

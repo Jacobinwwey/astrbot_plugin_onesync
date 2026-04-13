@@ -107,7 +107,16 @@ status: active
   - full replace 会清理 omitted manifest targets，并直接回写兼容投影
 - deploy target 相关 mutation 已复用同一套 manifest-first 投影辅助逻辑，authority boundary 从“inventory 回流”进一步收口到 persisted state
 - install-unit / collection 的命令更新成功后，会立即回写 freshness anchor，修复成功后仍显示 `aging` 的假阳性
-- 当前完整回归基线：`pytest -q -> 191 passed`
+- `build_skills_overview()` 新增 manifest authority 投影层：
+  - `binding_rows / binding_map / binding_map_by_scope / compatibility` 由 manifest + registry + host/source 关系主导生成，不再直接回传 inventory 快照字段
+  - counts 新增 `bindings_total / bindings_valid / bindings_invalid` 的 authority 侧统计，避免 inventory 旧值污染诊断
+- `build_skills_manifest()` 收口优先级：
+  - source 的显式兼容约束（`compatible_software_ids / compatible_software_families`）优先于 inventory compatibility
+  - target 选择回退链升级为 `saved_manifest -> saved_lock -> inventory_binding_projection`
+- manifest authority 投影进一步收紧：
+  - 无显式兼容约束的 source，优先使用 `selected_source_ids` 作为宿主提示，避免 `available_source_ids` 扩散导致的跨宿主误判
+  - 移除 inventory-only compatibility key 的回流，overview compatibility 不再携带无 host/target 依据的残留宿主键
+- 当前完整回归基线：`pytest -q -> 204 passed`
 
 ## 阶段 4：更广宿主生态
 - 扩更多 CLI / GUI / claw 家族

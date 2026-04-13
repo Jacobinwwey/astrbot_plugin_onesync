@@ -274,6 +274,13 @@ def _normalize_inventory_id(value: Any, default: str = "") -> str:
     return text or default
 
 
+def _normalize_astrbot_scope(value: Any, default: str = "global") -> str:
+    normalized = _normalize_inventory_id(value, default=default)
+    if normalized in {"global", "workspace"}:
+        return normalized
+    return default
+
+
 def _normalize_update_manager(value: Any) -> str:
     manager = str(value or "").strip().lower()
     if manager in {"pnpm dlx"}:
@@ -3079,7 +3086,11 @@ class OneSyncPlugin(Star):
             "inventory": inventory_snapshot,
         }
 
-    def _resolve_astrbot_host_action_context(self, host_id: str) -> dict[str, Any]:
+    def _resolve_astrbot_host_action_context(
+        self,
+        host_id: str,
+        scope: Any = None,
+    ) -> dict[str, Any]:
         normalized_host_id = str(host_id or "").strip()
         if not normalized_host_id:
             return {"ok": False, "message": "host_id is required"}
@@ -3115,10 +3126,32 @@ class OneSyncPlugin(Star):
                 "ok": False,
                 "message": f"host is not astrbot-capable: {normalized_host_id}",
             }
+        requested_scope = _normalize_astrbot_scope(
+            scope,
+            default=_normalize_astrbot_scope(layout.get("selected_scope"), default="global"),
+        )
+        scoped_layouts = (
+            layout.get("scoped_layouts", {})
+            if isinstance(layout.get("scoped_layouts", {}), dict)
+            else {}
+        )
+        action_layout = (
+            scoped_layouts.get(requested_scope, {})
+            if isinstance(scoped_layouts.get(requested_scope, {}), dict)
+            else {}
+        )
         if not _to_bool(layout.get("state_available"), False):
             return {
                 "ok": False,
                 "message": f"astrbot skills root unavailable for host: {normalized_host_id}",
+            }
+        if scoped_layouts and not _to_bool(action_layout.get("state_available"), False):
+            return {
+                "ok": False,
+                "message": (
+                    "astrbot skills root unavailable for "
+                    f"host={normalized_host_id} scope={requested_scope}"
+                ),
             }
 
         state_by_host = (
@@ -3134,8 +3167,17 @@ class OneSyncPlugin(Star):
         return {
             "ok": True,
             "host_id": normalized_host_id,
+            "scope": requested_scope,
             "host": host,
             "layout": layout,
+            "action_layout": {
+                **layout,
+                **action_layout,
+                "scope": requested_scope,
+            } if action_layout else {
+                **layout,
+                "scope": requested_scope,
+            },
             "runtime_state": runtime_state,
             "snapshot": snapshot,
         }
@@ -3158,11 +3200,14 @@ class OneSyncPlugin(Star):
             "runtime_state": runtime_state,
             "layout": {
                 "host_id": str(layout.get("host_id") or "").strip(),
+                "selected_scope": str(layout.get("selected_scope") or "").strip(),
+                "available_scopes": list(layout.get("available_scopes", [])) if isinstance(layout.get("available_scopes", []), list) else [],
                 "skills_root": str(layout.get("skills_root") or "").strip(),
                 "astrbot_data_dir": str(layout.get("astrbot_data_dir") or "").strip(),
                 "skills_config_path": str(layout.get("skills_config_path") or "").strip(),
                 "sandbox_cache_path": str(layout.get("sandbox_cache_path") or "").strip(),
                 "neo_map_path": str(layout.get("neo_map_path") or "").strip(),
+                "scoped_layouts": layout.get("scoped_layouts", {}) if isinstance(layout.get("scoped_layouts", {}), dict) else {},
             },
             "warnings": snapshot.get("warnings", []),
         }
@@ -3216,16 +3261,18 @@ class OneSyncPlugin(Star):
         }
 
     def webui_set_astrbot_skill_active(self, host_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        context = self._resolve_astrbot_host_action_context(host_id)
+        action_payload = payload if isinstance(payload, dict) else {}
+        requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
+        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
         if not context.get("ok"):
             return context
-        action_payload = payload if isinstance(payload, dict) else {}
         skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
         active = _to_bool(action_payload.get("active"), True)
         result = set_astrbot_skill_active(
-            context.get("layout", {}),
+            context.get("action_layout", {}),
             skill_name=skill_name,
             active=active,
+            scope=requested_scope,
         )
         if not result.get("ok"):
             return {
@@ -3245,6 +3292,7 @@ class OneSyncPlugin(Star):
                 "skill_name": str(result.get("skill_name") or "").strip(),
                 "active": _to_bool(result.get("active"), active),
                 "changed": _to_bool(result.get("changed"), False),
+                "scope": str(result.get("scope") or requested_scope),
             },
         )
         self._push_debug_log(
@@ -3252,6 +3300,7 @@ class OneSyncPlugin(Star):
             (
                 "astrbot skill toggled: "
                 f"host={normalized_host_id} "
+                f"scope={str(result.get('scope') or requested_scope)} "
                 f"skill={str(result.get('skill_name') or '').strip()} "
                 f"active={_to_bool(result.get('active'), active)}"
             ),
@@ -3265,12 +3314,17 @@ class OneSyncPlugin(Star):
         )
 
     def webui_delete_astrbot_skill(self, host_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        context = self._resolve_astrbot_host_action_context(host_id)
+        action_payload = payload if isinstance(payload, dict) else {}
+        requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
+        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
         if not context.get("ok"):
             return context
-        action_payload = payload if isinstance(payload, dict) else {}
         skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
-        result = delete_astrbot_local_skill(context.get("layout", {}), skill_name=skill_name)
+        result = delete_astrbot_local_skill(
+            context.get("action_layout", {}),
+            skill_name=skill_name,
+            scope=requested_scope,
+        )
         if not result.get("ok"):
             return {
                 "ok": False,
@@ -3290,6 +3344,7 @@ class OneSyncPlugin(Star):
                 "deleted_local_dir": _to_bool(result.get("deleted_local_dir"), False),
                 "removed_from_config": _to_bool(result.get("removed_from_config"), False),
                 "removed_from_sandbox_cache": _to_bool(result.get("removed_from_sandbox_cache"), False),
+                "scope": str(result.get("scope") or requested_scope),
             },
         )
         self._push_debug_log(
@@ -3297,6 +3352,7 @@ class OneSyncPlugin(Star):
             (
                 "astrbot skill deleted: "
                 f"host={normalized_host_id} "
+                f"scope={str(result.get('scope') or requested_scope)} "
                 f"skill={str(result.get('skill_name') or '').strip()}"
             ),
             source="webui",
@@ -3313,8 +3369,9 @@ class OneSyncPlugin(Star):
         host_id: str,
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        _ = payload if isinstance(payload, dict) else {}
-        context = self._resolve_astrbot_host_action_context(host_id)
+        action_payload = payload if isinstance(payload, dict) else {}
+        requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
+        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
         if not context.get("ok"):
             return context
 
@@ -3328,18 +3385,18 @@ class OneSyncPlugin(Star):
         self._append_skills_audit_event(
             "astrbot_sandbox_sync",
             source_id=normalized_host_id,
-            payload={"ok": True},
+            payload={"ok": True, "scope": requested_scope},
         )
         self._push_debug_log(
             "info",
-            f"astrbot sandbox sync completed: host={normalized_host_id}",
+            f"astrbot sandbox sync completed: host={normalized_host_id} scope={requested_scope}",
             source="webui",
         )
         return self._build_astrbot_host_mutation_response(
             normalized_host_id,
             inventory_snapshot=inventory_snapshot,
             skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
-            extra={"action": "sandbox_sync", "result": sync_result},
+            extra={"action": "sandbox_sync", "result": sync_result, "scope": requested_scope},
         )
 
     def webui_get_skill_sources_payload(self) -> dict[str, Any]:

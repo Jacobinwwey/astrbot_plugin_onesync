@@ -254,13 +254,14 @@ def _normalize_astrneo_source_id(host_id: Any, skill_key: Any) -> str:
 
 
 def build_astrbot_neo_source_rows(astrbot_state_rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+    rows_by_source_id: dict[str, dict[str, Any]] = {}
     for item in (astrbot_state_rows or []):
         if not isinstance(item, dict):
             continue
         neo_skill_key = str(item.get("neo_skill_key") or "").strip()
         host_id = str(item.get("host_id") or "").strip()
         skill_name = str(item.get("skill_name") or "").strip()
+        scope = str(item.get("scope") or "").strip().lower() or "global"
         source_id = _normalize_astrneo_source_id(host_id, neo_skill_key)
         if not source_id:
             continue
@@ -270,7 +271,7 @@ def build_astrbot_neo_source_rows(astrbot_state_rows: list[dict[str, Any]] | Non
             "display_name": skill_name or neo_skill_key,
             "source_kind": "astrneo_release",
             "provider_key": "astrbot",
-            "source_scope": "global",
+            "source_scope": scope,
             "managed_by": "astrneo",
             "update_policy": "manual",
             "locator": f"astrneo:{neo_skill_key}",
@@ -297,8 +298,20 @@ def build_astrbot_neo_source_rows(astrbot_state_rows: list[dict[str, Any]] | Non
             "drift_reasons": _to_str_list(item.get("drift_reasons", [])),
             "active": _to_bool(item.get("active"), True),
         }
-        rows.append(source_row)
+        existing = rows_by_source_id.get(source_id)
+        if existing is None:
+            source_row["astrneo_scopes"] = [scope]
+            rows_by_source_id[source_id] = source_row
+            continue
+        existing_scopes = _to_str_list(existing.get("astrneo_scopes", []))
+        if scope and scope not in existing_scopes:
+            existing_scopes.append(scope)
+        existing["astrneo_scopes"] = existing_scopes
+        if local_exists and not _to_bool(existing.get("source_exists"), False):
+            source_row["astrneo_scopes"] = existing_scopes
+            rows_by_source_id[source_id] = source_row
 
+    rows = list(rows_by_source_id.values())
     rows.sort(
         key=lambda item: (
             str(item.get("display_name") or "").lower(),
@@ -739,6 +752,180 @@ def project_inventory_snapshot_bindings_from_manifest(
     return snapshot
 
 
+def _project_binding_state_from_manifest(
+    manifest: dict[str, Any],
+    *,
+    source_rows: list[dict[str, Any]],
+    software_hosts: list[dict[str, Any]],
+    inventory_compatibility: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    source_index = {
+        str(item.get("source_id") or item.get("id") or "").strip(): copy.deepcopy(item)
+        for item in source_rows
+        if isinstance(item, dict) and str(item.get("source_id") or item.get("id") or "").strip()
+    }
+    host_index = {
+        str(item.get("host_id") or item.get("id") or "").strip(): copy.deepcopy(item)
+        for item in software_hosts
+        if isinstance(item, dict) and str(item.get("host_id") or item.get("id") or "").strip()
+    }
+    software_ids = _dedupe_keep_order(
+        list(host_index.keys())
+        + [
+            str(item.get("software_id") or "").strip()
+            for item in manifest.get("deploy_targets", [])
+            if isinstance(item, dict) and str(item.get("software_id") or "").strip()
+        ],
+    )
+    for software_id in software_ids:
+        if software_id not in host_index:
+            host_index[software_id] = {
+                "id": software_id,
+                "host_id": software_id,
+                "software_family": software_id,
+                "family": software_id,
+            }
+
+    manifest_selected_hosts_by_source: dict[str, set[str]] = {}
+    manifest_available_hosts_by_source: dict[str, set[str]] = {}
+    for target in manifest.get("deploy_targets", []):
+        if not isinstance(target, dict):
+            continue
+        software_id = str(target.get("software_id") or "").strip()
+        if not software_id:
+            continue
+        for source_id in _to_str_list(target.get("selected_source_ids", [])):
+            if not source_id:
+                continue
+            manifest_selected_hosts_by_source.setdefault(source_id, set()).add(software_id)
+        for source_id in _to_str_list(target.get("available_source_ids", [])):
+            if not source_id:
+                continue
+            manifest_available_hosts_by_source.setdefault(source_id, set()).add(software_id)
+
+    inventory_compatibility_map: dict[str, list[str]] = {}
+    inventory_hint_hosts_by_source: dict[str, set[str]] = {}
+    compatibility_raw = inventory_compatibility if isinstance(inventory_compatibility, dict) else {}
+    for software_id, source_ids in compatibility_raw.items():
+        normalized_software_id = str(software_id or "").strip()
+        if not normalized_software_id:
+            continue
+        normalized_source_ids = _dedupe_keep_order(_to_str_list(source_ids))
+        inventory_compatibility_map[normalized_software_id] = normalized_source_ids
+        for source_id in normalized_source_ids:
+            inventory_hint_hosts_by_source.setdefault(source_id, set()).add(normalized_software_id)
+
+    compatibility: dict[str, list[str]] = {}
+    for software_id in software_ids:
+        host = host_index.get(software_id, {"host_id": software_id, "id": software_id})
+        compatible_source_ids: list[str] = []
+        for source_id, source in source_index.items():
+            explicit_constraints = bool(
+                _to_str_list(source.get("compatible_software_ids", []))
+                or _to_str_list(source.get("compatible_software_families", [])),
+            )
+            if explicit_constraints:
+                if _source_matches_host(source, host, None):
+                    compatible_source_ids.append(source_id)
+                continue
+
+            selected_hint_hosts = manifest_selected_hosts_by_source.get(source_id, set())
+            if selected_hint_hosts:
+                if software_id in selected_hint_hosts:
+                    compatible_source_ids.append(source_id)
+                continue
+
+            available_hint_hosts = manifest_available_hosts_by_source.get(source_id, set())
+            if available_hint_hosts:
+                if software_id in available_hint_hosts:
+                    compatible_source_ids.append(source_id)
+                continue
+
+            inventory_hint_hosts = inventory_hint_hosts_by_source.get(source_id, set())
+            if inventory_hint_hosts:
+                if software_id in inventory_hint_hosts:
+                    compatible_source_ids.append(source_id)
+                continue
+
+            # No authority hints: keep permissive fallback for generic/manual sources.
+            compatible_source_ids.append(source_id)
+        compatibility[software_id] = _dedupe_keep_order(compatible_source_ids)
+
+    binding_rows: list[dict[str, Any]] = []
+    binding_map: dict[str, list[str]] = {software_id: [] for software_id in software_ids}
+    binding_map_by_scope: dict[str, dict[str, list[str]]] = {
+        scope: {software_id: [] for software_id in software_ids}
+        for scope in VALID_DEPLOY_SCOPES
+    }
+    valid_total = 0
+    invalid_total = 0
+    warnings: list[str] = []
+    compatible_id_sets = {
+        software_id: set(_to_str_list(source_ids))
+        for software_id, source_ids in compatibility.items()
+    }
+
+    for binding in manifest_to_binding_rows(manifest if isinstance(manifest, dict) else {}):
+        software_id = str(binding.get("software_id") or "").strip()
+        source_id = str(binding.get("skill_id") or "").strip()
+        scope = _normalize_scope(binding.get("scope", "global"))
+        enabled = _to_bool(binding.get("enabled", True), True)
+        valid = True
+        reason = ""
+
+        if software_id not in set(software_ids):
+            valid = False
+            reason = "software_not_found"
+        elif source_id not in source_index:
+            valid = False
+            reason = "skill_not_found"
+        elif source_id not in compatible_id_sets.get(software_id, set()):
+            valid = False
+            reason = "incompatible_kind"
+
+        if valid and enabled:
+            software_bindings = binding_map.setdefault(software_id, [])
+            if source_id not in software_bindings:
+                software_bindings.append(source_id)
+            scoped_map = binding_map_by_scope.setdefault(
+                scope,
+                {sid: [] for sid in software_ids},
+            )
+            scoped_bindings = scoped_map.setdefault(software_id, [])
+            if source_id not in scoped_bindings:
+                scoped_bindings.append(source_id)
+            valid_total += 1
+        elif not valid:
+            invalid_total += 1
+            warnings.append(
+                f"binding[{software_id}->{source_id}] is invalid: {reason}",
+            )
+
+        binding_rows.append(
+            {
+                "software_id": software_id,
+                "skill_id": source_id,
+                "scope": scope,
+                "enabled": enabled,
+                "valid": valid,
+                "reason": reason,
+            },
+        )
+
+    return {
+        "binding_rows": binding_rows,
+        "binding_map": binding_map,
+        "binding_map_by_scope": binding_map_by_scope,
+        "compatibility": compatibility,
+        "counts": {
+            "bindings_total": len(binding_rows),
+            "bindings_valid": valid_total,
+            "bindings_invalid": invalid_total,
+        },
+        "warnings": warnings,
+    }
+
+
 def _source_matches_host(
     source: dict[str, Any],
     host: dict[str, Any],
@@ -854,13 +1041,16 @@ def build_skills_manifest(
     *,
     saved_manifest: dict[str, Any] | None = None,
     saved_registry: dict[str, Any] | None = None,
+    saved_lock: dict[str, Any] | None = None,
     registry: dict[str, Any] | None = None,
     host_rows: list[dict[str, Any]] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     ts = generated_at or str(inventory_snapshot.get("generated_at") or _now_iso())
     normalized_saved_manifest = normalize_saved_skills_manifest(saved_manifest or {})
+    normalized_saved_lock = normalize_saved_skills_lock(saved_lock or {})
     saved_source_index, saved_target_index = _saved_manifest_index(normalized_saved_manifest)
+    _, saved_lock_target_index = _saved_lock_index(normalized_saved_lock)
     software_rows = [
         copy.deepcopy(item)
         for item in inventory_snapshot.get("software_rows", [])
@@ -898,11 +1088,31 @@ def build_skills_manifest(
         source_id = str(item.get("source_id", "")).strip()
         if not source_id:
             continue
-        compatible_hosts = _dedupe_keep_order(
-            compatible_hosts_by_source.get(source_id, [])
-            or _to_str_list(item.get("compatible_software_ids", [])),
-        )
         saved_source = saved_source_index.get(source_id, {})
+        authoritative_compatible_hosts = _dedupe_keep_order(
+            _to_str_list(item.get("compatible_software_ids", []))
+            + _to_str_list(saved_source.get("compatible_software_ids", [])),
+        )
+        authoritative_compatible_families = _dedupe_keep_order(
+            _to_str_list(item.get("compatible_software_families", []))
+            + _to_str_list(saved_source.get("compatible_software_families", [])),
+        )
+        has_authoritative_constraints = bool(authoritative_compatible_hosts or authoritative_compatible_families)
+        derived_hosts_from_families: list[str] = []
+        if authoritative_compatible_families:
+            family_set = set(authoritative_compatible_families)
+            for host in software_hosts:
+                host_id = str(host.get("host_id") or host.get("id") or "").strip()
+                host_family = str(host.get("family") or host.get("software_family") or host_id).strip()
+                if not host_id:
+                    continue
+                if host_id in family_set or host_family in family_set:
+                    derived_hosts_from_families.append(host_id)
+        compatible_hosts = _dedupe_keep_order(
+            authoritative_compatible_hosts
+            or derived_hosts_from_families
+            or ([] if has_authoritative_constraints else compatible_hosts_by_source.get(source_id, [])),
+        )
         source_record = {
                 "source_id": source_id,
                 "display_name": str(item.get("display_name") or saved_source.get("display_name") or source_id),
@@ -1024,10 +1234,18 @@ def build_skills_manifest(
             )
             saved_target = saved_target_index.get(target_id, {})
             saved_target_has_selection = isinstance(saved_target, dict) and "selected_source_ids" in saved_target
+            saved_lock_target = saved_lock_target_index.get(target_id, {})
+            saved_lock_selected_ids = _dedupe_keep_order(
+                _to_str_list(saved_lock_target.get("selected_source_ids", [])),
+            )
             selected_ids = (
                 _dedupe_keep_order(_to_str_list(saved_target.get("selected_source_ids", [])))
                 if saved_target_has_selection
-                else selected_from_inventory
+                else (
+                    saved_lock_selected_ids
+                    if saved_lock_selected_ids
+                    else selected_from_inventory
+                )
             )
             selected_ids = _expand_legacy_root_bundle_selection(
                 selected_ids,
@@ -1631,6 +1849,7 @@ def build_skills_overview(
         inventory_snapshot,
         saved_manifest=normalized_saved_manifest,
         saved_registry=saved_registry,
+        saved_lock=normalized_saved_lock,
         registry=registry,
         host_rows=host_rows,
         generated_at=ts,
@@ -1728,17 +1947,33 @@ def build_skills_overview(
     source_rows.sort(key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("source_id", "")).lower()))
     deploy_rows.sort(key=lambda item: (str(item.get("software_display_name", "")).lower(), str(item.get("scope", "")).lower()))
 
-    compatible_source_rows_by_software: dict[str, list[dict[str, Any]]] = {}
     compatibility_raw = inventory_snapshot.get("compatibility", {})
-    compatibility = compatibility_raw if isinstance(compatibility_raw, dict) else {}
-    for host in software_hosts:
-        software_id = str(host.get("host_id") or host.get("id", "")).strip()
-        if not software_id:
+    binding_projection = _project_binding_state_from_manifest(
+        manifest,
+        source_rows=source_rows,
+        software_hosts=software_hosts,
+        inventory_compatibility=compatibility_raw if isinstance(compatibility_raw, dict) else {},
+    )
+    projected_compatibility = (
+        binding_projection.get("compatibility", {})
+        if isinstance(binding_projection.get("compatibility", {}), dict)
+        else {}
+    )
+    warnings.extend(_to_str_list(binding_projection.get("warnings", [])))
+    source_row_index = {
+        str(item.get("source_id", "")).strip(): item
+        for item in source_rows
+        if isinstance(item, dict) and str(item.get("source_id", "")).strip()
+    }
+    compatible_source_rows_by_software: dict[str, list[dict[str, Any]]] = {}
+    for software_id, source_ids in projected_compatibility.items():
+        software_key = str(software_id or "").strip()
+        if not software_key:
             continue
-        compatible_source_rows_by_software[software_id] = [
-            copy.deepcopy(item)
-            for item in source_rows
-            if _source_matches_host(item, host, compatibility)
+        compatible_source_rows_by_software[software_key] = [
+            copy.deepcopy(source_row_index[source_id])
+            for source_id in _to_str_list(source_ids)
+            if source_id in source_row_index
         ]
 
     install_unit_rows = build_install_unit_rows(source_rows, deploy_rows)
@@ -1768,6 +2003,9 @@ def build_skills_overview(
     counts = dict(inventory_counts) if isinstance(inventory_counts, dict) else {}
     counts.update(
         {
+            "bindings_total": int(binding_projection.get("counts", {}).get("bindings_total", 0) or 0),
+            "bindings_valid": int(binding_projection.get("counts", {}).get("bindings_valid", 0) or 0),
+            "bindings_invalid": int(binding_projection.get("counts", {}).get("bindings_invalid", 0) or 0),
             "source_total": len(source_rows),
             "source_bundle_total": sum(
                 1
@@ -1994,8 +2232,8 @@ def build_skills_overview(
         "compatible_install_unit_rows_by_software": compatible_install_unit_rows_by_software,
         "compatible_collection_group_rows_by_software": compatible_collection_group_rows_by_software,
         "compatible_meaningful_collection_group_rows_by_software": compatible_meaningful_collection_group_rows_by_software,
-        "binding_rows": copy.deepcopy(inventory_snapshot.get("binding_rows", [])),
-        "binding_map": copy.deepcopy(inventory_snapshot.get("binding_map", {})),
-        "binding_map_by_scope": copy.deepcopy(inventory_snapshot.get("binding_map_by_scope", {})),
-        "compatibility": copy.deepcopy(inventory_snapshot.get("compatibility", {})),
+        "binding_rows": copy.deepcopy(binding_projection.get("binding_rows", [])),
+        "binding_map": copy.deepcopy(binding_projection.get("binding_map", {})),
+        "binding_map_by_scope": copy.deepcopy(binding_projection.get("binding_map_by_scope", {})),
+        "compatibility": copy.deepcopy(projected_compatibility),
     }

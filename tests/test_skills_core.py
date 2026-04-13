@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from skills_core import (
+    build_astrbot_neo_source_rows,
     build_collection_group_detail_payload,
     build_skills_lock,
     build_skills_manifest,
@@ -314,6 +315,37 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("rel-1", neo_row["astrneo_release_id"])
         self.assertEqual(1, overview["counts"]["astrbot_neo_source_total"])
         self.assertEqual(1, overview["doctor"]["astrbot_runtime_health"]["neo_source_total"])
+
+    def test_build_astrbot_neo_source_rows_dedupes_same_skill_across_scopes(self) -> None:
+        rows = build_astrbot_neo_source_rows(
+            [
+                {
+                    "host_id": "astrbot",
+                    "scope": "global",
+                    "skill_name": "neo-demo",
+                    "neo_skill_key": "demo.skill",
+                    "neo_release_id": "rel-1",
+                    "neo_updated_at": "2026-04-09T10:05:00+00:00",
+                    "local_exists": False,
+                    "local_path": "",
+                },
+                {
+                    "host_id": "astrbot",
+                    "scope": "workspace",
+                    "skill_name": "neo-demo",
+                    "neo_skill_key": "demo.skill",
+                    "neo_release_id": "rel-1",
+                    "neo_updated_at": "2026-04-09T10:05:00+00:00",
+                    "local_exists": True,
+                    "local_path": "/workspace/astrbot/data/skills/neo-demo/SKILL.md",
+                },
+            ]
+        )
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual("astrneo:astrbot:demo.skill", rows[0]["source_id"])
+        self.assertEqual("ready", rows[0]["status"])
+        self.assertEqual("/workspace/astrbot/data/skills/neo-demo/SKILL.md", rows[0]["source_path"])
 
     def test_build_skills_overview_exposes_provenance_summary_on_rows_and_doctor(self) -> None:
         overview = build_skills_overview(self.inventory_snapshot)
@@ -1179,6 +1211,59 @@ class SkillsCoreTests(unittest.TestCase):
         codex_global = next(item for item in manifest["deploy_targets"] if item["target_id"] == "codex:global")
         self.assertEqual([], codex_global["selected_source_ids"])
 
+    def test_build_skills_manifest_uses_saved_lock_selection_when_manifest_target_missing(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["binding_rows"] = []
+        snapshot["binding_map"] = {"codex": [], "antigravity": []}
+        snapshot["binding_map_by_scope"] = {
+            "global": {"codex": [], "antigravity": []},
+            "workspace": {"codex": [], "antigravity": []},
+        }
+
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [],
+            "deploy_targets": [],
+        }
+        saved_lock = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": ["npx_global_find_skills"],
+                },
+            ],
+        }
+
+        manifest = build_skills_manifest(
+            snapshot,
+            saved_manifest=saved_manifest,
+            saved_lock=saved_lock,
+        )
+        codex_global = next(item for item in manifest["deploy_targets"] if item["target_id"] == "codex:global")
+        self.assertEqual(["npx_global_find_skills"], codex_global["selected_source_ids"])
+
+    def test_build_skills_manifest_prefers_source_compatible_ids_over_inventory_compatibility(self) -> None:
+        snapshot = copy.deepcopy(self.inventory_snapshot)
+        snapshot["compatibility"] = {
+            "codex": [],
+            "antigravity": ["npx_bundle_compound_engineering_global", "npx_global_find_skills"],
+        }
+
+        manifest = build_skills_manifest(snapshot)
+        compound = next(item for item in manifest["sources"] if item["source_id"] == "npx_bundle_compound_engineering_global")
+        self.assertEqual(["codex"], compound["compatible_software_ids"])
+
+        codex_global = next(item for item in manifest["deploy_targets"] if item["target_id"] == "codex:global")
+        antigravity_global = next(item for item in manifest["deploy_targets"] if item["target_id"] == "antigravity:global")
+        self.assertIn("npx_bundle_compound_engineering_global", codex_global["available_source_ids"])
+        self.assertNotIn("npx_bundle_compound_engineering_global", antigravity_global["available_source_ids"])
+
     def test_build_skills_overview_exposes_registry_and_host_rows(self) -> None:
         saved_registry = {
             "version": 1,
@@ -1909,6 +1994,127 @@ class SkillsCoreTests(unittest.TestCase):
         self.assertEqual("ready", codex_global["status"])
         self.assertEqual("ok", codex_global["drift_status"])
         self.assertEqual(str(target_root), codex_global["target_path"])
+
+    def test_build_skills_overview_projects_binding_and_compatibility_from_manifest_authority(self) -> None:
+        stale_inventory = copy.deepcopy(self.inventory_snapshot)
+        stale_inventory["binding_rows"] = []
+        stale_inventory["binding_map"] = {"codex": [], "antigravity": []}
+        stale_inventory["binding_map_by_scope"] = {
+            "global": {"codex": [], "antigravity": []},
+            "workspace": {"codex": [], "antigravity": []},
+        }
+        stale_inventory["compatibility"] = {
+            "codex": [],
+            "antigravity": ["npx_bundle_compound_engineering_global", "npx_global_find_skills"],
+        }
+
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": ["npx_bundle_compound_engineering_global"],
+                },
+                {
+                    "target_id": "antigravity:global",
+                    "software_id": "antigravity",
+                    "scope": "global",
+                    "selected_source_ids": [],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(stale_inventory, saved_manifest=saved_manifest)
+
+        self.assertEqual(
+            ["npx_bundle_compound_engineering_global"],
+            overview["binding_map"]["codex"],
+        )
+        self.assertEqual([], overview["binding_map"]["antigravity"])
+        self.assertEqual(1, overview["counts"]["bindings_total"])
+        self.assertEqual(1, overview["counts"]["bindings_valid"])
+        self.assertEqual(0, overview["counts"]["bindings_invalid"])
+        self.assertIn(
+            "npx_bundle_compound_engineering_global",
+            overview["compatibility"]["codex"],
+        )
+        self.assertNotIn(
+            "npx_bundle_compound_engineering_global",
+            overview["compatibility"]["antigravity"],
+        )
+
+    def test_build_skills_overview_manifest_projection_prefers_selected_target_hints_for_unconstrained_source(self) -> None:
+        stale_inventory = copy.deepcopy(self.inventory_snapshot)
+        stale_inventory["compatibility"] = {"codex": [], "antigravity": []}
+
+        saved_registry = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "locator": "https://github.com/example/demo-skills.git",
+                    "source_scope": "global",
+                    "provider_key": "manual",
+                    "enabled": True,
+                },
+            ],
+        }
+        saved_manifest = {
+            "version": 1,
+            "generated_at": "2026-04-06T08:00:00+00:00",
+            "sources": [
+                {
+                    "source_id": "manual_git_demo",
+                    "display_name": "Demo Git Skills",
+                    "source_kind": "manual_git",
+                    "provider_key": "manual",
+                    "enabled": True,
+                    "source_scope": "global",
+                },
+            ],
+            "deploy_targets": [
+                {
+                    "target_id": "codex:global",
+                    "software_id": "codex",
+                    "scope": "global",
+                    "selected_source_ids": ["manual_git_demo"],
+                },
+                {
+                    "target_id": "antigravity:global",
+                    "software_id": "antigravity",
+                    "scope": "global",
+                    "selected_source_ids": [],
+                },
+            ],
+        }
+
+        overview = build_skills_overview(
+            stale_inventory,
+            saved_manifest=saved_manifest,
+            saved_registry=saved_registry,
+        )
+
+        self.assertIn("manual_git_demo", overview["compatibility"]["codex"])
+        self.assertNotIn("manual_git_demo", overview["compatibility"]["antigravity"])
+
+    def test_build_skills_overview_manifest_projection_drops_inventory_only_compatibility_keys(self) -> None:
+        stale_inventory = copy.deepcopy(self.inventory_snapshot)
+        stale_inventory["compatibility"] = {
+            "codex": stale_inventory["compatibility"]["codex"],
+            "antigravity": stale_inventory["compatibility"]["antigravity"],
+            "ghost_tool": ["npx_global_find_skills"],
+        }
+
+        overview = build_skills_overview(stale_inventory)
+
+        self.assertNotIn("ghost_tool", overview["compatibility"])
 
     def test_manifest_to_binding_rows_projects_selected_sources(self) -> None:
         manifest = build_skills_manifest(self.inventory_snapshot)

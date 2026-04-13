@@ -8,6 +8,7 @@ from typing import Any
 
 
 _SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+ASTRBOT_SCOPE_ORDER = ("global", "workspace")
 
 
 def _to_bool(value: Any, default: bool = False) -> bool:
@@ -26,6 +27,13 @@ def _to_bool(value: Any, default: bool = False) -> bool:
 
 def _normalize_skill_name(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _normalize_scope(value: Any, default: str = "global") -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in ASTRBOT_SCOPE_ORDER:
+        return normalized
+    return default
 
 
 def _read_json_dict(path: Path) -> tuple[dict[str, Any], str]:
@@ -81,11 +89,41 @@ def _load_sandbox_cache_names(sandbox_cache_path: Path) -> tuple[set[str], str]:
     return names, ""
 
 
-def _validate_astrbot_layout(layout: dict[str, Any] | None) -> tuple[dict[str, Any], str]:
+def _resolve_scoped_layout(layout: dict[str, Any], scope: str | None = None) -> tuple[dict[str, Any], str]:
+    requested_scope = _normalize_scope(
+        scope,
+        default=_normalize_scope(layout.get("selected_scope") or layout.get("scope"), default="global"),
+    )
+    scoped_layouts = layout.get("scoped_layouts", {}) if isinstance(layout.get("scoped_layouts", {}), dict) else {}
+    if scoped_layouts:
+        scoped = scoped_layouts.get(requested_scope, {})
+        if not isinstance(scoped, dict) or not _to_bool(scoped.get("state_available"), False):
+            return {}, "scope_unavailable"
+        return {
+            **layout,
+            **scoped,
+            "scope": requested_scope,
+        }, ""
+    if scope is not None:
+        return {}, "scope_unavailable"
+    return {
+        **layout,
+        "scope": requested_scope,
+    }, ""
+
+
+def _validate_astrbot_layout(
+    layout: dict[str, Any] | None,
+    *,
+    scope: str | None = None,
+) -> tuple[dict[str, Any], str]:
     normalized = layout if isinstance(layout, dict) else {}
     if not _to_bool(normalized.get("is_astrbot"), False):
         return {}, "host_is_not_astrbot"
-    paths = _skills_paths(normalized)
+    scoped_layout, scope_error = _resolve_scoped_layout(normalized, scope)
+    if scope_error:
+        return {}, scope_error
+    paths = _skills_paths(scoped_layout)
     skills_root = paths["skills_root"]
     if not str(skills_root):
         return {}, "skills_root_unavailable"
@@ -94,7 +132,7 @@ def _validate_astrbot_layout(layout: dict[str, Any] | None) -> tuple[dict[str, A
     if not str(paths["sandbox_cache_path"]):
         return {}, "sandbox_cache_path_unavailable"
     return {
-        **normalized,
+        **scoped_layout,
         **paths,
     }, ""
 
@@ -103,8 +141,10 @@ def set_astrbot_skill_active(
     layout: dict[str, Any] | None,
     skill_name: str,
     active: bool,
+    *,
+    scope: str | None = None,
 ) -> dict[str, Any]:
-    context, context_error = _validate_astrbot_layout(layout)
+    context, context_error = _validate_astrbot_layout(layout, scope=scope)
     normalized_skill_name = _normalize_skill_name(skill_name)
     if context_error:
         return {
@@ -112,6 +152,7 @@ def set_astrbot_skill_active(
             "message": f"astrbot action is unavailable: {context_error}",
             "reason_code": context_error,
             "skill_name": normalized_skill_name,
+            "scope": _normalize_scope(scope),
         }
     if not normalized_skill_name or not _SKILL_NAME_RE.fullmatch(normalized_skill_name):
         return {
@@ -119,6 +160,7 @@ def set_astrbot_skill_active(
             "message": f"invalid skill_name: {normalized_skill_name or '<empty>'}",
             "reason_code": "invalid_skill_name",
             "skill_name": normalized_skill_name,
+            "scope": str(context.get("scope") or _normalize_scope(scope)),
         }
 
     skills_root = context["skills_root"]
@@ -133,6 +175,7 @@ def set_astrbot_skill_active(
             "message": f"sandbox cache is unreadable: {sandbox_error}",
             "reason_code": "invalid_sandbox_cache",
             "skill_name": normalized_skill_name,
+            "scope": str(context.get("scope") or ""),
         }
     sandbox_exists = normalized_skill_name in sandbox_names
     if (not local_exists) and sandbox_exists:
@@ -145,6 +188,7 @@ def set_astrbot_skill_active(
             "skill_name": normalized_skill_name,
             "local_exists": local_exists,
             "sandbox_exists": sandbox_exists,
+            "scope": str(context.get("scope") or ""),
         }
 
     config, config_error = _read_json_dict(skills_config_path)
@@ -154,6 +198,7 @@ def set_astrbot_skill_active(
             "message": f"skills.json is unreadable: {config_error}",
             "reason_code": "invalid_skills_config",
             "skill_name": normalized_skill_name,
+            "scope": str(context.get("scope") or ""),
         }
     skills_payload = config.get("skills", {})
     if not isinstance(skills_payload, dict):
@@ -169,6 +214,7 @@ def set_astrbot_skill_active(
         "ok": True,
         "message": f"astrbot skill active state updated: {normalized_skill_name}",
         "reason_code": "",
+        "scope": str(context.get("scope") or ""),
         "skill_name": normalized_skill_name,
         "active": next_active,
         "changed": previous_active != next_active,
@@ -178,8 +224,13 @@ def set_astrbot_skill_active(
     }
 
 
-def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -> dict[str, Any]:
-    context, context_error = _validate_astrbot_layout(layout)
+def delete_astrbot_local_skill(
+    layout: dict[str, Any] | None,
+    skill_name: str,
+    *,
+    scope: str | None = None,
+) -> dict[str, Any]:
+    context, context_error = _validate_astrbot_layout(layout, scope=scope)
     normalized_skill_name = _normalize_skill_name(skill_name)
     if context_error:
         return {
@@ -187,6 +238,7 @@ def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -
             "message": f"astrbot action is unavailable: {context_error}",
             "reason_code": context_error,
             "skill_name": normalized_skill_name,
+            "scope": _normalize_scope(scope),
         }
     if not normalized_skill_name or not _SKILL_NAME_RE.fullmatch(normalized_skill_name):
         return {
@@ -194,6 +246,7 @@ def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -
             "message": f"invalid skill_name: {normalized_skill_name or '<empty>'}",
             "reason_code": "invalid_skill_name",
             "skill_name": normalized_skill_name,
+            "scope": str(context.get("scope") or _normalize_scope(scope)),
         }
 
     skills_root = context["skills_root"]
@@ -208,6 +261,7 @@ def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -
             "message": f"sandbox cache is unreadable: {sandbox_error}",
             "reason_code": "invalid_sandbox_cache",
             "skill_name": normalized_skill_name,
+            "scope": str(context.get("scope") or ""),
         }
     sandbox_exists = normalized_skill_name in sandbox_names
     if (not local_exists) and sandbox_exists:
@@ -218,6 +272,7 @@ def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -
             "skill_name": normalized_skill_name,
             "local_exists": local_exists,
             "sandbox_exists": sandbox_exists,
+            "scope": str(context.get("scope") or ""),
         }
 
     deleted_local_dir = False
@@ -232,6 +287,7 @@ def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -
             "message": f"skills.json is unreadable: {config_error}",
             "reason_code": "invalid_skills_config",
             "skill_name": normalized_skill_name,
+            "scope": str(context.get("scope") or ""),
         }
     skills_payload = config.get("skills", {})
     if not isinstance(skills_payload, dict):
@@ -251,6 +307,7 @@ def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -
                 "message": f"sandbox cache is unreadable: {cache_error}",
                 "reason_code": "invalid_sandbox_cache",
                 "skill_name": normalized_skill_name,
+                "scope": str(context.get("scope") or ""),
             }
         cache_items = cache_payload.get("skills", [])
         if isinstance(cache_items, list):
@@ -271,6 +328,7 @@ def delete_astrbot_local_skill(layout: dict[str, Any] | None, skill_name: str) -
         "ok": True,
         "message": f"astrbot local skill deleted: {normalized_skill_name}",
         "reason_code": "",
+        "scope": str(context.get("scope") or ""),
         "skill_name": normalized_skill_name,
         "deleted_local_dir": deleted_local_dir,
         "removed_from_config": removed_from_config,

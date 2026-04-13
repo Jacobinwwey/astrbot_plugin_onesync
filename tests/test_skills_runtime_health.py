@@ -139,8 +139,8 @@ class SkillsRuntimeHealthTests(unittest.TestCase):
         self.assertEqual(1, health["astrbot_runtime_health"]["missing_skills_config_total"])
         self.assertEqual(1, health["astrbot_runtime_health"]["missing_sandbox_cache_total"])
         self.assertEqual(1, health["astrbot_runtime_health"]["drifted_total"])
-        self.assertIn("astrbot[astrbot] missing skills.json", health["warnings"])
-        self.assertIn("astrbot[astrbot] missing sandbox_skills_cache.json", health["warnings"])
+        self.assertIn("astrbot[astrbot][global] missing skills.json", health["warnings"])
+        self.assertIn("astrbot[astrbot][global] missing sandbox_skills_cache.json", health["warnings"])
         self.assertIn("astrbot[astrbot] has 1 drifted runtime skill rows", health["warnings"])
 
 

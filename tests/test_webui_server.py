@@ -1004,6 +1004,20 @@ class _FakePlugin:
                 "summary": {
                     "state_available": True,
                     "skills_root": "/tmp/astrbot/data/skills",
+                    "selected_scope": "global",
+                    "available_scopes": ["global", "workspace"],
+                    "scope_summaries": {
+                        "global": {
+                            "state_available": True,
+                            "skills_root": "/tmp/astrbot/data/skills",
+                            "local_skill_total": 4,
+                        },
+                        "workspace": {
+                            "state_available": True,
+                            "skills_root": "/tmp/workspace-astrbot/data/skills",
+                            "local_skill_total": 2,
+                        },
+                    },
                 },
                 "state_rows": [],
                 "warnings": [],
@@ -1015,6 +1029,18 @@ class _FakePlugin:
                 "skills_config_path": "/tmp/astrbot/data/skills.json",
                 "sandbox_cache_path": "/tmp/astrbot/data/sandbox_skills_cache.json",
                 "neo_map_path": "/tmp/astrbot/data/skills/neo_skill_map.json",
+                "selected_scope": "global",
+                "available_scopes": ["global", "workspace"],
+                "scoped_layouts": {
+                    "global": {
+                        "scope": "global",
+                        "skills_root": "/tmp/astrbot/data/skills",
+                    },
+                    "workspace": {
+                        "scope": "workspace",
+                        "skills_root": "/tmp/workspace-astrbot/data/skills",
+                    },
+                },
             },
             "warnings": [],
         }
@@ -1032,6 +1058,7 @@ class _FakePlugin:
                 "ok": True,
                 "skill_name": str(payload.get("skill_name")),
                 "active": bool(payload.get("active", True)),
+                "scope": str(payload.get("scope") or "global"),
             },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
@@ -1049,6 +1076,7 @@ class _FakePlugin:
             "result": {
                 "ok": True,
                 "skill_name": str(payload.get("skill_name")),
+                "scope": str(payload.get("scope") or "global"),
             },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
@@ -1061,7 +1089,11 @@ class _FakePlugin:
         return {
             "ok": True,
             "action": "sandbox_sync",
-            "result": {"ok": True, "message": "sync done"},
+            "result": {
+                "ok": True,
+                "message": "sync done",
+                "scope": str(payload.get("scope") or "global"),
+            },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
         }
@@ -1386,6 +1418,61 @@ class WebUIServerTests(unittest.TestCase):
         self.assertTrue(set_data["config"]["web_admin"]["password_configured"])
         self.assertTrue(set_data["meta"]["web_admin_password_configured"])
 
+    def test_docs_routes_expose_local_markdown_index_and_content(self) -> None:
+        index_resp = self.client.get(
+            "/api/docs/index",
+            params={"lang": "zh", "keyword": "INSTALL", "limit": 100},
+        )
+        self.assertEqual(200, index_resp.status_code)
+        index_data = index_resp.json()
+        self.assertTrue(index_data["ok"])
+        self.assertEqual("zh", index_data["lang"])
+        self.assertGreaterEqual(index_data["counts"]["total"], 1)
+        install_item = next(
+            (
+                item
+                for item in index_data["items"]
+                if item["path"] in {"docs/INSTALL_AND_CONFIG_zh.md", "docs/INSTALL_AND_CONFIG_en.md"}
+            ),
+            None,
+        )
+        self.assertIsNotNone(install_item)
+
+        content_resp = self.client.get(
+            "/api/docs/content",
+            params={"path": "docs/INSTALL_AND_CONFIG_zh.md"},
+        )
+        self.assertEqual(200, content_resp.status_code)
+        content_data = content_resp.json()
+        self.assertTrue(content_data["ok"])
+        self.assertEqual("docs/INSTALL_AND_CONFIG_zh.md", content_data["path"])
+        self.assertIn("content", content_data)
+        self.assertIn("OneSync", content_data["content"])
+        self.assertIn(content_data["lang"], {"zh", "multi"})
+
+        raw_resp = self.client.get(
+            "/api/docs/raw",
+            params={"path": "README.md"},
+        )
+        self.assertEqual(200, raw_resp.status_code)
+        self.assertIn("text/markdown", raw_resp.headers.get("content-type", ""))
+        self.assertIn("OneSync", raw_resp.text)
+
+    def test_docs_content_route_rejects_path_traversal_and_missing_file(self) -> None:
+        traversal_resp = self.client.get(
+            "/api/docs/content",
+            params={"path": "../../etc/passwd"},
+        )
+        self.assertEqual(404, traversal_resp.status_code)
+        self.assertFalse(traversal_resp.json()["ok"])
+
+        missing_resp = self.client.get(
+            "/api/docs/raw",
+            params={"path": "docs/missing-file.md"},
+        )
+        self.assertEqual(404, missing_resp.status_code)
+        self.assertIn("document not found", missing_resp.text)
+
     def test_skills_routes_return_expected_payloads(self) -> None:
         overview_resp = self.client.get("/api/skills/overview")
         self.assertEqual(200, overview_resp.status_code)
@@ -1449,6 +1536,14 @@ class WebUIServerTests(unittest.TestCase):
         astrbot_host_resp = self.client.get("/api/skills/hosts/astrbot/astrbot")
         self.assertEqual(200, astrbot_host_resp.status_code)
         self.assertEqual("astrbot", astrbot_host_resp.json()["host"]["host_id"])
+        self.assertEqual(
+            ["global", "workspace"],
+            astrbot_host_resp.json()["runtime_state"]["summary"]["available_scopes"],
+        )
+        self.assertEqual(
+            "/tmp/workspace-astrbot/data/skills",
+            astrbot_host_resp.json()["layout"]["scoped_layouts"]["workspace"]["skills_root"],
+        )
 
         missing_astrbot_host_resp = self.client.get("/api/skills/hosts/missing/astrbot")
         self.assertEqual(404, missing_astrbot_host_resp.status_code)
@@ -1595,27 +1690,33 @@ class WebUIServerTests(unittest.TestCase):
 
         astrbot_toggle_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/skills/toggle",
-            json={"skill_name": "demo", "active": False},
+            json={"skill_name": "demo", "active": False, "scope": "workspace"},
         )
         self.assertEqual(200, astrbot_toggle_resp.status_code)
         self.assertTrue(astrbot_toggle_resp.json()["ok"])
         self.assertEqual("toggle_skill", astrbot_toggle_resp.json()["action"])
+        self.assertEqual("workspace", astrbot_toggle_resp.json()["result"]["scope"])
+        self.assertEqual("workspace", self.plugin.last_astrbot_toggle_payload["payload"]["scope"])
 
         astrbot_delete_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/skills/delete",
-            json={"skill_name": "demo"},
+            json={"skill_name": "demo", "scope": "workspace"},
         )
         self.assertEqual(200, astrbot_delete_resp.status_code)
         self.assertTrue(astrbot_delete_resp.json()["ok"])
         self.assertEqual("delete_skill", astrbot_delete_resp.json()["action"])
+        self.assertEqual("workspace", astrbot_delete_resp.json()["result"]["scope"])
+        self.assertEqual("workspace", self.plugin.last_astrbot_delete_payload["payload"]["scope"])
 
         astrbot_sync_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/sandbox/sync",
-            json={},
+            json={"scope": "workspace"},
         )
         self.assertEqual(200, astrbot_sync_resp.status_code)
         self.assertTrue(astrbot_sync_resp.json()["ok"])
         self.assertEqual("sandbox_sync", astrbot_sync_resp.json()["action"])
+        self.assertEqual("workspace", astrbot_sync_resp.json()["result"]["scope"])
+        self.assertEqual("workspace", self.plugin.last_astrbot_sync_payload["payload"]["scope"])
 
 
         astrbot_neo_sync_resp = self.client.post(

@@ -77,6 +77,17 @@ Important note:
 | GET | `/api/debug/logs` | debug logs |
 | POST | `/api/debug/clear` | clear debug logs |
 | POST | `/api/run` | trigger software update execution |
+| GET | `/api/docs/index` | local Markdown document index for the Guide modal |
+| GET | `/api/docs/content` | one local Markdown document payload (JSON) |
+| GET | `/api/docs/raw` | one local Markdown document payload (raw text) |
+
+Docs route notes:
+
+- `path` must be a repository-relative Markdown path.
+- current allow scope:
+  - root docs (`README*.md`, `CHANGELOG.md`, `TODO.md`, `TEST_REPORT.md`)
+  - all `docs/**/*.md`
+- traversal paths such as `../../...` are rejected with `404`.
 
 ## 5. Inventory compatibility layer
 

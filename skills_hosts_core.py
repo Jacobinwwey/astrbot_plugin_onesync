@@ -205,6 +205,18 @@ def _to_str_list(value: Any) -> list[str]:
     return [text] if text else []
 
 
+def _dedupe_keep_order(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
 def _build_host_capabilities(host_id: str, provider_key: str) -> list[str]:
     host_key = _slug(provider_key or host_id, default=_slug(host_id, default="generic"))
     if host_key == "astrbot":
@@ -219,11 +231,66 @@ def _runtime_state_backend(host_id: str, provider_key: str) -> str:
     return ""
 
 
+def _merged_skill_root_candidates(resolved_roots: list[str], declared_roots: list[str]) -> list[str]:
+    merged: list[str] = []
+    max_len = max(len(resolved_roots), len(declared_roots))
+    for index in range(max_len):
+        resolved = str(resolved_roots[index] or "").strip() if index < len(resolved_roots) else ""
+        declared = str(declared_roots[index] or "").strip() if index < len(declared_roots) else ""
+        if resolved:
+            merged.append(resolved)
+            continue
+        if declared:
+            merged.append(declared)
+    if merged:
+        return _dedupe_keep_order(merged)
+    return _dedupe_keep_order(resolved_roots + declared_roots)
+
+
+def _classify_astrbot_scope(path: str) -> str:
+    normalized = str(path or "").strip().replace("\\", "/").lower()
+    if "/.astrbot/" in normalized:
+        return "global"
+    return "workspace"
+
+
+def _resolve_astrbot_target_path(resolved_roots: list[str], declared_roots: list[str], scope_name: str) -> str:
+    merged = _merged_skill_root_candidates(resolved_roots, declared_roots)
+    if not merged:
+        return ""
+
+    workspace_candidates = [
+        item for item in merged if _classify_astrbot_scope(item) == "workspace"
+    ]
+    global_candidates = [
+        item for item in merged if _classify_astrbot_scope(item) == "global"
+    ]
+    if scope_name == "workspace":
+        return (
+            (workspace_candidates[0] if workspace_candidates else "")
+            or (global_candidates[1] if len(global_candidates) > 1 else "")
+            or (global_candidates[0] if global_candidates else "")
+            or merged[0]
+        )
+    return (
+        (global_candidates[0] if global_candidates else "")
+        or (workspace_candidates[1] if len(workspace_candidates) > 1 else "")
+        or (workspace_candidates[0] if workspace_candidates else "")
+        or merged[0]
+    )
+
+
 def resolve_host_target_path(host: dict[str, Any], scope: str) -> str:
     scope_name = _slug(scope or "global", default="global")
     resolved_roots = _to_str_list(host.get("resolved_skill_roots", []))
     declared_roots = _to_str_list(host.get("declared_skill_roots", []))
-    candidates = resolved_roots or declared_roots
+    host_key = _slug(
+        host.get("provider_key") or host.get("host_id") or host.get("id"),
+        default="generic",
+    )
+    if host_key == "astrbot":
+        return _resolve_astrbot_target_path(resolved_roots, declared_roots, scope_name)
+    candidates = _merged_skill_root_candidates(resolved_roots, declared_roots)
     if not candidates:
         return ""
     if scope_name == "workspace" and len(candidates) > 1:

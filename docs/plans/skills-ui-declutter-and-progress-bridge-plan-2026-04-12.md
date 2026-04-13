@@ -193,6 +193,10 @@ depends_on:
 - authority boundary 也已同步收口一层：
   - `webui_update_inventory_bindings()` 不再依赖 inventory 重扫
   - deploy target mutation 现已复用 manifest-first 投影辅助逻辑
+- Guide 弹窗已接入本地文档工作台：
+  - 新增 `/api/docs/index`、`/api/docs/content`、`/api/docs/raw`，前端可在 WebUI 内直接浏览本地 Markdown 文档，不再依赖外链仓库页面
+  - 支持按界面语言自动筛选（中文/英文）与手动切换 `auto/zh/en/all`，并保持文档列表与正文同屏可读
+  - 文档路由增加路径白名单与 traversal 防护，仅暴露仓库根文档与 `docs/**/*.md`
 - 当前完整回归基线：`pytest -q -> 191 passed`
 
 ## Test Plan

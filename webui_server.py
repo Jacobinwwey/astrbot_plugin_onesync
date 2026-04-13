@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,7 @@ try:
     import uvicorn
     from fastapi import FastAPI, Request
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, PlainTextResponse
     from fastapi.staticfiles import StaticFiles
 
     FASTAPI_AVAILABLE = True
@@ -43,6 +44,242 @@ class OneSyncWebUIServer:
         if isinstance(cfg, dict):
             return cfg
         return {}
+
+    @staticmethod
+    def _utc_iso(ts: float | None = None) -> str:
+        if ts is None:
+            dt = datetime.now(timezone.utc)
+        else:
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        return dt.replace(microsecond=0).isoformat()
+
+    @staticmethod
+    def _doc_lang_from_name(name: str) -> str:
+        lowered = str(name or "").strip().lower()
+        if lowered.endswith("_en.md"):
+            return "en"
+        if lowered.endswith("_zh.md") or lowered.endswith("_zh-cn.md"):
+            return "zh"
+        return "multi"
+
+    @staticmethod
+    def _doc_category_from_relpath(relpath: str) -> str:
+        normalized = str(relpath or "").strip().replace("\\", "/").lower()
+        if not normalized:
+            return "other"
+        if normalized.startswith("docs/plans/"):
+            return "plan"
+        if normalized.startswith("docs/brainstorms/"):
+            return "brainstorm"
+        if normalized.startswith("docs/releases/"):
+            return "release"
+        if normalized.startswith("docs/"):
+            return "guide"
+        if normalized in {"readme.md", "readme_en.md", "readme_zh.md", "changelog.md", "todo.md"}:
+            return "root"
+        return "other"
+
+    @staticmethod
+    def _normalize_docs_lang_filter(lang: str) -> str:
+        normalized = str(lang or "").strip().lower()
+        if normalized in {"", "auto"}:
+            return "all"
+        if normalized in {"zh", "en", "all"}:
+            return normalized
+        return "all"
+
+    @staticmethod
+    def _docs_lang_match(item_lang: str, wanted_lang: str) -> bool:
+        normalized_item = str(item_lang or "multi").strip().lower()
+        normalized_wanted = str(wanted_lang or "all").strip().lower()
+        if normalized_wanted == "all":
+            return True
+        if normalized_wanted == "zh":
+            return normalized_item in {"zh", "multi"}
+        if normalized_wanted == "en":
+            return normalized_item in {"en", "multi"}
+        return True
+
+    def _repo_root(self) -> Path:
+        return Path(__file__).resolve().parent
+
+    def _docs_root(self) -> Path:
+        return self._repo_root() / "docs"
+
+    def _extract_doc_title(self, absolute_path: Path) -> str:
+        try:
+            with absolute_path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    if stripped.startswith("#"):
+                        title = stripped.lstrip("#").strip()
+                        if title:
+                            return title
+                        continue
+                    # Skip frontmatter separators and metadata-ish lines.
+                    if stripped in {"---", "..."} or stripped.endswith(":"):
+                        continue
+                    break
+        except Exception:
+            pass
+        return absolute_path.stem.replace("_", " ").replace("-", " ").strip() or absolute_path.name
+
+    def _paired_doc_relpath(self, relpath: str) -> str:
+        rel = str(relpath or "").strip().replace("\\", "/")
+        if not rel.endswith(".md"):
+            return ""
+        base = self._repo_root()
+        candidate = ""
+        if rel.endswith("_zh.md"):
+            candidate = rel[:-7] + "_en.md"
+        elif rel.endswith("_en.md"):
+            candidate = rel[:-7] + "_zh.md"
+        if not candidate:
+            return ""
+        candidate_path = (base / candidate).resolve()
+        try:
+            candidate_path.relative_to(base.resolve())
+        except ValueError:
+            return ""
+        return candidate if candidate_path.is_file() else ""
+
+    def _resolve_allowed_doc_path(self, requested_path: str) -> Path | None:
+        raw = str(requested_path or "").strip()
+        if not raw:
+            return None
+        rel = raw.replace("\\", "/").lstrip("/")
+        if not rel or rel.startswith("../") or "/../" in rel:
+            return None
+        repo_root = self._repo_root().resolve()
+        target = (repo_root / rel).resolve()
+        if not target.is_file() or target.suffix.lower() != ".md":
+            return None
+
+        docs_root = self._docs_root().resolve()
+        root_allowlist = {
+            (repo_root / "README.md").resolve(),
+            (repo_root / "README_en.md").resolve(),
+            (repo_root / "README_zh.md").resolve(),
+            (repo_root / "CHANGELOG.md").resolve(),
+            (repo_root / "TODO.md").resolve(),
+            (repo_root / "TEST_REPORT.md").resolve(),
+        }
+
+        try:
+            target.relative_to(docs_root)
+            return target
+        except ValueError:
+            return target if target in root_allowlist else None
+
+    def _collect_docs_index_items(self) -> list[dict[str, Any]]:
+        repo_root = self._repo_root().resolve()
+        docs_root = self._docs_root().resolve()
+        candidates: list[Path] = []
+
+        for root_name in ("README.md", "README_en.md", "README_zh.md", "CHANGELOG.md", "TODO.md", "TEST_REPORT.md"):
+            root_doc = (repo_root / root_name).resolve()
+            if root_doc.is_file():
+                candidates.append(root_doc)
+
+        if docs_root.exists():
+            candidates.extend(sorted(docs_root.rglob("*.md")))
+
+        items: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for absolute in candidates:
+            try:
+                resolved = absolute.resolve()
+                relative = resolved.relative_to(repo_root).as_posix()
+            except Exception:
+                continue
+            if relative in seen:
+                continue
+            seen.add(relative)
+            stat = resolved.stat()
+            items.append(
+                {
+                    "path": relative,
+                    "title": self._extract_doc_title(resolved),
+                    "lang": self._doc_lang_from_name(resolved.name),
+                    "category": self._doc_category_from_relpath(relative),
+                    "size": int(stat.st_size),
+                    "updated_at": self._utc_iso(stat.st_mtime),
+                    "paired_path": self._paired_doc_relpath(relative),
+                }
+            )
+
+        category_order = {"root": 0, "guide": 1, "plan": 2, "brainstorm": 3, "release": 4, "other": 9}
+        items.sort(
+            key=lambda item: (
+                category_order.get(str(item.get("category") or "other"), 9),
+                str(item.get("path") or ""),
+            )
+        )
+        return items
+
+    def _build_docs_index_payload(self, *, lang: str = "all", keyword: str = "", limit: int = 240) -> dict[str, Any]:
+        normalized_lang = self._normalize_docs_lang_filter(lang)
+        keyword_text = str(keyword or "").strip().lower()
+        try:
+            limit_value = int(limit)
+        except Exception:
+            limit_value = 240
+        limit_value = min(max(limit_value, 1), 1000)
+
+        items = self._collect_docs_index_items()
+        filtered: list[dict[str, Any]] = []
+        for item in items:
+            item_lang = str(item.get("lang") or "multi")
+            if not self._docs_lang_match(item_lang, normalized_lang):
+                continue
+            if keyword_text:
+                path_text = str(item.get("path") or "").lower()
+                title_text = str(item.get("title") or "").lower()
+                if keyword_text not in path_text and keyword_text not in title_text:
+                    continue
+            filtered.append(item)
+
+        filtered = filtered[:limit_value]
+        return {
+            "ok": True,
+            "generated_at": self._utc_iso(),
+            "lang": normalized_lang,
+            "keyword": str(keyword or "").strip(),
+            "counts": {
+                "total": len(filtered),
+            },
+            "items": filtered,
+            "warnings": [],
+        }
+
+    def _build_doc_content_payload(self, *, requested_path: str) -> dict[str, Any]:
+        resolved = self._resolve_allowed_doc_path(requested_path)
+        if resolved is None:
+            return {"ok": False, "message": f"document not found: {requested_path}"}
+
+        repo_root = self._repo_root().resolve()
+        relative = resolved.relative_to(repo_root).as_posix()
+        try:
+            content = resolved.read_text(encoding="utf-8", errors="replace")
+        except Exception as exc:
+            return {"ok": False, "message": f"failed to read document: {exc}"}
+
+        stat = resolved.stat()
+        return {
+            "ok": True,
+            "generated_at": self._utc_iso(),
+            "path": relative,
+            "title": self._extract_doc_title(resolved),
+            "lang": self._doc_lang_from_name(resolved.name),
+            "category": self._doc_category_from_relpath(relative),
+            "paired_path": self._paired_doc_relpath(relative),
+            "updated_at": self._utc_iso(stat.st_mtime),
+            "size": int(stat.st_size),
+            "content": content,
+            "warnings": [],
+        }
 
     def _setup_app(self) -> None:
         self.app = FastAPI(
@@ -119,6 +356,27 @@ class OneSyncWebUIServer:
         @self.app.get("/api/health")
         async def health():
             return {"ok": True, "webui_url": self.public_url, "auth_required": self._auth_enabled}
+
+        @self.app.get("/api/docs/index")
+        async def docs_index(lang: str = "all", keyword: str = "", limit: int = 240):
+            return self._build_docs_index_payload(lang=lang, keyword=keyword, limit=limit)
+
+        @self.app.get("/api/docs/content")
+        async def docs_content(path: str = ""):
+            ret = self._build_doc_content_payload(requested_path=path)
+            if not ret.get("ok"):
+                return JSONResponse(ret, status_code=404)
+            return ret
+
+        @self.app.get("/api/docs/raw")
+        async def docs_raw(path: str = ""):
+            ret = self._build_doc_content_payload(requested_path=path)
+            if not ret.get("ok"):
+                return PlainTextResponse(str(ret.get("message") or "document not found"), status_code=404)
+            return PlainTextResponse(
+                str(ret.get("content") or ""),
+                media_type="text/markdown; charset=utf-8",
+            )
 
         @self.app.get("/api/overview")
         async def overview():

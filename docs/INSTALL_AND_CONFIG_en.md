@@ -132,6 +132,13 @@ WebUI features:
   - Level filter: `ALL/INFO/WARN/ERROR/DEBUG`
   - Keyword filter + auto-scroll + clear logs
 - Built-in UI language switch: Chinese / English (labels, filters, buttons, tab names).
+- Local docs workbench inside Guide modal: browse repository Markdown directly in WebUI with `auto/zh/en/all` filtering.
+
+Docs workbench routes:
+
+- `GET /api/docs/index`
+- `GET /api/docs/content?path=...`
+- `GET /api/docs/raw?path=...`
 
 ### 4.2 Embedded AI Assistant and Guide (User + Developer)
 

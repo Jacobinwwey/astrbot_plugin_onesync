@@ -77,6 +77,17 @@
 | GET | `/api/debug/logs` | Debug 日志 |
 | POST | `/api/debug/clear` | 清空 Debug 日志 |
 | POST | `/api/run` | 触发软件更新执行 |
+| GET | `/api/docs/index` | Guide 弹窗本地文档索引（Markdown） |
+| GET | `/api/docs/content` | 单个本地 Markdown 文档正文（JSON） |
+| GET | `/api/docs/raw` | 单个本地 Markdown 文档正文（纯文本） |
+
+文档路由说明：
+
+- `path` 必须是仓库内相对路径，且为 Markdown 文件。
+- 当前允许范围：
+  - 根文档（`README*.md`、`CHANGELOG.md`、`TODO.md`、`TEST_REPORT.md`）
+  - `docs/**/*.md`
+- `../../...` 这类 traversal 路径会被拒绝并返回 `404`。
 
 ## 5. Inventory 兼容层接口
 
