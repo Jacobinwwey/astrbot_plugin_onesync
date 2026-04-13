@@ -9839,7 +9839,8 @@
           updated_at: new Date().toISOString(),
         });
         if (showAlert) {
-          alert(updateMessage ? `${mergedSummary}\n\n${updateMessage}` : mergedSummary);
+          const updateAlertSummary = updateMessage ? `${mergedSummary}\n\n${updateMessage}` : mergedSummary;
+          alert(withInventoryActionAuditEvent(updateAlertSummary, result));
         }
         renderInventoryPanel();
         return result;
@@ -9952,7 +9953,7 @@
         renderInventoryPanel();
         await refreshSelectedInventorySourceDetail();
         await refreshSelectedDeployTargetDetail();
-        alert(t("inventory_improve_all_skills_success", {
+        const improveSummary = t("inventory_improve_all_skills_success", {
           atomSuccess: Number(atomResult.success || 0) || 0,
           atomTotal: Number(atomResult.total || 0) || 0,
           atomImproved: Number(atomResult.improved || 0) || 0,
@@ -9962,7 +9963,8 @@
           aggregateFailed: Number(update.failure_count || 0) || 0,
           aggregateExecuted: Number(update.executed_install_unit_total || 0) || 0,
           aggregateSkipped: Number(update.skipped_install_unit_total ?? update.unsupported_install_unit_total ?? 0) || 0,
-        }));
+        });
+        alert(withInventoryActionAuditEvent(improveSummary, aggregateResult));
         return {
           atomResult,
           aggregateResult,
@@ -10894,6 +10896,31 @@
         .filter(Boolean);
     }
 
+    function inventoryActionAuditEventId(payload) {
+      const root = payload && typeof payload === "object" ? payload : {};
+      const update = root.update && typeof root.update === "object" ? root.update : {};
+      const rollback = root.rollback && typeof root.rollback === "object" ? root.rollback : {};
+      const atomRefresh = root.atom_refresh && typeof root.atom_refresh === "object" ? root.atom_refresh : {};
+      return String(
+        root.audit_event_id
+        || update.audit_event_id
+        || rollback.audit_event_id
+        || atomRefresh.audit_event_id
+        || root.atom_refresh_audit_event_id
+        || "",
+      ).trim();
+    }
+
+    function withInventoryActionAuditEvent(message, payload) {
+      const summary = String(message || "").trim();
+      const auditEventId = inventoryActionAuditEventId(payload);
+      if (!auditEventId) {
+        return summary;
+      }
+      const eventLine = t("inventory_rollback_audit_event_id", { eventId: auditEventId });
+      return summary ? `${summary}\n${eventLine}` : eventLine;
+    }
+
     function inventoryRollbackSuccessMessage(messageKey, rollbackPayload) {
       const rollback = rollbackPayload && typeof rollbackPayload === "object"
         ? rollbackPayload
@@ -10903,11 +10930,7 @@
         notRestored: Number(rollback.not_restored_source_total || 0) || 0,
         failed: Number(rollback.failure_count || 0) || 0,
       });
-      const auditEventId = String(rollback.audit_event_id || "").trim();
-      if (!auditEventId) {
-        return summary;
-      }
-      return `${summary}\n${t("inventory_rollback_audit_event_id", { eventId: auditEventId })}`;
+      return withInventoryActionAuditEvent(summary, { rollback });
     }
 
     function selectRollbackBeforeRevisions(beforeRevisions) {
@@ -11601,7 +11624,8 @@
         }
         const updateMessage = String(update.message || "").trim();
         const mergedSummary = [updateSummary, ...summaryExtras].join("\n");
-        alert(updateMessage ? `${mergedSummary}\n\n${updateMessage}` : mergedSummary);
+        const updateAlertSummary = updateMessage ? `${mergedSummary}\n\n${updateMessage}` : mergedSummary;
+        alert(withInventoryActionAuditEvent(updateAlertSummary, result));
         return result;
       } finally {
         state.inventoryUpdatingInstallUnit = false;

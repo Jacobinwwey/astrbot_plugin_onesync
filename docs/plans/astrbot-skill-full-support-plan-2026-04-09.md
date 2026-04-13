@@ -473,6 +473,28 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
 - 本轮定向回归：
   - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> passed
 
+### 2026-04-13 / Step 16
+
+- 已将 `audit_event_id` 从 rollback 扩展到核心 mutation 响应链路：
+  - `main.py` 现为以下写路径回填审计事件号：
+    - `register / refresh / remove` source
+    - install-unit / collection-group 的 `refresh / update`
+    - `aggregates/update-all`
+    - `improve-all` 的 atom-refresh 阶段
+  - 响应字段约定：
+    - 顶层 `audit_event_id`
+    - 若存在 `update` 或 `atom_refresh` 摘要，摘要内同步回填 `audit_event_id`
+- 前端告警链路已统一消费审计事件号：
+  - 新增 `inventoryActionAuditEventId(...)` 与 `withInventoryActionAuditEvent(...)`
+  - 成功提示覆盖：
+    - 单聚合 update
+    - 批量 update-all
+    - improve-all
+    - rollback / rollback retry / audit retry
+- 本轮定向回归：
+  - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> passed
+  - `pytest -q` -> passed
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

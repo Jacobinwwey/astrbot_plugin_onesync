@@ -187,6 +187,9 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 - rollback 成功提示已补齐事件号回填：
   - 当前聚合回滚 / 回滚重试 / 审计重试三条成功提示，现会在响应包含 `rollback.audit_event_id` 时附加展示对应事件号；
   - 现场运维可直接复制事件号定位审计链路，减少“成功了但不知道对应哪条记录”的定位成本。
+- `audit_event_id` 已扩展到核心 mutation 响应：
+  - `register / refresh / remove` source、install-unit/collection-group 的 `refresh / update`、`update-all`、`improve-all(atom refresh)` 都会回填事件号；
+  - 前端已统一通过 `withInventoryActionAuditEvent(...)` 在 update / update-all / improve-all/ rollback 成功提示中附加事件号，形成跨动作一致的审计追踪体验。
 - 测试稳定性已补齐：
   - 修复 `tests/test_main_git_checkout_runtime.py` 与 `tests/test_webui_server.py` 组合执行时的 fake astrbot module 初始化冲突，
   - 现已可稳定通过：`pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`。

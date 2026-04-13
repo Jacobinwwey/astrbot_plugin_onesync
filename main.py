@@ -5844,7 +5844,7 @@ class OneSyncPlugin(Star):
                     sync_response["update"] = sync_update_summary
                     sync_response["updated_install_unit_ids"] = [normalized_install_unit_id]
                     sync_response["failed_install_units"] = []
-                    self._append_skills_audit_event(
+                    audit_event_id = self._append_skills_audit_event(
                         "install_unit_update_fallback_sync",
                         source_id=normalized_install_unit_id,
                         payload={
@@ -5852,6 +5852,8 @@ class OneSyncPlugin(Star):
                             "failed_sources": sync_response.get("failed_sources", []),
                         },
                     )
+                    sync_update_summary["audit_event_id"] = audit_event_id
+                    sync_response["audit_event_id"] = audit_event_id
                     return sync_response
             return {
                 "ok": False,
@@ -5876,7 +5878,7 @@ class OneSyncPlugin(Star):
                 f"{execution.get('revision_changed_source_total', 0)} source revisions changed"
             ),
         }
-        self._append_skills_audit_event(
+        audit_event_id = self._append_skills_audit_event(
             "install_unit_update",
             source_id=normalized_install_unit_id,
             payload={
@@ -5891,6 +5893,7 @@ class OneSyncPlugin(Star):
                 "rollback_preview_candidate_total": execution.get("rollback_preview_candidate_total", 0),
             },
         )
+        update_summary["audit_event_id"] = audit_event_id
         self._push_debug_log(
             "info" if not execution.get("failure_count") else "warn",
             (
@@ -5909,6 +5912,7 @@ class OneSyncPlugin(Star):
                 "update": update_summary,
                 "updated_install_unit_ids": execution.get("executed_install_unit_ids", []),
                 "failed_install_units": execution.get("failed_install_units", []),
+                "audit_event_id": audit_event_id,
             },
         )
 
@@ -6006,7 +6010,7 @@ class OneSyncPlugin(Star):
                 f"{plan.get('unsupported_install_unit_total', 0)} unsupported units"
             ),
         }
-        self._append_skills_audit_event(
+        audit_event_id = self._append_skills_audit_event(
             "collection_group_update",
             source_id=normalized_collection_group_id,
             payload={
@@ -6028,6 +6032,7 @@ class OneSyncPlugin(Star):
                 "skipped_other_install_unit_total": len(skipped_other_install_unit_ids),
             },
         )
+        update_summary["audit_event_id"] = audit_event_id
         self._push_debug_log(
             (
                 "info"
@@ -6061,6 +6066,7 @@ class OneSyncPlugin(Star):
                 "skipped_install_unit_ids": skipped_install_unit_ids,
                 "skipped_manual_only_install_unit_ids": skipped_manual_only_install_unit_ids,
                 "skipped_other_install_unit_ids": skipped_other_install_unit_ids,
+                "audit_event_id": audit_event_id,
             },
         )
 
@@ -6258,7 +6264,7 @@ class OneSyncPlugin(Star):
                     "failureItems": failed_items,
                     "completedAt": _now_iso(),
                 }
-                self._append_skills_audit_event(
+                atom_refresh_audit_event_id = self._append_skills_audit_event(
                     "install_atom_refresh_all",
                     source_id="all",
                     payload={
@@ -6272,6 +6278,7 @@ class OneSyncPlugin(Star):
                         "failure_groups": failure_groups,
                     },
                 )
+                atom_refresh_summary["audit_event_id"] = atom_refresh_audit_event_id
 
                 aggregate_result = await self._webui_update_all_skill_aggregates_locked(
                     body,
@@ -6281,6 +6288,7 @@ class OneSyncPlugin(Star):
                     reset_progress=False,
                 )
                 aggregate_result["atom_refresh"] = atom_refresh_summary
+                aggregate_result["atom_refresh_audit_event_id"] = atom_refresh_audit_event_id
                 return aggregate_result
             except Exception as exc:
                 self._update_skills_update_all_progress_snapshot(
@@ -6614,7 +6622,7 @@ class OneSyncPlugin(Star):
                     f"{len(duplicate_install_unit_ids)} deduplicated"
                 ),
             }
-            self._append_skills_audit_event(
+            audit_event_id = self._append_skills_audit_event(
                 "aggregates_update_all",
                 source_id="all",
                 payload={
@@ -6632,6 +6640,7 @@ class OneSyncPlugin(Star):
                     "failure_taxonomy": failure_taxonomy,
                 },
             )
+            update_summary["audit_event_id"] = audit_event_id
             blocked_reason_groups = failure_taxonomy.get("blocked_reason_groups", [])
             failed_reason_groups = failure_taxonomy.get("failed_install_unit_reason_groups", [])
             blocked_reason_tail = ", ".join(
@@ -6707,6 +6716,7 @@ class OneSyncPlugin(Star):
                 "deduplicated_install_unit_ids": duplicate_install_unit_ids,
                 "skills": refreshed_skills_snapshot,
                 "inventory": inventory_snapshot,
+                "audit_event_id": audit_event_id,
             }
         except Exception as exc:
             self._update_skills_update_all_progress_snapshot(
@@ -7219,7 +7229,7 @@ class OneSyncPlugin(Star):
             None,
         )
         source_id = str(source.get("source_id", "")).strip() if isinstance(source, dict) else ""
-        self._append_skills_audit_event(
+        audit_event_id = self._append_skills_audit_event(
             "register",
             source_id=source_id,
             payload={
@@ -7245,6 +7255,7 @@ class OneSyncPlugin(Star):
             "registry": registry_payload,
             "skills": refreshed_skills_snapshot,
             "inventory": inventory_snapshot,
+            "audit_event_id": audit_event_id,
         }
 
     def webui_refresh_skill_registry_source(self, source_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -7274,7 +7285,11 @@ class OneSyncPlugin(Star):
         except Exception as exc:
             return {"ok": False, "message": str(exc)}
         self._save_skills_registry(updated_registry)
-        self._append_skills_audit_event("refresh", source_id=normalized_source_id, payload=source_payload)
+        audit_event_id = self._append_skills_audit_event(
+            "refresh",
+            source_id=normalized_source_id,
+            payload=source_payload,
+        )
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
         registry_payload = refreshed_skills_snapshot.get("registry", updated_registry)
@@ -7292,6 +7307,7 @@ class OneSyncPlugin(Star):
             "registry": registry_payload,
             "skills": refreshed_skills_snapshot,
             "inventory": inventory_snapshot,
+            "audit_event_id": audit_event_id,
         }
 
     def webui_refresh_install_unit(
@@ -7343,7 +7359,7 @@ class OneSyncPlugin(Star):
 
         self._save_skills_registry(updated_registry)
         normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
-        self._append_skills_audit_event(
+        audit_event_id = self._append_skills_audit_event(
             "install_unit_refresh",
             source_id=normalized_install_unit_id,
             payload={
@@ -7368,6 +7384,7 @@ class OneSyncPlugin(Star):
             extra={
                 "registry": updated_registry,
                 "refreshed_source_ids": refreshed_source_ids,
+                "audit_event_id": audit_event_id,
             },
         )
 
@@ -7526,7 +7543,7 @@ class OneSyncPlugin(Star):
 
         self._save_skills_registry(updated_registry)
         normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
-        self._append_skills_audit_event(
+        audit_event_id = self._append_skills_audit_event(
             "collection_group_refresh",
             source_id=normalized_collection_group_id,
             payload={
@@ -7551,6 +7568,7 @@ class OneSyncPlugin(Star):
             extra={
                 "registry": updated_registry,
                 "refreshed_source_ids": refreshed_source_ids,
+                "audit_event_id": audit_event_id,
             },
         )
 
@@ -8148,7 +8166,7 @@ class OneSyncPlugin(Star):
             return {"ok": False, "message": str(exc)}
         self._save_skills_registry(updated_registry)
         manifest = self._remove_source_from_saved_manifest(normalized_source_id)
-        self._append_skills_audit_event("remove", source_id=normalized_source_id, payload={})
+        audit_event_id = self._append_skills_audit_event("remove", source_id=normalized_source_id, payload={})
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
         return {
@@ -8158,6 +8176,7 @@ class OneSyncPlugin(Star):
             "manifest": manifest,
             "skills": refreshed_skills_snapshot,
             "inventory": inventory_snapshot,
+            "audit_event_id": audit_event_id,
         }
 
     def webui_update_deploy_target(self, target_id: str, payload: dict[str, Any]) -> dict[str, Any]:

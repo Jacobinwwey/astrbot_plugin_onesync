@@ -187,6 +187,9 @@ To call the feature "complete", the next implementation steps should be:
 - Rollback success messaging now surfaces audit event IDs directly:
   - success alerts for aggregate rollback, rollback retry, and audit-row retry now append the `rollback.audit_event_id` when present;
   - operators can copy the event ID immediately and jump to the exact audit trail record without manual guesswork.
+- `audit_event_id` is now expanded across core mutation responses:
+  - source `register / refresh / remove`, install-unit and collection-group `refresh / update`, `update-all`, and `improve-all` (atom-refresh stage) now return event IDs;
+  - the frontend now uses `withInventoryActionAuditEvent(...)` so update, update-all, improve-all, and rollback success alerts all expose a consistent audit-trace hook.
 - Test-order stability is now fixed:
   - Resolved fake astrbot module initialization conflicts between `tests/test_main_git_checkout_runtime.py` and `tests/test_webui_server.py`.
   - Combined run now passes consistently: `pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`.

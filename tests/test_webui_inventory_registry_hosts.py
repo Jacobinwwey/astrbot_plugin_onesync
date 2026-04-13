@@ -582,6 +582,8 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_install_unit_rollback_retry_success", html)
         self.assertIn("function loadRollbackAuditTrail(", html)
         self.assertIn("function renderInventoryRollbackAuditPanel(", html)
+        self.assertIn("function inventoryActionAuditEventId(", html)
+        self.assertIn("function withInventoryActionAuditEvent(", html)
         self.assertIn("function inventoryRollbackRetryBeforeRevisions(", html)
         self.assertIn("function inventoryRollbackSuccessMessage(", html)
         self.assertIn("function inventoryRollbackAuditActionEndpoint(", html)
