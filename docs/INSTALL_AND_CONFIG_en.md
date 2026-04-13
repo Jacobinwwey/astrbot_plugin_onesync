@@ -2,23 +2,30 @@
 
 > Language / 语言: [English](./INSTALL_AND_CONFIG_en.md) | [中文](./INSTALL_AND_CONFIG_zh.md)
 
-This guide covers:
+| Current version | Updated | Audience | Start here |
+| --- | --- | --- | --- |
+| `v0.2.2` | `2026-04-13` | first-time users and day-to-day operators | [README_en.md](../README_en.md) |
 
-- How to install OneSync and verify it is working.
-- How to quickly set sync/update intervals.
-- How to configure additional software targets (human and developer modes).
-- How to troubleshoot common runtime/update failures.
+This guide is for two moments: the first time you install OneSync, and the first time you need to extend or repair a real setup. It stays on the operational path. Internal architecture lives elsewhere.
 
-Companion docs:
+| If you need to... | Go to |
+| --- | --- |
+| install and verify the plugin | [3. Installation](#3-installation) |
+| bring up the WebUI quickly | [4.1 Built-in WebUI](#41-built-in-webui-no-astrbot-dashboard-source-patch) |
+| let AI generate the config | [5.3 AI One-Click Prompt Suite](#53-ai-one-click-prompt-suite-recommended) |
+| look up commands or config fields | [6. Commands](#6-commands) / [7. Configuration Overview](#7-configuration-overview) |
+| troubleshoot common failures | [11. Troubleshooting](#11-troubleshooting) |
 
-- project homepage and quick start: [README_en.md](../README_en.md)
-- operations and release work: [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md)
-- development and extension: [Developer Guide (English)](./DEVELOPER_GUIDE_en.md)
-- API usage: [API Reference (English)](./API_REFERENCE_en.md)
+| Related doc | Purpose |
+| --- | --- |
+| [README_en.md](../README_en.md) | project overview, quick start, prompt entry points |
+| [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md) | release, repository sync, maintainer operations |
+| [Developer Guide (English)](./DEVELOPER_GUIDE_en.md) | code structure, extension points, verification workflow |
+| [API Reference (English)](./API_REFERENCE_en.md) | `/api/*` routes and call sequences |
 
 ## 1. Plugin Positioning
 
-OneSync is an extensible software updater plugin for AstrBot.
+OneSync is an extensible software updater plugin for AstrBot. The point is not a single update command. The point is keeping multi-target maintenance, verification, and operational visibility in one flow.
 
 Core capabilities:
 

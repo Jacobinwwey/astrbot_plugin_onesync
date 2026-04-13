@@ -2,19 +2,26 @@
 
 > Language / 语言: [English](./DEVELOPER_GUIDE_en.md) | [中文](./DEVELOPER_GUIDE_zh.md)
 
-This guide is for maintainers, contributors, and extension authors. It focuses on:
+| Current version | Updated | Audience | Start here |
+| --- | --- | --- | --- |
+| `v0.2.2` | `2026-04-13` | maintainers, contributors, extension authors | [README_en.md](../README_en.md) |
 
-- repository structure and responsibility boundaries
-- local development and verification workflow
-- Skills control-plane state files
-- extension points and maintenance discipline
+This guide is for people who are about to change code. It does not repeat install instructions. It tells you where the logic lives, where state lands, how to verify changes, and which boundaries are currently important.
 
-For user install/usage, operations, and API details, use:
+| If you want to... | Go to |
+| --- | --- |
+| find the main entrypoints and module roles | [1. Repository layout](#1-repository-layout) |
+| understand the state model first | [2. Current state model](#2-current-state-model) |
+| run local regression and WebUI checks | [4. Local development workflow](#4-local-development-workflow) |
+| add a strategy or extend Skills host support | [5. Extension points](#5-extension-points) |
+| decide which docs must move with the code | [7. Documentation boundaries](#7-documentation-boundaries) |
 
-- [README_en.md](../README_en.md)
-- [Installation & Config Guide (English)](./INSTALL_AND_CONFIG_en.md)
-- [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md)
-- [API Reference (English)](./API_REFERENCE_en.md)
+| Related doc | Purpose |
+| --- | --- |
+| [README_en.md](../README_en.md) | project overview and quick start |
+| [Installation & Config Guide (English)](./INSTALL_AND_CONFIG_en.md) | user install and config |
+| [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md) | release, sync, maintainer operations |
+| [API Reference (English)](./API_REFERENCE_en.md) | WebUI API routes and call order |
 
 ## 1. Repository layout
 

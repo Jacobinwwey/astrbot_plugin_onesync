@@ -2,24 +2,31 @@
 
 > 语言 / Language: [中文](./OPERATIONS_AND_SYNC_zh.md) | [English](./OPERATIONS_AND_SYNC_en.md)
 
-本文档面向仓库维护者，包含：
+| 当前版本 | 最后更新 | 适用对象 | 建议先读 |
+| --- | --- | --- | --- |
+| `v0.2.2` | `2026-04-13` | 仓库维护者、发布者 | [README.md](../README.md) |
 
-- 插件上传信息
-- GitHub About 配置
-- 版本维护与发版
-- 本地与 GitHub 同步流程
+这份文档给维护仓库和发版的人看。重点不是教你怎么用插件，而是确保你把版本、release、标签、远端同步和发布文案处理干净。
+
+| 你现在要做什么 | 入口 |
+| --- | --- |
+| 准备插件上传信息 | [2. 插件上传信息](#2-插件上传信息) |
+| 填 GitHub About | [3. GitHub About 配置](#3-github-about-配置) |
+| 走发布流程 | [4. 版本维护与发版](#4-版本维护与发版) |
+| 同步代码和标签到远端 | [5. 代码同步流程](#5-代码同步流程本地---github) |
+| 核对 Skills 运维链路现状 | [6. Skills 更新维护说明](#6-skills-更新维护说明) |
 
 ## 1. 文档导航
 
-- 项目首页： [README.md](../README.md)
-- 用户安装与配置： [INSTALL_AND_CONFIG_zh.md](INSTALL_AND_CONFIG_zh.md)
-- 用户安装与配置（英文）： [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md)
-- 开发指南（中文）： [DEVELOPER_GUIDE_zh.md](./DEVELOPER_GUIDE_zh.md)
-- 接口参考（中文）： [API_REFERENCE_zh.md](./API_REFERENCE_zh.md)
-- About 详细模板（中文）： [GITHUB_ABOUT_zh.md](./GITHUB_ABOUT_zh.md)
-- About 详细模板（英文）： [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
-- Skills 来源与更新审计（英文）： [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md)
-- Skills 来源与更新审计（中文）： [SKILLS_UPDATE_STATUS_zh.md](./SKILLS_UPDATE_STATUS_zh.md)
+| 文档 | 用途 |
+| --- | --- |
+| [README.md](../README.md) | 项目定位、快速开始、Prompt 模板 |
+| [INSTALL_AND_CONFIG_zh.md](./INSTALL_AND_CONFIG_zh.md) | 用户安装、配置、排障 |
+| [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md) | 英文安装与配置 |
+| [DEVELOPER_GUIDE_zh.md](./DEVELOPER_GUIDE_zh.md) | 开发结构与扩展点 |
+| [API_REFERENCE_zh.md](./API_REFERENCE_zh.md) | `/api/*` 路由清单与调用顺序 |
+| [GITHUB_ABOUT_zh.md](./GITHUB_ABOUT_zh.md) / [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md) | 仓库 About 模板 |
+| [SKILLS_UPDATE_STATUS_zh.md](./SKILLS_UPDATE_STATUS_zh.md) / [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md) | Skills 更新能力现状 |
 
 ## 2. 插件上传信息
 
@@ -83,11 +90,11 @@ NO_PUSH=1 ./scripts/release.sh v0.2.2
 
 GitHub release 页面默认应提供中英双语说明，而不是只写英文。
 
-建议做法：
+建议顺序：
 
-1. 在仓库中新增或更新 `docs/releases/vX.Y.Z.md`
-2. 文件结构保持 “完整英文 + 完整中文”
-3. 使用 `gh release create` 或 `gh release edit` 的 `--notes-file` 引用该文件
+1. 先在仓库中新增或更新 `docs/releases/vX.Y.Z.md`
+2. 确认内容结构保持“完整英文 + 完整中文”
+3. 跑完发布前验证后，再使用 `gh release create` 或 `gh release edit` 引用 `--notes-file`
 
 推荐命令：
 

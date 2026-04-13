@@ -2,8 +2,17 @@
 
 > Language / 语言: [English](./SKILLS_UPDATE_STATUS_en.md) | [中文](./SKILLS_UPDATE_STATUS_zh.md)
 
-Audit date: `2026-04-13`
-Scope: current `main` branch, source-first Skills management model
+| Current version | Audit date | Scope | Start here |
+| --- | --- | --- | --- |
+| `v0.2.2` | `2026-04-13` | current `main` branch, source-first Skills management model | [README_en.md](../README_en.md) |
+
+This is not product marketing. It is a capability audit. If you need to answer “what is actually updateable today, what only syncs metadata, and what is still manual,” start here.
+
+| Read this section first | Use it for |
+| --- | --- |
+| [3. Current Support Matrix](#3-current-support-matrix) | what each source/install shape can actually do |
+| [4. How To Judge Support Correctly](#4-how-to-judge-support-correctly) | which fields matter when UI state and reality diverge |
+| [5. Current Verdict](#5-current-verdict) | where the current mainline is solid and where it is still incomplete |
 
 ## 1. What Is Actually Complete Today
 

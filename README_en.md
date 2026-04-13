@@ -13,68 +13,62 @@
   <img src="https://img.shields.io/badge/Skills-aggregate--first-7c3aed" alt="aggregate-first skills">
 </p>
 
-OneSync is a general-purpose software update plugin for AstrBot, built around one practical goal:
+OneSync pulls software updates and Skills operations into one AstrBot control plane.
 
-- keep multiple software targets under one update workflow
-- expose a dedicated WebUI without patching AstrBot Dashboard source
-- manage software hosts, source bundles, deploy targets, and Skills operations inside one control plane
-
-Use this project if you want:
-
-- scheduled and manual maintenance for more than one software target
-- a built-in operations console at `127.0.0.1:8099`
-- aggregate-first Skills management instead of leaf-level UI noise
+It is built for a practical situation: you maintain more than one software target, you do not want that maintenance to live in scattered shell scripts, and you do not want to fork AstrBot Dashboard just to get a usable operations console. OneSync gives you a full path instead: check, update, verify, audit, plus a dedicated WebUI.
 
 ## Quick Navigation
 
-1. [Core Highlights](#core-highlights)
-2. [Good Fit](#good-fit)
-3. [Quick Start](#quick-start)
-4. [Common Commands](#common-commands)
-5. [WebUI Highlights](#webui-highlights)
-6. [Skills Management Highlights](#skills-management-highlights)
-7. [FAQ](#faq)
-8. [Documentation Map](#documentation-map)
+| What do you need right now? | Entry |
+| --- | --- |
+| Decide whether the project fits your setup | [Core Highlights](#core-highlights) / [Good Fit](#good-fit) |
+| Get the plugin running | [Quick Start](#quick-start) |
+| Let AI generate the config for you | [Prompt Templates](#prompt-templates) |
+| See the main commands | [Common Commands](#common-commands) |
+| Understand the WebUI quickly | [WebUI Highlights](#webui-highlights) |
+| Understand the Skills model | [Skills Management Highlights](#skills-management-highlights) |
+| Triage common failures | [FAQ](#faq) |
+
+| User install | Prompt suite | Ops and release | Developer docs | API docs | Status and roadmap |
+| --- | --- | --- | --- | --- | --- |
+| [Installation & Config (EN)](./docs/INSTALL_AND_CONFIG_en.md)<br>[安装与配置（中文）](./docs/INSTALL_AND_CONFIG_zh.md) | [Prompt suite in install guide](./docs/INSTALL_AND_CONFIG_en.md#53-ai-one-click-prompt-suite-recommended)<br>[Prompt 套件（中文）](./docs/INSTALL_AND_CONFIG_zh.md#53-ai-一键配置-prompt-套件推荐) | [Ops & Release (EN)](./docs/OPERATIONS_AND_SYNC_en.md)<br>[运维与发布（中文）](./docs/OPERATIONS_AND_SYNC_zh.md) | [Developer Guide (EN)](./docs/DEVELOPER_GUIDE_en.md)<br>[开发指南（中文）](./docs/DEVELOPER_GUIDE_zh.md) | [API Reference (EN)](./docs/API_REFERENCE_en.md)<br>[接口参考（中文）](./docs/API_REFERENCE_zh.md) | [Skills Status (EN)](./docs/SKILLS_UPDATE_STATUS_en.md)<br>[Skills 状态（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) |
 
 ## Core Highlights
 
-### 1. Software updates as an actual workflow
+### 1. Software updates as a full workflow
 
-- scheduled checks, manual checks, manual updates, and forced updates
-- multi-target architecture instead of a single-tool updater
-- three primary strategies:
-  - `cargo_path_git`
-  - `command`
-  - `system_package`
-- post-update verification, persisted state, and event logs
+- Scheduled checks, manual checks, manual updates, and forced updates.
+- Multi-target maintenance instead of a single-tool updater.
+- Three primary strategies: `cargo_path_git`, `command`, and `system_package`.
+- Post-update verification, persisted state, event logs, and audit replay.
 
 ### 2. Embedded WebUI without dashboard patching
 
-- embedded WebUI at `127.0.0.1:8099`
-- config center, runtime overview, recent jobs, debug logs
-- Chinese/English UI toggle
-- filtering by keyword, status, and strategy
+- Embedded WebUI at `127.0.0.1:8099`.
+- Config center, runtime overview, latest job, and debug logs in one place.
+- Chinese/English UI switching.
+- Filtering by keyword, status, and strategy.
 
-### 3. Built for operations, not only for “it runs”
+### 3. Skills management organized by maintenance boundary
 
-- mirror and multi-remote support
-- runtime health and structured diagnostics
-- batch update flows and audit replay
-- unified batch workflows such as `Improve All Skills` and `Update All Aggregates`
+- Install units and collection groups are the primary management objects.
+- Source bundles, deploy targets, and host software live in the same control plane.
+- `manual_only`, git-backed, repo-metadata, and registry-backed paths stay explicit.
+- `Structure & Members` is collapsed by default so primary actions stay visible.
 
-### 4. Aggregate-first Skills management
+### 4. Built for operations, not just for “it runs”
 
-- no primary UI based on flat leaf-skill explosion
-- install units and collection groups are the main maintenance objects
-- package/source bundles are preferred when a real maintenance boundary exists
-- `manual_only`, git-backed, repo-metadata, and registry-backed paths stay explicitly separated
+- Mirrors, multi-remote candidates, and probing support.
+- Runtime health, doctor results, and structured diagnostics.
+- Batch update flows, aggregate progress, and execution replay.
+- Clear separation between source sync and real update execution.
 
 ## Good Fit
 
-- you maintain multiple CLI / GUI / Skills-capable hosts on one AstrBot machine
-- you want software updates and Skills maintenance in one panel
-- you need a plugin that is user-operable, developer-extensible, and ops-auditable
-- you do not want README to carry user guidance, ops process, architecture notes, and API inventory all at once
+- You maintain multiple CLI / GUI / Skills-capable hosts on one AstrBot machine.
+- You want software updates and Skills maintenance in one ops console.
+- You need a plugin that is usable by operators, extensible by developers, and auditable by maintainers.
+- You do not want README to carry install help, release process, architecture notes, and API inventory all at once.
 
 ## Quick Start
 
@@ -99,11 +93,11 @@ Send as admin:
 /updater status
 ```
 
-If you see the status summary, the plugin is loaded correctly.
+If you get a status summary back, the plugin is loaded correctly.
 
 ### 4. Open the embedded WebUI
 
-Enable these config fields:
+Enable:
 
 - `web_admin.enabled = true`
 - `web_admin.host = 127.0.0.1`
@@ -115,17 +109,138 @@ Then open:
 http://127.0.0.1:8099
 ```
 
-### 5. Follow the recommended path
+### 5. Recommended sequence
 
-1. choose `human` or `developer` mode in Config Center
-2. define or import software targets
-3. run `/updater env` or `Run Update (Filtered)` first
-4. validate one target before moving to batch operations
+1. Choose `human` or `developer` mode in Config Center.
+2. Define or import software targets.
+3. Run `/updater env` or `Run Update (Filtered)` once.
+4. Validate one target before moving to batch operations.
 
-For full install and config detail:
+For full install, config, and troubleshooting detail:
 
 - [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
 - [安装与配置指南（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
+
+## Prompt Templates
+
+If you do not want to write config prompts from scratch, use the templates below with Codex, Claude, or ChatGPT.
+
+If the parameter set is large, use the local prompt generator first:
+
+```bash
+python3 scripts/onesync_prompt_builder.py \
+  --interactive \
+  --lang en \
+  --scenario suite \
+  --output /tmp/onesync_prompt_en.txt
+```
+
+### Prompt A: bootstrap and apply in one shot
+
+Use this when you want AI to generate the initial config payload and the apply script in one pass.
+
+```text
+You are my OneSync configuration execution assistant.
+Please bootstrap and apply OneSync configuration end-to-end.
+
+Goal:
+1) Generate valid JSON payload for POST /api/config. The outer shape must be {"config": {...}}.
+2) Generate a bash one-click script that:
+   - writes onesync_config.json
+   - logs in via /api/login if WEBUI_PASSWORD is not empty
+   - POSTs /api/config
+   - verifies with GET /api/config and GET /api/overview
+3) Output exactly 3 sections:
+   - JSON_PAYLOAD
+   - BASH_ONE_CLICK
+   - ASSUMPTIONS
+4) No extra commentary. JSON must have no comments or trailing commas.
+
+Input:
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+TARGET_CONFIG_MODE=human
+POLL_INTERVAL_MINUTES=10
+DEFAULT_CHECK_INTERVAL_HOURS=12
+AUTO_UPDATE_ON_SCHEDULE=true
+TARGETS_YAML:
+- name: zeroclaw
+  strategy: cargo_path_git
+  enabled: true
+  check_interval_hours: 12
+  repo_path: /home/jacob/zeroclaw
+  binary_path: /root/.cargo/bin/zeroclaw
+  upstream_repo: https://github.com/zeroclaw-labs/zeroclaw.git
+  build_commands:
+    - cargo install --path {repo_path}
+  verify_cmd: "{binary_path} --version"
+```
+
+### Prompt B: incrementally add one target
+
+Use this when the existing config already works and you only want to merge one more software target without wiping anything else.
+
+```text
+You are my OneSync config merge assistant.
+Add one new software target while preserving all existing settings and targets.
+
+Execution rules:
+1) Read current config from GET {WEBUI_URL}/api/config.
+2) Merge my new target incrementally and do not overwrite unrelated targets.
+3) Output:
+   - UPDATED_JSON_PAYLOAD
+   - BASH_APPLY_PATCH
+   - CHANGE_SUMMARY
+4) If the target name already exists, update it in place instead of duplicating it.
+
+Input:
+WEBUI_URL=http://127.0.0.1:8099
+WEBUI_PASSWORD=
+NEW_TARGET:
+  name: mytool
+  strategy: command
+  enabled: true
+  check_interval_hours: 12
+  current_version_cmd: /usr/local/bin/mytool --version
+  latest_version_cmd: curl -fsSL https://example.com/mytool/latest.txt
+  latest_version_pattern: (\\d+\\.\\d+\\.\\d+)
+  update_commands:
+    - bash /opt/scripts/update-mytool.sh
+  verify_cmd: /usr/local/bin/mytool --version
+```
+
+### Prompt C: diagnose and repair config failures
+
+Use this for `404`, config-apply failures, or path mismatch problems.
+
+```text
+You are my OneSync troubleshooting assistant.
+Output a runnable plan in order: diagnose -> fix -> verify.
+
+Required diagnostics:
+1) GET {WEBUI_URL}/api/health
+2) GET {WEBUI_URL}/openapi.json and confirm `/api/config` exists
+3) GET {WEBUI_URL}/api/config
+4) If /api/config is 404, provide the minimum fix sequence:
+   - restart service
+   - confirm web_admin_url
+   - browser hard refresh with Ctrl+F5
+
+Output:
+- DIAGNOSIS
+- FIX_COMMANDS
+- VERIFY_COMMANDS
+- ROLLBACK_PLAN
+
+Environment:
+WEBUI_URL=http://127.0.0.1:8099
+SERVICE_NAME=astrbot.service
+```
+
+Full prompt suite and generator usage live here:
+
+- [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md#53-ai-one-click-prompt-suite-recommended)
+- [安装与配置指南（中文）](./docs/INSTALL_AND_CONFIG_zh.md#53-ai-一键配置-prompt-套件推荐)
 
 ## Common Commands
 
@@ -139,18 +254,18 @@ For full install and config detail:
 
 Notes:
 
-- `target` is optional; when omitted, all configured targets are used
-- running `/updater env` before wider rollout is strongly recommended
+- `target` is optional. If omitted, all configured targets are used.
+- Running `/updater env` before a wider rollout is still the safest first step.
 
 ## WebUI Highlights
 
-The WebUI is not just “commands with buttons”. It is structured for actual operations:
+The WebUI is built around three practical needs: write the config correctly, watch the execution clearly, and diagnose failures without guessing.
 
 - `Config Center`
-  - read/write plugin config
+  - read and write plugin config directly
   - `human` / `developer` dual-mode support
 - `AI Assistant`
-  - prompt generation for bootstrap, incremental add, diagnosis, and full-suite flows
+  - bootstrap, incremental add, diagnose/repair, and full-suite prompt generation
 - `Latest Job`
   - recent software-update execution summary
 - `Debug Logs`
@@ -161,23 +276,22 @@ The WebUI is not just “commands with buttons”. It is structured for actual o
 If your immediate goal is “get software update working safely”, the practical order is:
 
 1. `Config Center`
-2. `AI Assistant` if needed
+2. `AI Assistant`
 3. `Run Update (Filtered)`
 4. `Latest Job`
 5. `Debug Logs`
 
 ## Skills Management Highlights
 
-OneSync does not treat Skills management as a raw `npx skills ls` dump. It is built around maintenance boundaries:
+OneSync does not mirror a raw `npx skills ls` dump. It organizes the Skills surface around maintenance boundaries.
 
-- installed, skill-capable hosts are shown first by default
-- uninstalled candidates can still be revealed explicitly
-- `global / workspace` binding scope is first-class
-- the right-side inspector focuses on the current source / install unit / deploy target
-- long information zones such as `Structure & Members` and `Execution Preview & Audit` are collapsible
-- in the current UI, `Structure & Members` is collapsed by default so the primary operations stay visually dominant
+- Installed, skill-capable hosts are shown first.
+- Uninstalled candidates can still be revealed deliberately.
+- `global / workspace` is a first-class binding scope.
+- The right-side inspector focuses on the current source / install unit / deploy target.
+- Longer sections such as `Structure & Members` and `Execution Preview & Audit` stay collapsible.
 
-Update support is intentionally explicit:
+The update boundary is explicit:
 
 - npm / registry-backed aggregates: updateable
 - git-backed `skill_lock` aggregates: updateable after managed checkout bootstrap
@@ -186,18 +300,18 @@ Update support is intentionally explicit:
 
 The point is not to make everything look updateable. The point is to make it obvious:
 
-- what can be updated automatically
+- what can be maintained automatically
 - what can only refresh metadata
-- what still requires manual maintenance
+- what still needs manual handling
 
 ## FAQ
 
 ### 1. The page shows `Failed to load config: 404 Not Found`
 
-Use this order first:
+Try this order first:
 
 1. `systemctl restart astrbot.service`
-2. make sure you opened OneSync `web_admin_url`
+2. make sure you opened OneSync’s own `web_admin_url`
 3. hard refresh the browser with `Ctrl+F5`
 4. verify:
    - `curl -i http://127.0.0.1:8099/api/config`
@@ -207,13 +321,13 @@ Use this order first:
 
 The current mainline already fixes two common false positives:
 
-- binding saves no longer depend on an inventory rescan to become visible
+- binding saves no longer depend on an inventory rescan to converge
 - successful install-unit / collection command updates now stamp freshness anchors immediately, so false `AGING` state should clear on the next rebuild
 
 If the panel still looks wrong, check:
 
 - whether the source is actually `manual_only`
-- whether the path used `source sync fallback` instead of command update
+- whether the path used real command update or `source sync fallback`
 - whether `Debug Logs` or `doctor` show a structured error
 
 ### 3. Should I use `human` or `developer` mode?
@@ -221,38 +335,16 @@ If the panel still looks wrong, check:
 - normal users: start with `human`
 - advanced operators needing mirrors, regex, timeout tuning, or larger target sets: use `developer`
 
-## Documentation Map
+## Documentation Boundaries
 
-The documentation is now intentionally separated by audience:
+The docs are now split by role. README is intentionally not the whole documentation set.
 
-### User docs
-
-- [README_en.md](./README_en.md)
-- [README.md](./README.md)
-- [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
-- [安装与配置指南（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
-
-### Operations / release docs
-
-- [Operations and Sync Manual (English)](./docs/OPERATIONS_AND_SYNC_en.md)
-- [操作与同步手册（中文）](./docs/OPERATIONS_AND_SYNC_zh.md)
-
-### Developer docs
-
-- [Developer Guide (English)](./docs/DEVELOPER_GUIDE_en.md)
-- [开发指南（中文）](./docs/DEVELOPER_GUIDE_zh.md)
-
-### API docs
-
-- [API Reference (English)](./docs/API_REFERENCE_en.md)
-- [接口参考（中文）](./docs/API_REFERENCE_zh.md)
-
-### Status and planning docs
-
-- [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md)
-- [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md)
-- [Skills Management Roadmap](./docs/plans/skills-management-roadmap-v2.md)
-
----
+| If you need to... | Start here |
+| --- | --- |
+| install, configure, or troubleshoot | [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md) |
+| publish, sync, or prepare bilingual releases | [Operations and Sync Manual (English)](./docs/OPERATIONS_AND_SYNC_en.md) |
+| understand code structure and extension points | [Developer Guide (English)](./docs/DEVELOPER_GUIDE_en.md) |
+| script against the WebUI or integrate frontend/API flows | [API Reference (English)](./docs/API_REFERENCE_en.md) |
+| understand current Skills update support limits | [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) |
 
 If this project helps with real AstrBot maintenance work, a Star is appreciated.

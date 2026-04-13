@@ -2,22 +2,30 @@
 
 > Language / 语言: [English](./OPERATIONS_AND_SYNC_en.md) | [中文](./OPERATIONS_AND_SYNC_zh.md)
 
-This manual is for repository maintainers and covers:
+| Current version | Updated | Audience | Start here |
+| --- | --- | --- | --- |
+| `v0.2.2` | `2026-04-13` | maintainers and release operators | [README_en.md](../README_en.md) |
 
-- Plugin upload metadata
-- GitHub About setup
-- Versioning and release workflow
-- Local to GitHub synchronization process
+This manual is for the people who publish and maintain the repository. It is not usage documentation. It is the place to keep release flow, tags, remote sync, and published messaging clean.
+
+| If you need to... | Go to |
+| --- | --- |
+| prepare plugin upload metadata | [2. Plugin Upload Metadata](#2-plugin-upload-metadata) |
+| update GitHub About | [3. GitHub About Setup](#3-github-about-setup) |
+| run the release flow | [4. Versioning and Releases](#4-versioning-and-releases) |
+| sync code and tags upstream | [5. Code Sync Workflow](#5-code-sync-workflow-local---github) |
+| verify current Skills maintenance reality | [6. Skills Update Maintenance Notes](#6-skills-update-maintenance-notes) |
 
 ## 1. Doc Navigation
 
-- project homepage: [README_en.md](../README_en.md)
-- User install and config: [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md)
-- Developer guide: [DEVELOPER_GUIDE_en.md](./DEVELOPER_GUIDE_en.md)
-- API reference: [API_REFERENCE_en.md](./API_REFERENCE_en.md)
-- About templates: [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
-- Skills source/update audit: [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md)
-- Skills source/update audit (Chinese): [SKILLS_UPDATE_STATUS_zh.md](./SKILLS_UPDATE_STATUS_zh.md)
+| Doc | Purpose |
+| --- | --- |
+| [README_en.md](../README_en.md) | project overview, quick start, prompt entry points |
+| [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md) | installation, config, troubleshooting |
+| [DEVELOPER_GUIDE_en.md](./DEVELOPER_GUIDE_en.md) | code layout and extension points |
+| [API_REFERENCE_en.md](./API_REFERENCE_en.md) | `/api/*` surface and call sequences |
+| [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md) / [GITHUB_ABOUT_zh.md](./GITHUB_ABOUT_zh.md) | repository About templates |
+| [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md) / [SKILLS_UPDATE_STATUS_zh.md](./SKILLS_UPDATE_STATUS_zh.md) | current Skills update capability status |
 
 ## 2. Plugin Upload Metadata
 
@@ -81,11 +89,11 @@ NO_PUSH=1 ./scripts/release.sh v0.2.2
 
 GitHub releases should default to bilingual notes, not English-only notes.
 
-Recommended process:
+Recommended sequence:
 
 1. create or update `docs/releases/vX.Y.Z.md`
 2. keep the file structured as “complete English + complete Chinese”
-3. publish or edit the GitHub release with `--notes-file`
+3. finish pre-release verification first, then publish or edit the GitHub release with `--notes-file`
 
 Recommended command:
 

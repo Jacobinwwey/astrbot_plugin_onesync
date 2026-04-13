@@ -2,20 +2,24 @@
 
 > Language / 语言: [English](./API_REFERENCE_en.md) | [中文](./API_REFERENCE_zh.md)
 
-This document centralizes the embedded WebUI `/api/*` surface for:
+| Current version | Updated | Audience | Start here |
+| --- | --- | --- | --- |
+| `v0.2.2` | `2026-04-13` | script callers, frontend integrators, extension authors | [README_en.md](../README_en.md) |
 
-- automation scripts
-- frontend integration
-- secondary integrations around the plugin
+This document does one job: it maps the embedded WebUI `/api/*` surface cleanly. If you are installing or operating the plugin, start elsewhere.
 
-For user install and day-to-day usage, see:
+| When should you read this? | Go to |
+| --- | --- |
+| auth rules and token transport | [2. Authentication](#2-authentication) |
+| system and overview endpoints | [4. System and overview routes](#4-system-and-overview-routes) |
+| Skills read/write endpoints | [6. Skills read routes](#6-skills-read-routes) / [7. Skills mutation routes](#7-skills-mutation-routes) |
+| practical call order | [11. Recommended call sequences](#11-recommended-call-sequences) |
 
-- [README_en.md](../README_en.md)
-- [Installation & Config Guide (English)](./INSTALL_AND_CONFIG_en.md)
-
-For code structure and extension points, see:
-
-- [Developer Guide (English)](./DEVELOPER_GUIDE_en.md)
+| Related doc | Purpose |
+| --- | --- |
+| [README_en.md](../README_en.md) | project overview and quick start |
+| [Installation & Config Guide (English)](./INSTALL_AND_CONFIG_en.md) | installation and daily usage |
+| [Developer Guide (English)](./DEVELOPER_GUIDE_en.md) | code structure and extension points |
 
 ## 1. Basics
 
