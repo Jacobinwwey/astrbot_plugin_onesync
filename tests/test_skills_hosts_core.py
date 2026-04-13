@@ -96,21 +96,28 @@ class SkillsHostsCoreTests(unittest.TestCase):
         self.assertEqual(ASTRBOT_HOST_CAPABILITIES, adapter["capabilities"])
 
     def test_resolve_host_target_path_prefers_runtime_data_root_for_astrbot_global(self) -> None:
-        host = {
-            "id": "astrbot",
-            "host_id": "astrbot",
-            "provider_key": "astrbot",
-            "declared_skill_roots": [
-                "/root/astrbot/data/skills",
-                "/root/.astrbot/data/skills",
-            ],
-            "resolved_skill_roots": [
-                "/root/astrbot/data/skills",
-            ],
-        }
+        with tempfile.TemporaryDirectory() as tempdir:
+            astrbot_root = Path(tempdir) / "astrbot"
+            global_skills_root = astrbot_root / "data" / "skills"
+            fallback_global_skills_root = Path(tempdir) / ".astrbot" / "data" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+            fallback_global_skills_root.mkdir(parents=True, exist_ok=True)
 
-        self.assertEqual("/root/astrbot/data/skills", resolve_host_target_path(host, "global"))
-        self.assertEqual("", resolve_host_target_path(host, "workspace"))
+            host = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "declared_skill_roots": [
+                    str(global_skills_root),
+                    str(fallback_global_skills_root),
+                ],
+                "resolved_skill_roots": [
+                    str(global_skills_root),
+                ],
+            }
+
+            self.assertEqual(str(global_skills_root), resolve_host_target_path(host, "global"))
+            self.assertEqual("", resolve_host_target_path(host, "workspace"))
 
     def test_resolve_host_target_path_discovers_workspace_skills_under_astrbot_data_workspaces(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

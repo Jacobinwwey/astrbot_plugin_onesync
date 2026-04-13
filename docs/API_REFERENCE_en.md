@@ -242,9 +242,14 @@ When `scope=workspace`, `workspace_id` is required; otherwise the API returns
 
 ```json
 {
-  "workspace_id": "session_alpha"
+  "workspace_id": "session_alpha",
+  "workspace_root": "/root/astrbot/data/workspaces/session-alpha"
 }
 ```
+
+`workspace_root` is optional. If provided, it must be under
+`{astrbot_data_dir}/workspaces` and its basename must normalize to the same
+`workspace_id`.
 
 - `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
 

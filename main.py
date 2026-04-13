@@ -4101,7 +4101,55 @@ class OneSyncPlugin(Star):
             }
 
         astrbot_data_dir = Path(astrbot_data_dir_text).expanduser()
-        workspace_root = astrbot_data_dir / "workspaces" / requested_workspace_id
+        workspaces_root = (astrbot_data_dir / "workspaces").expanduser()
+        workspace_root_override_text = str(
+            action_payload.get("workspace_root")
+            or action_payload.get("workspaceRoot")
+            or "",
+        ).strip()
+        workspace_root = workspaces_root / requested_workspace_id
+        workspace_root_source = "default"
+        if workspace_root_override_text:
+            try:
+                workspace_root_override = Path(workspace_root_override_text).expanduser().resolve()
+            except Exception as exc:
+                return {
+                    "ok": False,
+                    "message": f"invalid workspace_root: {exc}",
+                    "reason_code": "workspace_root_invalid",
+                    "workspace_id": requested_workspace_id,
+                    "workspace_root": workspace_root_override_text,
+                }
+            try:
+                workspace_root_override.relative_to(workspaces_root.resolve())
+            except Exception:
+                return {
+                    "ok": False,
+                    "message": (
+                        "workspace_root must be located under astrbot data workspaces: "
+                        f"{workspaces_root}"
+                    ),
+                    "reason_code": "workspace_root_out_of_bounds",
+                    "workspace_id": requested_workspace_id,
+                    "workspace_root": str(workspace_root_override),
+                }
+            normalized_workspace_root_id = _normalize_astrbot_workspace_id(workspace_root_override.name)
+            if normalized_workspace_root_id and normalized_workspace_root_id != requested_workspace_id:
+                return {
+                    "ok": False,
+                    "message": (
+                        "workspace_id does not match workspace_root basename: "
+                        f"workspace_id={requested_workspace_id} "
+                        f"workspace_root={workspace_root_override}"
+                    ),
+                    "reason_code": "workspace_root_mismatch",
+                    "workspace_id": requested_workspace_id,
+                    "workspace_root": str(workspace_root_override),
+                    "normalized_workspace_root_id": normalized_workspace_root_id,
+                }
+            workspace_root = workspace_root_override
+            workspace_root_source = "payload"
+
         skills_root = workspace_root / "skills"
         skills_config_path = workspace_root / "skills.json"
         sandbox_cache_path = workspace_root / "sandbox_skills_cache.json"
@@ -4153,6 +4201,7 @@ class OneSyncPlugin(Star):
             "created_skills_config": not skills_config_exists_before,
             "created_sandbox_cache": not sandbox_cache_exists_before,
             "created_extra_prompt": not extra_prompt_exists_before,
+            "workspace_root_source": workspace_root_source,
         }
 
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
@@ -4170,6 +4219,7 @@ class OneSyncPlugin(Star):
                 "created_skills_config": result["created_skills_config"],
                 "created_sandbox_cache": result["created_sandbox_cache"],
                 "created_extra_prompt": result["created_extra_prompt"],
+                "workspace_root_source": workspace_root_source,
             },
         )
         self._push_debug_log(

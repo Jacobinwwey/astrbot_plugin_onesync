@@ -1888,6 +1888,20 @@ class WebUIServerTests(unittest.TestCase):
             self.plugin.last_astrbot_workspace_init_payload["payload"]["workspace_id"],
         )
 
+        astrbot_workspace_init_with_root_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/workspaces/init",
+            json={
+                "workspace_id": "session_beta",
+                "workspace_root": "/tmp/workspace-astrbot/data/workspaces/session-beta",
+            },
+        )
+        self.assertEqual(200, astrbot_workspace_init_with_root_resp.status_code)
+        self.assertTrue(astrbot_workspace_init_with_root_resp.json()["ok"])
+        self.assertEqual(
+            "/tmp/workspace-astrbot/data/workspaces/session-beta",
+            self.plugin.last_astrbot_workspace_init_payload["payload"]["workspace_root"],
+        )
+
         astrbot_workspace_init_bad_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/workspaces/init",
             json={},

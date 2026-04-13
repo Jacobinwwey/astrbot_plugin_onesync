@@ -1652,3 +1652,98 @@ class OneSyncPluginAstrbotWorkspaceInitTests(unittest.TestCase):
         )
         self.assertFalse(result["ok"])
         self.assertEqual("workspace_required", result["reason_code"])
+
+    def test_webui_init_astrbot_workspace_accepts_safe_workspace_root_override(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            global_skills_root = tmp_path / "astrbot" / "data" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host_row = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "runtime_state_backend": "astrbot",
+                "target_paths": {
+                    "global": str(global_skills_root),
+                    "workspace": "",
+                },
+                "resolved_skill_roots": [str(global_skills_root)],
+                "declared_skill_roots": [str(global_skills_root)],
+            }
+            snapshot = {
+                "generated_at": "2026-04-13T00:00:00+00:00",
+                "host_rows": [host_row],
+                "astrbot_state_by_host": {
+                    "astrbot": {
+                        "summary": {
+                            "selected_scope": "global",
+                            "available_scopes": ["global"],
+                            "selected_workspace_id": "",
+                            "workspace_summaries": {},
+                        },
+                    },
+                },
+            }
+            plugin.webui_get_skills_payload = lambda: snapshot
+            plugin._refresh_inventory_snapshot = lambda sync_skills=True: snapshot
+            plugin._skills_state = lambda: {"last_overview": snapshot}
+            plugin._push_debug_log = lambda *_args, **_kwargs: None
+            plugin._append_skills_audit_event = lambda *_args, **_kwargs: "audit-demo"
+
+            workspace_root = tmp_path / "astrbot" / "data" / "workspaces" / "session-alpha"
+            result = OneSyncPlugin.webui_init_astrbot_workspace(
+                plugin,
+                "astrbot",
+                {
+                    "workspace_id": "session-alpha",
+                    "workspace_root": str(workspace_root),
+                },
+            )
+            self.assertTrue(result["ok"])
+            self.assertEqual("session_alpha", result["workspace_id"])
+            self.assertEqual(str(workspace_root.resolve()), result["workspace_root"])
+            self.assertEqual("payload", result["result"]["workspace_root_source"])
+            self.assertTrue((workspace_root / "skills").is_dir())
+            self.assertTrue((workspace_root / "skills.json").is_file())
+            self.assertTrue((workspace_root / "sandbox_skills_cache.json").is_file())
+            self.assertTrue((workspace_root / "EXTRA_PROMPT.md").is_file())
+
+    def test_webui_init_astrbot_workspace_rejects_workspace_root_out_of_bounds(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            global_skills_root = tmp_path / "astrbot" / "data" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host_row = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "runtime_state_backend": "astrbot",
+                "target_paths": {
+                    "global": str(global_skills_root),
+                    "workspace": "",
+                },
+                "resolved_skill_roots": [str(global_skills_root)],
+                "declared_skill_roots": [str(global_skills_root)],
+            }
+            snapshot = {
+                "generated_at": "2026-04-13T00:00:00+00:00",
+                "host_rows": [host_row],
+                "astrbot_state_by_host": {"astrbot": {"summary": {}}},
+            }
+            plugin.webui_get_skills_payload = lambda: snapshot
+
+            out_of_bounds_root = tmp_path / "external-workspace" / "session-alpha"
+            result = OneSyncPlugin.webui_init_astrbot_workspace(
+                plugin,
+                "astrbot",
+                {
+                    "workspace_id": "session-alpha",
+                    "workspace_root": str(out_of_bounds_root),
+                },
+            )
+            self.assertFalse(result["ok"])
+            self.assertEqual("workspace_root_out_of_bounds", result["reason_code"])

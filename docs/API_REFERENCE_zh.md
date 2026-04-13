@@ -243,9 +243,14 @@
 
 ```json
 {
-  "workspace_id": "session_alpha"
+  "workspace_id": "session_alpha",
+  "workspace_root": "/root/astrbot/data/workspaces/session-alpha"
 }
 ```
+
+`workspace_root` 为可选项。若传入，必须位于
+`{astrbot_data_dir}/workspaces` 目录下，且其 basename 归一化后需与
+`workspace_id` 一致。
 
 - `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
 
