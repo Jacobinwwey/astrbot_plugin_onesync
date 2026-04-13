@@ -234,6 +234,8 @@
 ### 9.2 AstrBot 变更请求 payload
 
 建议显式传递 `scope`，不要让前端隐式假设默认范围。
+当 `scope=workspace` 时必须传 `workspace_id`，否则会返回
+`reason_code=workspace_required` 或 `reason_code=workspace_not_found`。
 
 - `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
 
@@ -241,7 +243,8 @@
 {
   "skill_name": "demo",
   "active": false,
-  "scope": "workspace"
+  "scope": "workspace",
+  "workspace_id": "session_alpha"
 }
 ```
 
@@ -250,7 +253,8 @@
 ```json
 {
   "skill_name": "demo",
-  "scope": "workspace"
+  "scope": "workspace",
+  "workspace_id": "session_alpha"
 }
 ```
 
@@ -259,6 +263,7 @@
   - 字段：
     - `file`: `.zip` 文件
     - `scope`: `global` / `workspace`
+    - `workspace_id`: 当 `scope=workspace` 时必填
     - `overwrite`: 可选，默认 `false`
     - `skill_name_hint`: 可选，单 skill root archive 时可作为目标目录名提示
 
@@ -266,12 +271,14 @@
   - query:
     - `skill_name=demo`
     - `scope=workspace`
+    - `workspace_id=session_alpha`
 
 - `POST /api/skills/hosts/{host_id}/astrbot/sandbox/sync`
 
 ```json
 {
-  "scope": "workspace"
+  "scope": "workspace",
+  "workspace_id": "session_alpha"
 }
 ```
 

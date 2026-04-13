@@ -1466,3 +1466,95 @@ class OneSyncPluginSkillsAuditTests(unittest.TestCase):
             self.assertEqual(1, audit_payload["counts"]["total"])
             self.assertEqual("sources_sync_all", audit_payload["items"][0]["action"])
             self.assertEqual(audit_event_id, audit_payload["items"][0]["event_id"])
+
+
+class OneSyncPluginAstrbotWorkspaceContextTests(unittest.TestCase):
+    def test_resolve_astrbot_host_action_context_requires_workspace_id_for_workspace_scope(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            global_skills_root = tmp_path / "astrbot" / "data" / "skills"
+            workspace_skills_root = tmp_path / "astrbot" / "data" / "workspaces" / "session-alpha" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+            workspace_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host_row = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "runtime_state_backend": "astrbot",
+                "target_paths": {
+                    "global": str(global_skills_root),
+                    "workspace": str(workspace_skills_root),
+                },
+                "resolved_skill_roots": [str(global_skills_root)],
+                "declared_skill_roots": [str(global_skills_root), str(workspace_skills_root)],
+            }
+            plugin.webui_get_skills_payload = lambda: {
+                "host_rows": [host_row],
+                "astrbot_state_by_host": {"astrbot": {"summary": {}}},
+            }
+
+            missing_workspace = OneSyncPlugin._resolve_astrbot_host_action_context(
+                plugin,
+                "astrbot",
+                "workspace",
+                "",
+                require_workspace=True,
+            )
+            self.assertFalse(missing_workspace["ok"])
+            self.assertEqual("workspace_required", missing_workspace["reason_code"])
+            self.assertEqual(["session_alpha"], missing_workspace["available_workspace_ids"])
+
+            missing_workspace_id = OneSyncPlugin._resolve_astrbot_host_action_context(
+                plugin,
+                "astrbot",
+                "workspace",
+                "missing",
+                require_workspace=True,
+            )
+            self.assertFalse(missing_workspace_id["ok"])
+            self.assertEqual("workspace_not_found", missing_workspace_id["reason_code"])
+
+    def test_resolve_astrbot_host_action_context_uses_workspace_profile_paths(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            global_skills_root = tmp_path / "astrbot" / "data" / "skills"
+            workspace_skills_root = tmp_path / "astrbot" / "data" / "workspaces" / "session-alpha" / "skills"
+            workspace_root = workspace_skills_root.parent
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+            workspace_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host_row = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "runtime_state_backend": "astrbot",
+                "target_paths": {
+                    "global": str(global_skills_root),
+                    "workspace": "",
+                },
+                "resolved_skill_roots": [str(global_skills_root)],
+                "declared_skill_roots": [str(global_skills_root), str(workspace_skills_root)],
+            }
+            plugin.webui_get_skills_payload = lambda: {
+                "host_rows": [host_row],
+                "astrbot_state_by_host": {"astrbot": {"summary": {}}},
+            }
+
+            workspace_context = OneSyncPlugin._resolve_astrbot_host_action_context(
+                plugin,
+                "astrbot",
+                "workspace",
+                "session_alpha",
+                require_workspace=True,
+            )
+            self.assertTrue(workspace_context["ok"])
+            self.assertEqual("workspace", workspace_context["scope"])
+            self.assertEqual("session_alpha", workspace_context["workspace_id"])
+            self.assertEqual(str(workspace_root), workspace_context["workspace_root"])
+            action_layout = workspace_context["action_layout"]
+            self.assertEqual(str(workspace_skills_root), action_layout["skills_root"])
+            self.assertEqual(str(workspace_root / "skills.json"), action_layout["skills_config_path"])
+            self.assertEqual(str(workspace_root / "sandbox_skills_cache.json"), action_layout["sandbox_cache_path"])

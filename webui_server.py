@@ -509,6 +509,7 @@ class OneSyncWebUIServer:
             host_id: str,
             file: UploadFile | None = File(None),
             scope: str = Form("global"),
+            workspace_id: str = Form(""),
             overwrite: bool = Form(False),
             skill_name_hint: str = Form(""),
         ):
@@ -529,6 +530,7 @@ class OneSyncWebUIServer:
                     temp_path,
                     {
                         "scope": scope,
+                        "workspace_id": workspace_id,
                         "overwrite": overwrite,
                         "skill_name_hint": skill_name_hint or Path(filename).stem,
                     },
@@ -548,12 +550,14 @@ class OneSyncWebUIServer:
             host_id: str,
             skill_name: str = "",
             scope: str = "global",
+            workspace_id: str = "",
         ):
             ret = self.plugin.webui_export_astrbot_skill_zip(
                 host_id,
                 {
                     "skill_name": skill_name,
                     "scope": scope,
+                    "workspace_id": workspace_id,
                 },
             )
             if not ret.get("ok"):

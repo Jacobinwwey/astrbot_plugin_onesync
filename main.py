@@ -308,6 +308,10 @@ def _normalize_astrbot_scope(value: Any, default: str = "global") -> str:
     return default
 
 
+def _normalize_astrbot_workspace_id(value: Any) -> str:
+    return _normalize_inventory_id(value, default="")
+
+
 def _normalize_update_manager(value: Any) -> str:
     manager = str(value or "").strip().lower()
     if manager in {"pnpm dlx"}:
@@ -3669,10 +3673,59 @@ class OneSyncPlugin(Star):
             },
         )
 
+    def _build_astrbot_workspace_action_layout(
+        self,
+        workspace_profile: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        profile = workspace_profile if isinstance(workspace_profile, dict) else {}
+        skills_root_text = str(profile.get("skills_root") or "").strip()
+        workspace_root_text = str(profile.get("workspace_root") or "").strip()
+
+        skills_root_path = Path(skills_root_text).expanduser() if skills_root_text else Path()
+        workspace_root_path = Path(workspace_root_text).expanduser() if workspace_root_text else Path()
+
+        if skills_root_text and skills_root_path.name == "skills":
+            data_dir_path = skills_root_path.parent
+        elif workspace_root_text:
+            data_dir_path = workspace_root_path
+        elif skills_root_text:
+            data_dir_path = skills_root_path.parent
+        else:
+            data_dir_path = Path()
+
+        def _path_text(path_obj: Path) -> str:
+            text = str(path_obj).strip()
+            if text in {"", "."}:
+                return ""
+            return text
+
+        data_dir_text = _path_text(data_dir_path)
+        astrbot_root_text = _path_text(data_dir_path.parent) if data_dir_text else ""
+        skills_config_path = _path_text(Path(data_dir_text) / "skills.json") if data_dir_text else ""
+        sandbox_cache_path = _path_text(Path(data_dir_text) / "sandbox_skills_cache.json") if data_dir_text else ""
+        neo_map_path = _path_text(Path(skills_root_text) / "neo_skill_map.json") if skills_root_text else ""
+
+        return {
+            "scope": "workspace",
+            "state_available": bool(skills_root_text) and _to_bool(profile.get("exists"), False),
+            "workspace_id": str(profile.get("workspace_id") or "").strip(),
+            "workspace_root": workspace_root_text,
+            "extra_prompt_path": str(profile.get("extra_prompt_path") or "").strip(),
+            "skills_root": skills_root_text,
+            "astrbot_root": astrbot_root_text,
+            "astrbot_data_dir": data_dir_text,
+            "skills_config_path": skills_config_path,
+            "sandbox_cache_path": sandbox_cache_path,
+            "neo_map_path": neo_map_path,
+        }
+
     def _resolve_astrbot_host_action_context(
         self,
         host_id: str,
         scope: Any = None,
+        workspace_id: Any = None,
+        *,
+        require_workspace: bool = False,
     ) -> dict[str, Any]:
         normalized_host_id = str(host_id or "").strip()
         if not normalized_host_id:
@@ -3713,20 +3766,114 @@ class OneSyncPlugin(Star):
             scope,
             default=_normalize_astrbot_scope(layout.get("selected_scope"), default="global"),
         )
+        requested_workspace_id = _normalize_astrbot_workspace_id(workspace_id)
+        selected_workspace_id = _normalize_astrbot_workspace_id(layout.get("selected_workspace_id"))
+        workspace_profiles = (
+            list(layout.get("workspace_profiles", []))
+            if isinstance(layout.get("workspace_profiles", []), list)
+            else []
+        )
+        workspace_profile_by_id: dict[str, dict[str, Any]] = {}
+        available_workspace_ids: list[str] = []
+        for profile in workspace_profiles:
+            if not isinstance(profile, dict):
+                continue
+            profile_workspace_id = _normalize_astrbot_workspace_id(profile.get("workspace_id"))
+            if not profile_workspace_id or profile_workspace_id in workspace_profile_by_id:
+                continue
+            workspace_profile_by_id[profile_workspace_id] = profile
+            available_workspace_ids.append(profile_workspace_id)
+
         scoped_layouts = (
             layout.get("scoped_layouts", {})
             if isinstance(layout.get("scoped_layouts", {}), dict)
             else {}
         )
-        action_layout = (
-            scoped_layouts.get(requested_scope, {})
-            if isinstance(scoped_layouts.get(requested_scope, {}), dict)
-            else {}
-        )
+        effective_scoped_layouts = {
+            key: value
+            for key, value in scoped_layouts.items()
+            if isinstance(value, dict)
+        }
+        resolved_workspace_id = ""
+        resolved_workspace_profile: dict[str, Any] = {}
+
+        if requested_scope == "workspace":
+            if not available_workspace_ids:
+                return {
+                    "ok": False,
+                    "message": (
+                        "astrbot workspace is unavailable for "
+                        f"host={normalized_host_id}"
+                    ),
+                    "reason_code": "workspace_not_found",
+                    "scope": requested_scope,
+                    "requested_workspace_id": requested_workspace_id,
+                    "available_workspace_ids": available_workspace_ids,
+                }
+            if requested_workspace_id:
+                if requested_workspace_id not in workspace_profile_by_id:
+                    return {
+                        "ok": False,
+                        "message": (
+                            "astrbot workspace not found for "
+                            f"host={normalized_host_id} workspace_id={requested_workspace_id}"
+                        ),
+                        "reason_code": "workspace_not_found",
+                        "scope": requested_scope,
+                        "requested_workspace_id": requested_workspace_id,
+                        "available_workspace_ids": available_workspace_ids,
+                    }
+                resolved_workspace_id = requested_workspace_id
+            elif require_workspace:
+                return {
+                    "ok": False,
+                    "message": (
+                        "workspace_id is required for "
+                        f"scope={requested_scope} host={normalized_host_id}"
+                    ),
+                    "reason_code": "workspace_required",
+                    "scope": requested_scope,
+                    "requested_workspace_id": requested_workspace_id,
+                    "available_workspace_ids": available_workspace_ids,
+                }
+            elif selected_workspace_id and selected_workspace_id in workspace_profile_by_id:
+                resolved_workspace_id = selected_workspace_id
+            else:
+                resolved_workspace_id = available_workspace_ids[0]
+
+            resolved_workspace_profile = (
+                workspace_profile_by_id.get(resolved_workspace_id, {})
+                if resolved_workspace_id
+                else {}
+            )
+            workspace_action_layout = self._build_astrbot_workspace_action_layout(
+                resolved_workspace_profile,
+            )
+            effective_scoped_layouts["workspace"] = workspace_action_layout
+            action_layout = workspace_action_layout
+        else:
+            action_layout = (
+                scoped_layouts.get(requested_scope, {})
+                if isinstance(scoped_layouts.get(requested_scope, {}), dict)
+                else {}
+            )
+
         if not _to_bool(layout.get("state_available"), False):
             return {
                 "ok": False,
                 "message": f"astrbot skills root unavailable for host: {normalized_host_id}",
+            }
+        if requested_scope == "workspace" and not _to_bool(action_layout.get("state_available"), False):
+            return {
+                "ok": False,
+                "message": (
+                    "astrbot workspace skills root unavailable for "
+                    f"host={normalized_host_id} workspace_id={resolved_workspace_id or requested_workspace_id}"
+                ),
+                "reason_code": "workspace_not_found",
+                "scope": requested_scope,
+                "requested_workspace_id": requested_workspace_id,
+                "available_workspace_ids": available_workspace_ids,
             }
         if scoped_layouts and not _to_bool(action_layout.get("state_available"), False):
             return {
@@ -3747,20 +3894,43 @@ class OneSyncPlugin(Star):
             if isinstance(state_by_host.get(normalized_host_id, {}), dict)
             else {}
         )
+        action_layout_payload = (
+            {
+                **layout,
+                **action_layout,
+                "scope": requested_scope,
+                "selected_scope": requested_scope,
+                "selected_workspace_id": resolved_workspace_id or selected_workspace_id,
+                "workspace_profiles": workspace_profiles,
+                "scoped_layouts": effective_scoped_layouts,
+            }
+            if action_layout
+            else {
+                **layout,
+                "scope": requested_scope,
+                "selected_scope": requested_scope,
+                "selected_workspace_id": resolved_workspace_id or selected_workspace_id,
+                "workspace_profiles": workspace_profiles,
+                "scoped_layouts": effective_scoped_layouts,
+            }
+        )
+        resolved_workspace_root = (
+            str(resolved_workspace_profile.get("workspace_root") or "").strip()
+            if isinstance(resolved_workspace_profile, dict)
+            else ""
+        )
         return {
             "ok": True,
             "host_id": normalized_host_id,
             "scope": requested_scope,
+            "workspace_id": resolved_workspace_id,
+            "workspace_root": resolved_workspace_root,
+            "workspace_profile": resolved_workspace_profile if isinstance(resolved_workspace_profile, dict) else {},
+            "requested_workspace_id": requested_workspace_id,
+            "available_workspace_ids": available_workspace_ids,
             "host": host,
             "layout": layout,
-            "action_layout": {
-                **layout,
-                **action_layout,
-                "scope": requested_scope,
-            } if action_layout else {
-                **layout,
-                "scope": requested_scope,
-            },
+            "action_layout": action_layout_payload,
             "runtime_state": runtime_state,
             "snapshot": snapshot,
         }
@@ -3931,11 +4101,19 @@ class OneSyncPlugin(Star):
     def webui_set_astrbot_skill_active(self, host_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         action_payload = payload if isinstance(payload, dict) else {}
         requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
-        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
+        requested_workspace_id = _normalize_astrbot_workspace_id(action_payload.get("workspace_id"))
+        context = self._resolve_astrbot_host_action_context(
+            host_id,
+            requested_scope,
+            requested_workspace_id,
+            require_workspace=requested_scope == "workspace",
+        )
         if not context.get("ok"):
             return context
         skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
         active = _to_bool(action_payload.get("active"), True)
+        resolved_workspace_id = str(context.get("workspace_id") or "").strip()
+        resolved_workspace_root = str(context.get("workspace_root") or "").strip()
         result = set_astrbot_skill_active(
             context.get("action_layout", {}),
             skill_name=skill_name,
@@ -3949,6 +4127,12 @@ class OneSyncPlugin(Star):
                 "reason_code": str(result.get("reason_code") or "").strip(),
                 "result": result,
             }
+        if resolved_workspace_id:
+            result = {
+                **result,
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
+            }
 
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         skills_snapshot = self._skills_state().get("last_overview", {})
@@ -3961,6 +4145,8 @@ class OneSyncPlugin(Star):
                 "active": _to_bool(result.get("active"), active),
                 "changed": _to_bool(result.get("changed"), False),
                 "scope": str(result.get("scope") or requested_scope),
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
             },
         )
         self._push_debug_log(
@@ -3969,6 +4155,7 @@ class OneSyncPlugin(Star):
                 "astrbot skill toggled: "
                 f"host={normalized_host_id} "
                 f"scope={str(result.get('scope') or requested_scope)} "
+                f"workspace={resolved_workspace_id or '-'} "
                 f"skill={str(result.get('skill_name') or '').strip()} "
                 f"active={_to_bool(result.get('active'), active)}"
             ),
@@ -3978,16 +4165,30 @@ class OneSyncPlugin(Star):
             normalized_host_id,
             inventory_snapshot=inventory_snapshot,
             skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
-            extra={"action": "toggle_skill", "result": result},
+            extra={
+                "action": "toggle_skill",
+                "scope": str(result.get("scope") or requested_scope),
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
+                "result": result,
+            },
         )
 
     def webui_delete_astrbot_skill(self, host_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         action_payload = payload if isinstance(payload, dict) else {}
         requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
-        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
+        requested_workspace_id = _normalize_astrbot_workspace_id(action_payload.get("workspace_id"))
+        context = self._resolve_astrbot_host_action_context(
+            host_id,
+            requested_scope,
+            requested_workspace_id,
+            require_workspace=requested_scope == "workspace",
+        )
         if not context.get("ok"):
             return context
         skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
+        resolved_workspace_id = str(context.get("workspace_id") or "").strip()
+        resolved_workspace_root = str(context.get("workspace_root") or "").strip()
         result = delete_astrbot_local_skill(
             context.get("action_layout", {}),
             skill_name=skill_name,
@@ -3999,6 +4200,12 @@ class OneSyncPlugin(Star):
                 "message": str(result.get("message") or "astrbot delete action failed"),
                 "reason_code": str(result.get("reason_code") or "").strip(),
                 "result": result,
+            }
+        if resolved_workspace_id:
+            result = {
+                **result,
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
             }
 
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
@@ -4013,6 +4220,8 @@ class OneSyncPlugin(Star):
                 "removed_from_config": _to_bool(result.get("removed_from_config"), False),
                 "removed_from_sandbox_cache": _to_bool(result.get("removed_from_sandbox_cache"), False),
                 "scope": str(result.get("scope") or requested_scope),
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
             },
         )
         self._push_debug_log(
@@ -4021,6 +4230,7 @@ class OneSyncPlugin(Star):
                 "astrbot skill deleted: "
                 f"host={normalized_host_id} "
                 f"scope={str(result.get('scope') or requested_scope)} "
+                f"workspace={resolved_workspace_id or '-'} "
                 f"skill={str(result.get('skill_name') or '').strip()}"
             ),
             source="webui",
@@ -4029,7 +4239,13 @@ class OneSyncPlugin(Star):
             normalized_host_id,
             inventory_snapshot=inventory_snapshot,
             skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
-            extra={"action": "delete_skill", "result": result},
+            extra={
+                "action": "delete_skill",
+                "scope": str(result.get("scope") or requested_scope),
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
+                "result": result,
+            },
         )
 
     async def webui_sync_astrbot_sandbox(
@@ -4039,13 +4255,29 @@ class OneSyncPlugin(Star):
     ) -> dict[str, Any]:
         action_payload = payload if isinstance(payload, dict) else {}
         requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
-        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
+        requested_workspace_id = _normalize_astrbot_workspace_id(action_payload.get("workspace_id"))
+        context = self._resolve_astrbot_host_action_context(
+            host_id,
+            requested_scope,
+            requested_workspace_id,
+            require_workspace=requested_scope == "workspace",
+        )
         if not context.get("ok"):
             return context
+        resolved_workspace_id = str(context.get("workspace_id") or "").strip()
+        resolved_workspace_root = str(context.get("workspace_root") or "").strip()
 
         sync_result = await self._trigger_astrbot_sandbox_sync()
         if not sync_result.get("ok"):
             return sync_result
+        sync_result_payload = dict(sync_result)
+        if resolved_workspace_id:
+            sync_result_payload.update(
+                {
+                    "workspace_id": resolved_workspace_id,
+                    "workspace_root": resolved_workspace_root,
+                },
+            )
 
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         skills_snapshot = self._skills_state().get("last_overview", {})
@@ -4053,18 +4285,34 @@ class OneSyncPlugin(Star):
         self._append_skills_audit_event(
             "astrbot_sandbox_sync",
             source_id=normalized_host_id,
-            payload={"ok": True, "scope": requested_scope},
+            payload={
+                "ok": True,
+                "scope": requested_scope,
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
+            },
         )
         self._push_debug_log(
             "info",
-            f"astrbot sandbox sync completed: host={normalized_host_id} scope={requested_scope}",
+            (
+                "astrbot sandbox sync completed: "
+                f"host={normalized_host_id} "
+                f"scope={requested_scope} "
+                f"workspace={resolved_workspace_id or '-'}"
+            ),
             source="webui",
         )
         return self._build_astrbot_host_mutation_response(
             normalized_host_id,
             inventory_snapshot=inventory_snapshot,
             skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
-            extra={"action": "sandbox_sync", "result": sync_result, "scope": requested_scope},
+            extra={
+                "action": "sandbox_sync",
+                "result": sync_result_payload,
+                "scope": requested_scope,
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
+            },
         )
 
     def webui_import_astrbot_skill_zip(
@@ -4075,12 +4323,20 @@ class OneSyncPlugin(Star):
     ) -> dict[str, Any]:
         action_payload = payload if isinstance(payload, dict) else {}
         requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
-        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
+        requested_workspace_id = _normalize_astrbot_workspace_id(action_payload.get("workspace_id"))
+        context = self._resolve_astrbot_host_action_context(
+            host_id,
+            requested_scope,
+            requested_workspace_id,
+            require_workspace=requested_scope == "workspace",
+        )
         if not context.get("ok"):
             return context
 
         skill_name_hint = str(action_payload.get("skill_name_hint") or "").strip() or None
         overwrite = _to_bool(action_payload.get("overwrite"), False)
+        resolved_workspace_id = str(context.get("workspace_id") or "").strip()
+        resolved_workspace_root = str(context.get("workspace_root") or "").strip()
         result = import_astrbot_skill_zip(
             context.get("action_layout", {}),
             zip_path=zip_path,
@@ -4094,6 +4350,12 @@ class OneSyncPlugin(Star):
                 "message": str(result.get("message") or "astrbot zip import failed"),
                 "reason_code": str(result.get("reason_code") or "").strip(),
                 "result": result,
+            }
+        if resolved_workspace_id:
+            result = {
+                **result,
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
             }
 
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
@@ -4110,6 +4372,8 @@ class OneSyncPlugin(Star):
                 "installed_skill_names": installed_skill_names,
                 "installed_count": len(installed_skill_names),
                 "archive_path": str(result.get("archive_path") or zip_path),
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
             },
         )
         self._push_debug_log(
@@ -4118,6 +4382,7 @@ class OneSyncPlugin(Star):
                 "astrbot zip imported: "
                 f"host={normalized_host_id} "
                 f"scope={str(result.get('scope') or requested_scope)} "
+                f"workspace={resolved_workspace_id or '-'} "
                 f"installed={','.join(installed_skill_names) or '-'}"
             ),
             source="webui",
@@ -4126,7 +4391,13 @@ class OneSyncPlugin(Star):
             normalized_host_id,
             inventory_snapshot=inventory_snapshot,
             skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
-            extra={"action": "import_zip", "result": result},
+            extra={
+                "action": "import_zip",
+                "scope": str(result.get("scope") or requested_scope),
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
+                "result": result,
+            },
         )
 
     def webui_export_astrbot_skill_zip(
@@ -4136,11 +4407,19 @@ class OneSyncPlugin(Star):
     ) -> dict[str, Any]:
         action_payload = payload if isinstance(payload, dict) else {}
         requested_scope = _normalize_astrbot_scope(action_payload.get("scope"), default="global")
-        context = self._resolve_astrbot_host_action_context(host_id, requested_scope)
+        requested_workspace_id = _normalize_astrbot_workspace_id(action_payload.get("workspace_id"))
+        context = self._resolve_astrbot_host_action_context(
+            host_id,
+            requested_scope,
+            requested_workspace_id,
+            require_workspace=requested_scope == "workspace",
+        )
         if not context.get("ok"):
             return context
 
         skill_name = str(action_payload.get("skill_name") or action_payload.get("name") or "").strip()
+        resolved_workspace_id = str(context.get("workspace_id") or "").strip()
+        resolved_workspace_root = str(context.get("workspace_root") or "").strip()
         result = export_astrbot_skill_zip(
             context.get("action_layout", {}),
             skill_name=skill_name,
@@ -4153,6 +4432,12 @@ class OneSyncPlugin(Star):
                 "reason_code": str(result.get("reason_code") or "").strip(),
                 "result": result,
             }
+        if resolved_workspace_id:
+            result = {
+                **result,
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
+            }
 
         normalized_host_id = str(context.get("host_id") or "").strip()
         self._append_skills_audit_event(
@@ -4163,6 +4448,8 @@ class OneSyncPlugin(Star):
                 "skill_name": str(result.get("skill_name") or skill_name),
                 "archive_path": str(result.get("archive_path") or ""),
                 "filename": str(result.get("filename") or ""),
+                "workspace_id": resolved_workspace_id,
+                "workspace_root": resolved_workspace_root,
             },
         )
         self._push_debug_log(
@@ -4171,6 +4458,7 @@ class OneSyncPlugin(Star):
                 "astrbot zip exported: "
                 f"host={normalized_host_id} "
                 f"scope={str(result.get('scope') or requested_scope)} "
+                f"workspace={resolved_workspace_id or '-'} "
                 f"skill={str(result.get('skill_name') or skill_name)}"
             ),
             source="webui",
@@ -4184,6 +4472,9 @@ class OneSyncPlugin(Star):
             ),
             "host": context.get("host", {}),
             "action": "export_zip",
+            "scope": str(result.get("scope") or requested_scope),
+            "workspace_id": resolved_workspace_id,
+            "workspace_root": resolved_workspace_root,
             "result": result,
         }
 

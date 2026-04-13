@@ -1236,10 +1236,25 @@ class _FakePlugin:
             "warnings": [],
         }
 
+    def _validate_workspace_action_payload(self, payload: dict | None = None) -> dict | None:
+        action_payload = payload if isinstance(payload, dict) else {}
+        scope = str(action_payload.get("scope") or "global").strip()
+        workspace_id = str(action_payload.get("workspace_id") or "").strip()
+        if scope == "workspace" and not workspace_id:
+            return {
+                "ok": False,
+                "message": "workspace_id is required for workspace scope",
+                "reason_code": "workspace_required",
+            }
+        return None
+
     def webui_set_astrbot_skill_active(self, host_id: str, payload: dict) -> dict:
         self.last_astrbot_toggle_payload = {"host_id": host_id, "payload": payload}
         if host_id != "astrbot":
             return {"ok": False, "message": "host_id not found"}
+        validation = self._validate_workspace_action_payload(payload)
+        if validation:
+            return validation
         if not str((payload or {}).get("skill_name", "")).strip():
             return {"ok": False, "message": "invalid skill_name"}
         return {
@@ -1250,6 +1265,7 @@ class _FakePlugin:
                 "skill_name": str(payload.get("skill_name")),
                 "active": bool(payload.get("active", True)),
                 "scope": str(payload.get("scope") or "global"),
+                "workspace_id": str(payload.get("workspace_id") or ""),
             },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
@@ -1259,6 +1275,9 @@ class _FakePlugin:
         self.last_astrbot_delete_payload = {"host_id": host_id, "payload": payload}
         if host_id != "astrbot":
             return {"ok": False, "message": "host_id not found"}
+        validation = self._validate_workspace_action_payload(payload)
+        if validation:
+            return validation
         if not str((payload or {}).get("skill_name", "")).strip():
             return {"ok": False, "message": "invalid skill_name"}
         return {
@@ -1268,6 +1287,7 @@ class _FakePlugin:
                 "ok": True,
                 "skill_name": str(payload.get("skill_name")),
                 "scope": str(payload.get("scope") or "global"),
+                "workspace_id": str(payload.get("workspace_id") or ""),
             },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
@@ -1277,6 +1297,9 @@ class _FakePlugin:
         self.last_astrbot_sync_payload = {"host_id": host_id, "payload": payload}
         if host_id != "astrbot":
             return {"ok": False, "message": "host_id not found"}
+        validation = self._validate_workspace_action_payload(payload)
+        if validation:
+            return validation
         return {
             "ok": True,
             "action": "sandbox_sync",
@@ -1284,6 +1307,7 @@ class _FakePlugin:
                 "ok": True,
                 "message": "sync done",
                 "scope": str(payload.get("scope") or "global"),
+                "workspace_id": str(payload.get("workspace_id") or ""),
             },
             "skills": self.skills_snapshot,
             "inventory": self.inventory_snapshot,
@@ -1298,6 +1322,9 @@ class _FakePlugin:
         }
         if host_id != "astrbot":
             return {"ok": False, "message": "host_id not found"}
+        validation = self._validate_workspace_action_payload(action_payload)
+        if validation:
+            return validation
         if not Path(str(zip_path or "")).exists():
             return {"ok": False, "message": "zip file not found"}
         return {
@@ -1306,6 +1333,7 @@ class _FakePlugin:
             "result": {
                 "ok": True,
                 "scope": str(action_payload.get("scope") or "global"),
+                "workspace_id": str(action_payload.get("workspace_id") or ""),
                 "installed_skill_names": ["demo-import"],
                 "installed_count": 1,
                 "archive_path": str(zip_path),
@@ -1322,6 +1350,9 @@ class _FakePlugin:
         }
         if host_id != "astrbot":
             return {"ok": False, "message": "host_id not found"}
+        validation = self._validate_workspace_action_payload(action_payload)
+        if validation:
+            return validation
         skill_name = str(action_payload.get("skill_name") or "").strip()
         if not skill_name:
             return {"ok": False, "message": "invalid skill_name"}
@@ -1334,6 +1365,7 @@ class _FakePlugin:
             "result": {
                 "ok": True,
                 "scope": str(action_payload.get("scope") or "global"),
+                "workspace_id": str(action_payload.get("workspace_id") or ""),
                 "skill_name": skill_name,
                 "archive_path": str(archive_path),
                 "filename": f"{skill_name}.zip",
@@ -1958,53 +1990,67 @@ class WebUIServerTests(unittest.TestCase):
 
         astrbot_toggle_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/skills/toggle",
-            json={"skill_name": "demo", "active": False, "scope": "workspace"},
+            json={
+                "skill_name": "demo",
+                "active": False,
+                "scope": "workspace",
+                "workspace_id": "session_alpha",
+            },
         )
         self.assertEqual(200, astrbot_toggle_resp.status_code)
         self.assertTrue(astrbot_toggle_resp.json()["ok"])
         self.assertEqual("toggle_skill", astrbot_toggle_resp.json()["action"])
         self.assertEqual("workspace", astrbot_toggle_resp.json()["result"]["scope"])
+        self.assertEqual("session_alpha", astrbot_toggle_resp.json()["result"]["workspace_id"])
         self.assertEqual("workspace", self.plugin.last_astrbot_toggle_payload["payload"]["scope"])
+        self.assertEqual("session_alpha", self.plugin.last_astrbot_toggle_payload["payload"]["workspace_id"])
 
         astrbot_delete_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/skills/delete",
-            json={"skill_name": "demo", "scope": "workspace"},
+            json={"skill_name": "demo", "scope": "workspace", "workspace_id": "session_alpha"},
         )
         self.assertEqual(200, astrbot_delete_resp.status_code)
         self.assertTrue(astrbot_delete_resp.json()["ok"])
         self.assertEqual("delete_skill", astrbot_delete_resp.json()["action"])
         self.assertEqual("workspace", astrbot_delete_resp.json()["result"]["scope"])
+        self.assertEqual("session_alpha", astrbot_delete_resp.json()["result"]["workspace_id"])
         self.assertEqual("workspace", self.plugin.last_astrbot_delete_payload["payload"]["scope"])
+        self.assertEqual("session_alpha", self.plugin.last_astrbot_delete_payload["payload"]["workspace_id"])
 
         astrbot_sync_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/sandbox/sync",
-            json={"scope": "workspace"},
+            json={"scope": "workspace", "workspace_id": "session_alpha"},
         )
         self.assertEqual(200, astrbot_sync_resp.status_code)
         self.assertTrue(astrbot_sync_resp.json()["ok"])
         self.assertEqual("sandbox_sync", astrbot_sync_resp.json()["action"])
         self.assertEqual("workspace", astrbot_sync_resp.json()["result"]["scope"])
+        self.assertEqual("session_alpha", astrbot_sync_resp.json()["result"]["workspace_id"])
         self.assertEqual("workspace", self.plugin.last_astrbot_sync_payload["payload"]["scope"])
+        self.assertEqual("session_alpha", self.plugin.last_astrbot_sync_payload["payload"]["workspace_id"])
 
         astrbot_import_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/skills/import-zip",
-            data={"scope": "workspace"},
+            data={"scope": "workspace", "workspace_id": "session_alpha"},
             files={"file": ("demo-import.zip", b"PK\x05\x06" + b"\x00" * 18, "application/zip")},
         )
         self.assertEqual(200, astrbot_import_resp.status_code)
         self.assertTrue(astrbot_import_resp.json()["ok"])
         self.assertEqual("import_zip", astrbot_import_resp.json()["action"])
         self.assertEqual("workspace", astrbot_import_resp.json()["result"]["scope"])
+        self.assertEqual("session_alpha", astrbot_import_resp.json()["result"]["workspace_id"])
         self.assertEqual("workspace", self.plugin.last_astrbot_import_payload["payload"]["scope"])
+        self.assertEqual("session_alpha", self.plugin.last_astrbot_import_payload["payload"]["workspace_id"])
 
         astrbot_export_resp = self.client.get(
             "/api/skills/hosts/astrbot/astrbot/skills/export-zip",
-            params={"skill_name": "demo", "scope": "workspace"},
+            params={"skill_name": "demo", "scope": "workspace", "workspace_id": "session_alpha"},
         )
         self.assertEqual(200, astrbot_export_resp.status_code)
         self.assertEqual("application/zip", astrbot_export_resp.headers["content-type"])
         self.assertIn("demo.zip", astrbot_export_resp.headers.get("content-disposition", ""))
         self.assertEqual("workspace", self.plugin.last_astrbot_export_payload["payload"]["scope"])
+        self.assertEqual("session_alpha", self.plugin.last_astrbot_export_payload["payload"]["workspace_id"])
 
 
         astrbot_neo_sync_resp = self.client.post(
@@ -2084,6 +2130,14 @@ class WebUIServerTests(unittest.TestCase):
         )
         self.assertEqual(400, astrbot_toggle_bad_resp.status_code)
         self.assertFalse(astrbot_toggle_bad_resp.json()["ok"])
+
+        astrbot_toggle_workspace_missing_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/skills/toggle",
+            json={"skill_name": "demo", "scope": "workspace"},
+        )
+        self.assertEqual(400, astrbot_toggle_workspace_missing_resp.status_code)
+        self.assertFalse(astrbot_toggle_workspace_missing_resp.json()["ok"])
+        self.assertEqual("workspace_required", astrbot_toggle_workspace_missing_resp.json()["reason_code"])
 
         astrbot_sync_missing_resp = self.client.post(
             "/api/skills/hosts/missing/astrbot/sandbox/sync",

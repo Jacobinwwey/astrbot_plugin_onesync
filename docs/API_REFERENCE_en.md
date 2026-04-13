@@ -233,6 +233,8 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
 ### 9.2 AstrBot mutation payloads
 
 Pass `scope` explicitly whenever the caller already knows which root it wants.
+When `scope=workspace`, `workspace_id` is required; otherwise the API returns
+`reason_code=workspace_required` or `reason_code=workspace_not_found`.
 
 - `POST /api/skills/hosts/{host_id}/astrbot/skills/toggle`
 
@@ -240,7 +242,8 @@ Pass `scope` explicitly whenever the caller already knows which root it wants.
 {
   "skill_name": "demo",
   "active": false,
-  "scope": "workspace"
+  "scope": "workspace",
+  "workspace_id": "session_alpha"
 }
 ```
 
@@ -249,7 +252,8 @@ Pass `scope` explicitly whenever the caller already knows which root it wants.
 ```json
 {
   "skill_name": "demo",
-  "scope": "workspace"
+  "scope": "workspace",
+  "workspace_id": "session_alpha"
 }
 ```
 
@@ -258,6 +262,7 @@ Pass `scope` explicitly whenever the caller already knows which root it wants.
   - fields:
     - `file`: `.zip` archive
     - `scope`: `global` / `workspace`
+    - `workspace_id`: required when `scope=workspace`
     - `overwrite`: optional, default `false`
     - `skill_name_hint`: optional target directory hint for single-skill root archives
 
@@ -265,12 +270,14 @@ Pass `scope` explicitly whenever the caller already knows which root it wants.
   - query:
     - `skill_name=demo`
     - `scope=workspace`
+    - `workspace_id=session_alpha`
 
 - `POST /api/skills/hosts/{host_id}/astrbot/sandbox/sync`
 
 ```json
 {
-  "scope": "workspace"
+  "scope": "workspace",
+  "workspace_id": "session_alpha"
 }
 ```
 

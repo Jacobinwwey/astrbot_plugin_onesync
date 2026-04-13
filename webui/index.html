@@ -5076,6 +5076,7 @@
         inventory_astrbot_action_unavailable: "当前软件不是 AstrBot，动作不可用。",
         inventory_astrbot_scope_unavailable: "当前 AstrBot host 未暴露 {scope} 范围，本地 skill 管理已禁用。可用范围：{available_scopes}",
         inventory_astrbot_skill_name_required: "请输入 skill 名称。",
+        inventory_astrbot_workspace_required: "当前范围需要 workspace_id，请先选择或初始化 Workspace。",
         inventory_astrbot_zip_required: "请选择一个 .zip 文件。",
         inventory_astrbot_toggle_success: "已在 {scope} 范围更新 skill `{skill}` active={active}",
         inventory_astrbot_delete_success: "已从 {scope} 范围删除 skill `{skill}`",
@@ -5926,6 +5927,7 @@
         inventory_astrbot_action_unavailable: "Selected software is not AstrBot. Actions are disabled.",
         inventory_astrbot_scope_unavailable: "The selected AstrBot host does not expose {scope}. Local skill actions are disabled. Available scopes: {available_scopes}",
         inventory_astrbot_skill_name_required: "Please provide a skill name.",
+        inventory_astrbot_workspace_required: "workspace_id is required for the current scope. Select or initialize a workspace first.",
         inventory_astrbot_zip_required: "Please choose a .zip file.",
         inventory_astrbot_toggle_success: "Updated skill `{skill}` under {scope} active={active}",
         inventory_astrbot_delete_success: "Deleted skill `{skill}` from {scope}",
@@ -9309,10 +9311,27 @@
       }) || {};
       const hostId = selectedAstrbotHostIdFromHost(selectedHost, selectedSoftwareId);
       if (!hostId) return null;
+      const scope = normalizeInventoryScope(state.inventorySelectedScope);
+      const runtimeSummary = selectedHost && typeof selectedHost.runtime_state_summary === "object"
+        ? selectedHost.runtime_state_summary
+        : {};
+      const normalizeWorkspaceId = (value) => String(value || "").trim().toLowerCase();
+      const workspaceSummaries = runtimeSummary && typeof runtimeSummary.workspace_summaries === "object"
+        ? runtimeSummary.workspace_summaries
+        : {};
+      const workspaceIds = Object.keys(workspaceSummaries)
+        .map((item) => normalizeWorkspaceId(item))
+        .filter(Boolean);
+      let workspaceId = normalizeWorkspaceId(runtimeSummary.selected_workspace_id);
+      if (scope === "workspace" && !workspaceId && workspaceIds.length) {
+        workspaceId = workspaceIds[0];
+      }
       return {
         hostId,
         host: selectedHost,
-        scope: normalizeInventoryScope(state.inventorySelectedScope),
+        scope,
+        workspaceId,
+        availableWorkspaceIds: workspaceIds,
       };
     }
 
@@ -11554,6 +11573,10 @@
       if (!context || !context.hostId || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox) {
         return null;
       }
+      if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
+        alert(t("inventory_astrbot_workspace_required"));
+        return null;
+      }
       const scopeLabel = inventoryScopeLabel(context.scope);
       const inputEl = $("inventoryAstrbotSkillNameInput");
       const skillName = String(inputEl && inputEl.value || "").trim();
@@ -11570,6 +11593,7 @@
             skill_name: skillName,
             active: Boolean(active),
             scope: context.scope,
+            workspace_id: context.workspaceId || "",
           }),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
@@ -11594,6 +11618,10 @@
       if (!context || !context.hostId || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotSyncingSandbox) {
         return null;
       }
+      if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
+        alert(t("inventory_astrbot_workspace_required"));
+        return null;
+      }
       const scopeLabel = inventoryScopeLabel(context.scope);
       const inputEl = $("inventoryAstrbotSkillNameInput");
       const skillName = String(inputEl && inputEl.value || "").trim();
@@ -11615,6 +11643,7 @@
           body: JSON.stringify({
             skill_name: skillName,
             scope: context.scope,
+            workspace_id: context.workspaceId || "",
           }),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
@@ -11638,13 +11667,20 @@
       if (!context || !context.hostId || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotImportingZip || state.inventoryAstrbotExportingZip) {
         return null;
       }
+      if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
+        alert(t("inventory_astrbot_workspace_required"));
+        return null;
+      }
       const scopeLabel = inventoryScopeLabel(context.scope);
       state.inventoryAstrbotSyncingSandbox = true;
       renderInventoryPanel();
       try {
         const result = await api(`/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/sandbox/sync`, {
           method: "POST",
-          body: JSON.stringify({ scope: context.scope }),
+          body: JSON.stringify({
+            scope: context.scope,
+            workspace_id: context.workspaceId || "",
+          }),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
         state.inventorySourceDetail = null;
@@ -11666,6 +11702,10 @@
       if (!context || !context.hostId || state.inventoryAstrbotImportingZip || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotExportingZip) {
         return null;
       }
+      if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
+        alert(t("inventory_astrbot_workspace_required"));
+        return null;
+      }
       const zipFile = file instanceof File ? file : null;
       if (!zipFile) {
         alert(t("inventory_astrbot_zip_required"));
@@ -11675,6 +11715,7 @@
       const form = new FormData();
       form.append("file", zipFile);
       form.append("scope", context.scope);
+      form.append("workspace_id", context.workspaceId || "");
       state.inventoryAstrbotImportingZip = true;
       renderInventoryPanel();
       try {
@@ -11707,6 +11748,10 @@
       if (!context || !context.hostId || state.inventoryAstrbotExportingZip || state.inventoryAstrbotTogglingSkill || state.inventoryAstrbotDeletingSkill || state.inventoryAstrbotSyncingSandbox || state.inventoryAstrbotImportingZip) {
         return null;
       }
+      if (context.scope === "workspace" && !String(context.workspaceId || "").trim()) {
+        alert(t("inventory_astrbot_workspace_required"));
+        return null;
+      }
       const scopeLabel = inventoryScopeLabel(context.scope);
       const inputEl = $("inventoryAstrbotSkillNameInput");
       const skillName = String(inputEl && inputEl.value || "").trim();
@@ -11718,7 +11763,7 @@
       renderInventoryPanel();
       try {
         const resp = await apiBlob(
-          `/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/skills/export-zip?skill_name=${encodeURIComponent(skillName)}&scope=${encodeURIComponent(context.scope)}`,
+          `/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/skills/export-zip?skill_name=${encodeURIComponent(skillName)}&scope=${encodeURIComponent(context.scope)}&workspace_id=${encodeURIComponent(context.workspaceId || "")}`,
           { method: "GET" },
         );
         const blob = await resp.blob();
