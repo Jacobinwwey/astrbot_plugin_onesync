@@ -11,8 +11,11 @@
 
 ## 1. 文档导航
 
+- 项目首页： [README.md](../README.md)
 - 用户安装与配置： [INSTALL_AND_CONFIG_zh.md](INSTALL_AND_CONFIG_zh.md)
 - 用户安装与配置（英文）： [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md)
+- 开发指南（中文）： [DEVELOPER_GUIDE_zh.md](./DEVELOPER_GUIDE_zh.md)
+- 接口参考（中文）： [API_REFERENCE_zh.md](./API_REFERENCE_zh.md)
 - About 详细模板（中文）： [GITHUB_ABOUT_zh.md](./GITHUB_ABOUT_zh.md)
 - About 详细模板（英文）： [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
 - Skills 来源与更新审计（英文）： [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md)

@@ -2,313 +2,257 @@
 
 > Language / 语言: [English](./README_en.md) | [中文](./README.md)
 
-OneSync is an extensible software update manager plugin for AstrBot.
+<div align="center">
+  <img src="./logo_256.png" alt="OneSync Logo" width="132">
+</div>
 
-Current mainline version: `v0.2.1`
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v0.2.1-2563eb" alt="version v0.2.1">
+  <img src="https://img.shields.io/badge/AstrBot-%3E%3D4.16-16a34a" alt="AstrBot >=4.16">
+  <img src="https://img.shields.io/badge/WebUI-127.0.0.1%3A8099-f59e0b" alt="WebUI 127.0.0.1:8099">
+  <img src="https://img.shields.io/badge/Skills-aggregate--first-7c3aed" alt="aggregate-first skills">
+</p>
 
-- Scheduled checks, optional auto-update, and manual run support.
-- Multi-target architecture (not limited to `zeroclaw`).
-- Mirror and multi-remote fallback for stable updates.
-- Remote probe and selection before update execution.
-- Persistent state and event logs for audit/troubleshooting.
-- Built-in WebUI (no AstrBot Dashboard source patch required).
-- Auto-generated software/version overview for operations.
-- Built-in debug log panel with tabs (`All/Run/Target/Scheduler/System`).
-- WebUI config center can now read/write plugin config and sync Human/Developer target models.
-- Native `system_package` strategy for `apt_get/yum/dnf/pacman/zypper/choco/winget/brew`.
-- v1 adds a `Skills Management` panel with npx-based skill discovery, auto CLI asset discovery, compatibility filtering, and skill binding updates.
-- Skills management is now install-unit / collection-group first instead of flattening all leaf skills as primary operations.
-- The WebUI now includes `Update All Aggregates`, which runs all actionable aggregate plans and skips `manual_only` boundaries explicitly.
-- Git-backed skill sources now support managed checkout bootstrap: when a leaf skill path is not itself a git worktree, OneSync materializes a managed repo checkout under plugin data and executes git updates from there.
+OneSync is a general-purpose software update plugin for AstrBot, built around one practical goal:
 
-## Configuration Modes
+- keep multiple software targets under one update workflow
+- expose a dedicated WebUI without patching AstrBot Dashboard source
+- manage software hosts, source bundles, deploy targets, and Skills operations inside one control plane
 
-- `human` (default): cleaner UI settings for normal users.
-- `developer`: advanced `targets_json` mode for full control.
+Use this project if you want:
 
-Switch via `target_config_mode`.
+- scheduled and manual maintenance for more than one software target
+- a built-in operations console at `127.0.0.1:8099`
+- aggregate-first Skills management instead of leaf-level UI noise
 
-## Embedded WebUI
+## Quick Navigation
 
-Enable with:
+1. [Core Highlights](#core-highlights)
+2. [Good Fit](#good-fit)
+3. [Quick Start](#quick-start)
+4. [Common Commands](#common-commands)
+5. [WebUI Highlights](#webui-highlights)
+6. [Skills Management Highlights](#skills-management-highlights)
+7. [FAQ](#faq)
+8. [Documentation Map](#documentation-map)
 
-1. `web_admin.enabled=true`
-2. Configure `web_admin.host` and `web_admin.port` (default `127.0.0.1:8099`)
-3. Optional `web_admin.password`
-4. Reload plugin and open `web_admin_url`
+## Core Highlights
 
-WebUI capabilities:
+### 1. Software updates as an actual workflow
 
-- Filter targets by status and keyword.
-- `Run Update (Filtered)` with confirmation dialog.
-- `Run Update (All Managed)` with confirmation dialog.
-- `Config Center`: edit plugin settings and target definitions directly in WebUI.
-- `AI Assistant`: generate copy-ready prompts for bootstrap/add/diagnose/full-suite workflows.
-- `Guide`: built-in user and developer operation flows, plus direct doc links.
-- `Skills Management`: inspect local software assets, aggregate skills via `npx skills ls`, and save per-software compatible skill bindings.
-- The software list shows installed, skill-capable software by default; users can explicitly reveal uninstalled candidates from the panel.
-- The inventory panel supports binding scope switching (`global/workspace`) and quick selection actions (select compatible / discovered-only / clear).
-- The software snapshot area supports `CLI/GUI/CLAW/OTHER` filtering and click-to-switch selection.
-- Recent job panel and real-time debug logs.
-- UI i18n toggle (Chinese/English).
+- scheduled checks, manual checks, manual updates, and forced updates
+- multi-target architecture instead of a single-tool updater
+- three primary strategies:
+  - `cargo_path_git`
+  - `command`
+  - `system_package`
+- post-update verification, persisted state, and event logs
 
-### Skills Management (v1)
+### 2. Embedded WebUI without dashboard patching
 
-New config fields:
+- embedded WebUI at `127.0.0.1:8099`
+- config center, runtime overview, recent jobs, debug logs
+- Chinese/English UI toggle
+- filtering by keyword, status, and strategy
 
-- `software_catalog`: base software assets (optional manual additions; PATH CLI auto-discovery can append more).
-- `skill_catalog`: optional manual skill assets (used in `filesystem/hybrid` modes).
-- `skill_bindings`: software-skill bindings (with `global/workspace` scope).
-- `skill_management_mode`: `npx / filesystem / hybrid`, default is `npx`.
-- `npx_skills_*`: command/scope/timeout controls for `npx skills ls`.
-- `auto_discover_cli*`: auto CLI discovery toggle, limit, include/exclude lists.
+### 3. Built for operations, not only for “it runs”
 
-WebUI/API endpoints:
+- mirror and multi-remote support
+- runtime health and structured diagnostics
+- batch update flows and audit replay
+- unified batch workflows such as `Improve All Skills` and `Update All Aggregates`
 
-- `GET /api/inventory/overview`: latest inventory overview (software rows, skill rows, compatibility map, binding summary, scope-grouped binding map, warnings).
-- `GET /api/inventory/software`: read-only software inventory details (good for external scripts).
-- `GET /api/inventory/skills`: read-only skill inventory details (including discovery/source fields).
-- `GET /api/inventory/bindings`: read-only binding details (`binding_map` + `binding_map_by_scope`).
-- `POST /api/inventory/scan`: trigger a rescan and refresh inventory snapshot.
-- `POST /api/inventory/bindings`: save bindings with compatibility validation.
-- `GET /api/skills/install-units/{install_unit_id}`: install-unit detail with effective `update_plan` and member sources.
-- `GET /api/skills/collections/{collection_group_id}`: collection-group detail with aggregated `update_plan`.
-- The Skills panel now includes an `Import Source` wizard for `manual_local` and `manual_git` sources, including optional git `source_subpath`.
-- `POST /api/skills/sources/register`: register a new source; supports local paths and git repositories with optional `source_subpath`.
-- `POST /api/skills/sources/{source_id}/sync`: sync upstream metadata for one source.
-- `POST /api/skills/install-units/{install_unit_id}/sync`: sync upstream metadata for all sources under one install unit.
-- `POST /api/skills/install-units/{install_unit_id}/update`: execute the real update command for one install unit.
-- `POST /api/skills/collections/{collection_group_id}/sync`: sync upstream metadata for all sources in one collection group.
-- `POST /api/skills/collections/{collection_group_id}/update`: execute updates for all supported install units in one collection group.
-- `POST /api/skills/aggregates/update-all`: batch-run all currently actionable aggregate update plans and return executed/skipped/source-sync breakdown.
-- `GET /api/skills/aggregates/update-all/progress`: fetch the latest in-flight aggregate-update progress snapshot.
-- `GET /api/skills/aggregates/update-all/history`: fetch recent aggregate-update history for replay/audit views.
-- `POST /api/skills/improve-all`: run the unified "Improve All Skills" workflow that stitches install-atom completion and aggregate update into one backend-managed run.
-- `POST /api/skills/sources/sync-all`: batch-sync all currently syncable sources.
+### 4. Aggregate-first Skills management
 
-Notes:
+- no primary UI based on flat leaf-skill explosion
+- install units and collection groups are the main maintenance objects
+- package/source bundles are preferred when a real maintenance boundary exists
+- `manual_only`, git-backed, repo-metadata, and registry-backed paths stay explicitly separated
 
-- The v1 inventory layer is additive and does not replace existing update execution paths (`/api/run`, scheduler, `/updater` commands).
-- Default mode builds the skill inventory from `npx skills ls --json` (project scope) and `npx skills ls -g --json` (global scope).
-- In `npx` mode, the UI prefers package-level bundles over raw skill explosion. For example, `ce:*` is grouped as `Compound Engineering` with one maintenance command.
-- In `filesystem/hybrid` mode, skill discovery can still scan `SKILL.md` under configured `skill_roots` and merge with manual `skill_catalog`.
-- Provenance resolution now distinguishes `registry_package / skill_lock_source / documented_source_repo / catalog_source_repo / community_source_repo / local_custom_skill`; for example, a self-authored `doc` skill can be modeled as `local_custom_skill`.
-- `POST /api/inventory/bindings` now projects directly from persisted `manifest` plus the latest skills snapshot, so binding saves no longer depend on an inventory rescan to converge.
-- `Sync Source` and `Update Install Unit` are different capabilities: source sync refreshes upstream metadata, while install-unit / collection-group update executes the effective update plan.
-- Git-backed `skill_lock` and repo-derived sources no longer require users to pre-create a local git checkout manually. When the leaf skill path is not a git worktree, OneSync now bootstraps a managed checkout under `plugin_data/.../skills/git_repos/` and routes sync/update through that checkout.
-- Successful install-unit / collection command updates now refresh registry freshness anchors immediately, clearing false `AGING` UI state after a successful run.
-- Update support is now on a more honest boundary:
-  - npm / registry-backed aggregates are updateable
-  - git-backed `skill_lock` aggregates are updateable after managed checkout bootstrap
-  - repo-metadata-backed aggregates can run source-sync fallback
-  - `local_custom`, `synthetic_single`, and similar no-package-boundary sources are explicitly treated as `manual_only`
-- Maintainers should use [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md) and [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md) for the full support matrix and audit notes.
+## Good Fit
 
-### Latest Progress (2026-04-13)
+- you maintain multiple CLI / GUI / Skills-capable hosts on one AstrBot machine
+- you want software updates and Skills maintenance in one panel
+- you need a plugin that is user-operable, developer-extensible, and ops-auditable
+- you do not want README to carry user guidance, ops process, architecture notes, and API inventory all at once
 
-- `POST /api/inventory/bindings` and deploy-target projection mutations now reuse manifest-first projection helpers, which removes the old requirement to rescan inventory just to make binding changes visible.
-- Successful install-unit / collection command updates now stamp `last_seen_at`, `last_refresh_at`, `source_age_days=0`, and `freshness_status=fresh`, fixing the false `AGING` state that could remain after success.
-- `Improve All Skills` and `Update All Aggregates` now share one backend progress/history contract instead of relying on transient frontend-only feedback.
-- Current regression baseline on `main`: `pytest -q -> 191 passed`.
+## Quick Start
 
-### Latest Progress (2026-04-12)
-
-- The live 8099 operations console now includes the deployed `Update All Aggregates` action.
-- `find-skills` and `frontend-design`, which previously failed because their leaf directories were not git repositories, can now bootstrap managed checkouts automatically and update successfully.
-- `synthetic_single:*` npx leaf aggregates without a real package boundary no longer pretend to be updateable; they now fall back to stable `manual_only`.
-- Latest live verification for `POST /api/skills/aggregates/update-all`:
-  - `candidate_install_unit_total = 20`
-  - `executed_install_unit_total = 14`
-  - `command_install_unit_total = 3`
-  - `source_sync_install_unit_total = 11`
-  - `skipped_install_unit_total = 6`
-  - `success_count = 8`
-  - `failure_count = 2`
-  - `precheck_failure_count = 0`
-
-### Stitch MCP Baseline Runner (UI Calibration)
-
-The repo includes `scripts/stitch_mcp_runner.py` for a resilient Stitch flow when generation connections are unstable: single destructive call, polling reads, and artifact download.
-
-Quick examples:
-
-```bash
-# Read-only: list projects
-python3 scripts/stitch_mcp_runner.py projects --limit 10
-
-# Baseline flow: trigger variants once, then poll
-python3 scripts/stitch_mcp_runner.py baseline \
-  --project-id 13653968230990294035 \
-  --mode variants \
-  --base-screen-id 3ed0716291bf49c4ac5ff29285fe9a2d \
-  --prompt "Refine unified software+skills dashboard hierarchy" \
-  --download new
-```
-
-For full parameters and reliability notes, see:
-- [Stitch WebUI Baseline Notes](./docs/plans/stitch-webui-baseline-2026-04-06.md)
-- [Skills Management Reference Comparison](./docs/plans/skills-management-reference-comparative-analysis-2026-04-06.md)
-- [Skills Management Next-Step Plan](./docs/plans/skills-management-next-step-implementation-plan-2026-04-06.md)
-- [Skills UI Declutter and Update-All Progress Bridge Plan](./docs/plans/skills-ui-declutter-and-progress-bridge-plan-2026-04-12.md)
-
-### Embedded AI Assistant and Guide
-
-Entry points:
-
-- Top buttons: `AI Assistant` and `Guide`
-- Shortcuts:
-  - `Alt+A` open AI assistant
-  - `Alt+H` open guide
-  - `Esc` close top-most modal (AI / Guide / Config Center)
-
-Recommended user flow:
-
-1. Open `AI Assistant` and click `User Preset`.
-2. If config already exists, click `Auto-fill from Current Config` first to load mode, intervals, and one target profile.
-3. Optional: switch `Auto Generate: On` to generate prompt immediately after auto-fill.
-4. Pick a scenario (bootstrap/add/diagnose/suite) and complete required fields.
-5. Click `Generate Prompt`, then `Copy Output`, and send it to your AI tool.
-6. Apply returned JSON/script via Config Center or API.
-7. Verify from `Latest Job` and `Debug Logs`.
-
-Recommended developer flow:
-
-1. Open `AI Assistant` and click `Developer Preset`.
-2. Use `Full Suite` to generate a multi-scenario prompt package.
-3. Ask AI to output `targets_json` or one-click API scripts.
-4. Switch Config Center to `developer` mode and apply the config.
-5. Validate with `/updater env` and `/updater check`.
-
-### WebUI Troubleshooting: `Failed to load config (404)`
-
-If you see `Failed to load config: 404 Not Found`, the running plugin process is usually still serving an older route set.
-
-Use this sequence:
-
-1. Restart AstrBot:
-   `systemctl restart astrbot.service`
-2. Confirm you opened OneSync `web_admin_url` (default `http://127.0.0.1:8099`) instead of the AstrBot Dashboard URL.
-3. Hard refresh browser cache (`Ctrl+F5`).
-4. Verify endpoint on host:
-   - `curl -i http://127.0.0.1:8099/api/config`
-   - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
-
-## AI One-Click Prompt (Copy Ready)
-
-If you do not want to fill a large prompt manually, generate it first with the built-in helper:
-
-```bash
-# Interactive mode (recommended): answer a few questions
-python3 scripts/onesync_prompt_builder.py --interactive --lang en --scenario suite --output /tmp/onesync_prompt_en.txt
-
-# Non-interactive mode (example: Ubuntu + system_package)
-python3 scripts/onesync_prompt_builder.py \
-  --lang en \
-  --scenario suite \
-  --os-profile ubuntu \
-  --software-name curl \
-  --strategy system_package \
-  --output /tmp/onesync_prompt_en.txt
-```
-
-Then send the full generated file content (`/tmp/onesync_prompt_en.txt`) to your AI tool.
-
-The prompt below is designed for ChatGPT/Codex/Claude to produce a full OneSync setup in one pass: generate config, apply it through API, and validate result.
-
-```text
-You are my OneSync (astrbot_plugin_onesync) configuration execution assistant.
-Goal: generate a valid OneSync config payload, then provide one-click shell commands to apply and verify it.
-
-Follow these rules strictly:
-1) First output a valid JSON payload in this exact shape:
-   {
-     "config": {
-       ...OneSync config...
-     }
-   }
-2) Then output a bash script that performs:
-   - write onesync_config.json
-   - optional login via POST /api/login when WEBUI_PASSWORD is not empty
-   - POST /api/config to apply
-   - GET /api/config and /api/overview to verify
-3) If required fields are missing, use safe defaults and list them under assumptions.
-4) Output must contain exactly these three sections:
-   - `JSON_PAYLOAD`
-   - `BASH_ONE_CLICK`
-   - `ASSUMPTIONS`
-5) No comments or trailing commas in JSON.
-
-Input values:
-WEBUI_URL=http://127.0.0.1:8099
-WEBUI_PASSWORD=
-TARGET_CONFIG_MODE=human
-POLL_INTERVAL_MINUTES=10
-DEFAULT_CHECK_INTERVAL_HOURS=12
-AUTO_UPDATE_ON_SCHEDULE=true
-NOTIFY_ADMIN_ON_SCHEDULE=true
-NOTIFY_ON_SCHEDULE_NOOP=false
-ADMIN_SID_LIST=
-TARGETS_YAML:
-- name: zeroclaw
-  strategy: cargo_path_git
-  enabled: true
-  check_interval_hours: 12
-  repo_path: /home/jacob/zeroclaw
-  binary_path: /root/.cargo/bin/zeroclaw
-  upstream_repo: https://github.com/zeroclaw-labs/zeroclaw.git
-  build_commands:
-    - cargo install --path {repo_path}
-  verify_cmd: "{binary_path} --version"
-- name: curl
-  strategy: system_package
-  enabled: true
-  check_interval_hours: 24
-  manager: apt_get
-  package_name: curl
-  require_sudo: true
-```
-
-For a full prompt suite (bootstrap, incremental target add, diagnose/repair), see:
-- [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
-- [安装与配置手册（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
-
-## Quick Interval Setup
-
-Sync cadence is controlled by:
-
-- `poll_interval_minutes` (scheduler loop frequency)
-- `check_interval_hours` (per target)
-
-Recommended:
-
-1. `poll_interval_minutes = 5` (or `10`)
-2. Set per-target `check_interval_hours`
-3. Restart AstrBot
-4. Verify via `/updater status` and `/updater env <target>`
-
-## Install
+### 1. Install the plugin
 
 ```bash
 cd <ASTRBOT_ROOT>/data/plugins
 git clone https://github.com/Jacobinwwey/astrbot_plugin_onesync.git
+```
+
+### 2. Restart AstrBot
+
+```bash
 systemctl restart astrbot.service
 ```
 
-Verification:
+### 3. Run the minimal verification
 
-- Send `/updater status` as admin.
+Send as admin:
 
-## Commands
+```text
+/updater status
+```
 
-- `/updater status`
-- `/updater check [target]`
-- `/updater run [target]`
-- `/updater force [target]`
-- `/updater env [target]`
+If you see the status summary, the plugin is loaded correctly.
 
-## Docs
+### 4. Open the embedded WebUI
+
+Enable these config fields:
+
+- `web_admin.enabled = true`
+- `web_admin.host = 127.0.0.1`
+- `web_admin.port = 8099`
+
+Then open:
+
+```text
+http://127.0.0.1:8099
+```
+
+### 5. Follow the recommended path
+
+1. choose `human` or `developer` mode in Config Center
+2. define or import software targets
+3. run `/updater env` or `Run Update (Filtered)` first
+4. validate one target before moving to batch operations
+
+For full install and config detail:
 
 - [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
-- [安装与配置手册（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
+- [安装与配置指南（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
+
+## Common Commands
+
+| Command | Purpose |
+| --- | --- |
+| `/updater status` | show plugin and target status |
+| `/updater check [target]` | check versions without updating |
+| `/updater run [target]` | check and update if needed |
+| `/updater force [target]` | force update execution |
+| `/updater env [target]` | verify runtime commands, paths, and versions |
+
+Notes:
+
+- `target` is optional; when omitted, all configured targets are used
+- running `/updater env` before wider rollout is strongly recommended
+
+## WebUI Highlights
+
+The WebUI is not just “commands with buttons”. It is structured for actual operations:
+
+- `Config Center`
+  - read/write plugin config
+  - `human` / `developer` dual-mode support
+- `AI Assistant`
+  - prompt generation for bootstrap, incremental add, diagnosis, and full-suite flows
+- `Latest Job`
+  - recent software-update execution summary
+- `Debug Logs`
+  - tabs, level filter, keyword filter, clear action
+- `Guide`
+  - user flow and developer flow help
+
+If your immediate goal is “get software update working safely”, the practical order is:
+
+1. `Config Center`
+2. `AI Assistant` if needed
+3. `Run Update (Filtered)`
+4. `Latest Job`
+5. `Debug Logs`
+
+## Skills Management Highlights
+
+OneSync does not treat Skills management as a raw `npx skills ls` dump. It is built around maintenance boundaries:
+
+- installed, skill-capable hosts are shown first by default
+- uninstalled candidates can still be revealed explicitly
+- `global / workspace` binding scope is first-class
+- the right-side inspector focuses on the current source / install unit / deploy target
+- long information zones such as `Structure & Members` and `Execution Preview & Audit` are collapsible
+- in the current UI, `Structure & Members` is collapsed by default so the primary operations stay visually dominant
+
+Update support is intentionally explicit:
+
+- npm / registry-backed aggregates: updateable
+- git-backed `skill_lock` aggregates: updateable after managed checkout bootstrap
+- repo-metadata sources: source-sync fallback
+- `local_custom` / `synthetic_single` / `derived`: explicitly `manual_only`
+
+The point is not to make everything look updateable. The point is to make it obvious:
+
+- what can be updated automatically
+- what can only refresh metadata
+- what still requires manual maintenance
+
+## FAQ
+
+### 1. The page shows `Failed to load config: 404 Not Found`
+
+Use this order first:
+
+1. `systemctl restart astrbot.service`
+2. make sure you opened OneSync `web_admin_url`
+3. hard refresh the browser with `Ctrl+F5`
+4. verify:
+   - `curl -i http://127.0.0.1:8099/api/config`
+   - `curl -s http://127.0.0.1:8099/openapi.json | jq -r '.paths | keys[]'`
+
+### 2. An update succeeded, but the Skills panel still looks stale
+
+The current mainline already fixes two common false positives:
+
+- binding saves no longer depend on an inventory rescan to become visible
+- successful install-unit / collection command updates now stamp freshness anchors immediately, so false `AGING` state should clear on the next rebuild
+
+If the panel still looks wrong, check:
+
+- whether the source is actually `manual_only`
+- whether the path used `source sync fallback` instead of command update
+- whether `Debug Logs` or `doctor` show a structured error
+
+### 3. Should I use `human` or `developer` mode?
+
+- normal users: start with `human`
+- advanced operators needing mirrors, regex, timeout tuning, or larger target sets: use `developer`
+
+## Documentation Map
+
+The documentation is now intentionally separated by audience:
+
+### User docs
+
+- [README_en.md](./README_en.md)
+- [README.md](./README.md)
+- [Installation & Config Guide (English)](./docs/INSTALL_AND_CONFIG_en.md)
+- [安装与配置指南（中文）](./docs/INSTALL_AND_CONFIG_zh.md)
+
+### Operations / release docs
+
 - [Operations and Sync Manual (English)](./docs/OPERATIONS_AND_SYNC_en.md)
 - [操作与同步手册（中文）](./docs/OPERATIONS_AND_SYNC_zh.md)
+
+### Developer docs
+
+- [Developer Guide (English)](./docs/DEVELOPER_GUIDE_en.md)
+- [开发指南（中文）](./docs/DEVELOPER_GUIDE_zh.md)
+
+### API docs
+
+- [API Reference (English)](./docs/API_REFERENCE_en.md)
+- [接口参考（中文）](./docs/API_REFERENCE_zh.md)
+
+### Status and planning docs
+
+- [Skills Update Status (English)](./docs/SKILLS_UPDATE_STATUS_en.md)
+- [Skills 更新能力现状（中文）](./docs/SKILLS_UPDATE_STATUS_zh.md)
+- [Skills Management Roadmap](./docs/plans/skills-management-roadmap-v2.md)
+
+---
+
+If this project helps with real AstrBot maintenance work, a Star is appreciated.

@@ -9,6 +9,13 @@ This guide covers:
 - How to configure additional software targets (human and developer modes).
 - How to troubleshoot common runtime/update failures.
 
+Companion docs:
+
+- project homepage and quick start: [README_en.md](../README_en.md)
+- operations and release work: [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md)
+- development and extension: [Developer Guide (English)](./DEVELOPER_GUIDE_en.md)
+- API usage: [API Reference (English)](./API_REFERENCE_en.md)
+
 ## 1. Plugin Positioning
 
 OneSync is an extensible software updater plugin for AstrBot.
@@ -572,3 +579,5 @@ For release workflow, upload metadata, GitHub About, and sync operations, see:
 - [GitHub About Template (English)](./GITHUB_ABOUT_en.md)
 - [操作与同步手册（中文）](./OPERATIONS_AND_SYNC_zh.md)
 - [GitHub About 模板（中文）](./GITHUB_ABOUT_zh.md)
+- [Developer Guide (English)](./DEVELOPER_GUIDE_en.md)
+- [API Reference (English)](./API_REFERENCE_en.md)

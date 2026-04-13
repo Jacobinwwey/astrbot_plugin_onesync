@@ -9,6 +9,13 @@
 - 如何扩展到多个软件目标并提升更新稳定性。
 - 维护者相关操作文档入口。
 
+配套文档：
+
+- 项目首页与快速上手： [README.md](../README.md)
+- 运维与发布： [操作与同步手册（中文）](./OPERATIONS_AND_SYNC_zh.md)
+- 开发与扩展： [开发指南（中文）](./DEVELOPER_GUIDE_zh.md)
+- 接口调用： [接口参考（中文）](./API_REFERENCE_zh.md)
+
 ## 1. 插件定位
 
 `astrbot_plugin_onesync` 是一个 AstrBot 插件，负责按计划检查并更新软件。
@@ -625,3 +632,5 @@ git config --global --add safe.directory <repo_path>
 - [Operations and Sync Manual (English)](./OPERATIONS_AND_SYNC_en.md)
 - [GitHub About 模板（中文）](./GITHUB_ABOUT_zh.md)
 - [GitHub About Template (English)](./GITHUB_ABOUT_en.md)
+- [开发指南（中文）](./DEVELOPER_GUIDE_zh.md)
+- [接口参考（中文）](./API_REFERENCE_zh.md)

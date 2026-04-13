@@ -11,7 +11,10 @@ This manual is for repository maintainers and covers:
 
 ## 1. Doc Navigation
 
+- project homepage: [README_en.md](../README_en.md)
 - User install and config: [INSTALL_AND_CONFIG_en.md](./INSTALL_AND_CONFIG_en.md)
+- Developer guide: [DEVELOPER_GUIDE_en.md](./DEVELOPER_GUIDE_en.md)
+- API reference: [API_REFERENCE_en.md](./API_REFERENCE_en.md)
 - About templates: [GITHUB_ABOUT_en.md](./GITHUB_ABOUT_en.md)
 - Skills source/update audit: [SKILLS_UPDATE_STATUS_en.md](./SKILLS_UPDATE_STATUS_en.md)
 - Skills source/update audit (Chinese): [SKILLS_UPDATE_STATUS_zh.md](./SKILLS_UPDATE_STATUS_zh.md)
