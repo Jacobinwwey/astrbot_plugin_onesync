@@ -76,6 +76,19 @@ class SourceSyncCoreTests(unittest.TestCase):
             key,
         )
 
+    def test_build_source_sync_cache_key_supports_gitea_repo_metadata_sources(self) -> None:
+        key = build_source_sync_cache_key(
+            {
+                "source_id": "codeberg_skill_pack",
+                "source_kind": "manual_local",
+                "locator": "repo:codeberg.org/astral/skills#skills/find-skills",
+                "managed_by": "manual",
+                "update_policy": "manual",
+            },
+        )
+
+        self.assertEqual("repo_metadata:gitea:astral/skills", key)
+
     def test_fetch_npm_registry_package_summary(self) -> None:
         def _fake_urlopen(url: str, timeout: int = 0):
             self.assertIn("%40every-env%2Fcompound-plugin", url)
@@ -569,6 +582,78 @@ class SourceSyncCoreTests(unittest.TestCase):
         self.assertEqual("https://bitbucket.org/atlassian/python-bitbucket", record["registry_homepage"])
         self.assertEqual("Bitbucket SDK", record["registry_description"])
 
+    def test_build_source_sync_record_fetches_gitea_repo_metadata_for_repo_locator(self) -> None:
+        def _fake_urlopen(req, timeout: int = 0):
+            self.assertEqual(9, timeout)
+            request_url = req.full_url if hasattr(req, "full_url") else str(req)
+            self.assertEqual("https://codeberg.org/api/v1/repos/astral/skills", request_url)
+            return _FakeResponse(
+                {
+                    "html_url": "https://codeberg.org/astral/skills",
+                    "description": "Codeberg skills pack",
+                    "default_branch": "main",
+                    "updated_at": "2026-04-12T20:21:22Z",
+                },
+            )
+
+        record = build_source_sync_record(
+            {
+                "source_id": "documented_codeberg_project",
+                "display_name": "codeberg project",
+                "source_kind": "manual_local",
+                "locator": "repo:codeberg.org/astral/skills#skills",
+                "managed_by": "manual",
+                "update_policy": "manual",
+            },
+            checked_at="2026-04-06T12:00:00+00:00",
+            urlopen=_fake_urlopen,
+            timeout_s=9,
+        )
+
+        self.assertEqual("ok", record["sync_status"])
+        self.assertEqual("repo_metadata_gitea", record["sync_kind"])
+        self.assertEqual("2026-04-12T20:21:22Z", record["registry_latest_version"])
+        self.assertEqual("2026-04-12T20:21:22Z", record["sync_remote_revision"])
+        self.assertEqual("2026-04-12T20:21:22Z", record["sync_resolved_revision"])
+        self.assertEqual("main", record["sync_branch"])
+        self.assertEqual("https://codeberg.org/astral/skills", record["registry_homepage"])
+        self.assertEqual("Codeberg skills pack", record["registry_description"])
+
+    def test_build_source_sync_record_supports_self_hosted_forgejo_with_auth(self) -> None:
+        def _fake_urlopen(req, timeout: int = 0):
+            self.assertEqual(12, timeout)
+            request_url = req.full_url if hasattr(req, "full_url") else str(req)
+            self.assertEqual("https://forgejo.internal/api/v1/repos/acme/skills-pack", request_url)
+            headers = {str(key).lower(): str(value) for key, value in req.header_items()}
+            self.assertEqual("token secret-xyz", headers.get("authorization"))
+            return _FakeResponse(
+                {
+                    "html_url": "https://forgejo.internal/acme/skills-pack",
+                    "description": "Forgejo skills pack",
+                    "default_branch": "main",
+                    "updated_at": "2026-04-12T23:59:59Z",
+                },
+            )
+
+        record = build_source_sync_record(
+            {
+                "source_id": "forgejo_skills_pack",
+                "display_name": "forgejo skills pack",
+                "source_kind": "manual_local",
+                "locator": "repo:https://forgejo.internal/acme/skills-pack#skills",
+                "managed_by": "forgejo",
+                "update_policy": "manual",
+                "sync_auth_token": "secret-xyz",
+            },
+            checked_at="2026-04-06T12:00:00+00:00",
+            urlopen=_fake_urlopen,
+            timeout_s=12,
+        )
+
+        self.assertEqual("ok", record["sync_status"])
+        self.assertEqual("repo_metadata_gitea", record["sync_kind"])
+        self.assertEqual("2026-04-12T23:59:59Z", record["sync_resolved_revision"])
+
     def test_is_source_syncable_supports_npm_and_git(self) -> None:
         self.assertTrue(
             is_source_syncable(
@@ -625,6 +710,16 @@ class SourceSyncCoreTests(unittest.TestCase):
                     "locator": "repo:https://gitlab.internal/group/skills-pack#skills",
                     "managed_by": "gitlab",
                     "sync_api_base": "https://gitlab.internal/api/v4",
+                    "update_policy": "manual",
+                },
+            ),
+        )
+        self.assertTrue(
+            is_source_syncable(
+                {
+                    "source_kind": "manual_local",
+                    "locator": "repo:codeberg.org/astral/skills#skills",
+                    "managed_by": "manual",
                     "update_policy": "manual",
                 },
             ),

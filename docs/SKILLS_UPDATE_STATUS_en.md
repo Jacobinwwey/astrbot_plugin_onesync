@@ -55,8 +55,8 @@ Current reality:
   - `source_kind == "manual_git"` with `source_path` or a git locator
   - `update_policy == "source_sync"` with `source_path` or a git locator
 - npm sync uses registry metadata; git sync uses remote/head plus local checkout metadata.
-- Repo-reference sources (`repo:` / `documented:` / `catalog:` / `community:`) can now sync repository metadata for GitHub, GitLab, and Bitbucket locators.
-- Self-hosted GitHub/GitLab/Bitbucket instances are now syncable through `sync_api_base + sync_auth_header/sync_auth_token`; unknown providers still require dedicated adapters.
+- Repo-reference sources (`repo:` / `documented:` / `catalog:` / `community:`) can now sync repository metadata for GitHub, GitLab, Bitbucket, Gitea, and Forgejo locators.
+- Self-hosted GitHub/GitLab/Bitbucket/Gitea/Forgejo instances are now syncable through `sync_api_base + sync_auth_header/sync_auth_token`; unknown providers still require dedicated adapters.
 
 ### 2.3 `Update Install Unit` / `Update Collection`
 
@@ -89,7 +89,7 @@ Current reality:
 | --- | --- | --- | --- | --- |
 | npm package-backed bundle/single | `npm:@every-env/compound-plugin` | Yes | Yes | Sync reads npm registry metadata. Update uses `management_hint` first, otherwise a registry command is built. |
 | Git-backed local checkout / skill-lock entry | `skill_lock:https://github.com/vercel-labs/skills.git#skills/find-skills` | Yes (git remote/head, managed checkout, or local checkout metadata) | Yes | If the original skill path is not a git worktree, OneSync now bootstraps a managed checkout under `plugin_data/.../skills/git_repos/` and executes `git pull --ff-only` from there. |
-| Documented/catalog/community repo reference without executable manager | `repo:https://github.com/...#skills/foo` | Partial (repo metadata only) | Usually no | Source Sync can refresh metadata from GitHub/GitLab/Bitbucket (for example pushed/updated timestamp), but update execution is still unsupported. |
+| Documented/catalog/community repo reference without executable manager | `repo:https://github.com/...#skills/foo` | Partial (repo metadata only) | Usually no | Source Sync can refresh metadata from GitHub/GitLab/Bitbucket/Gitea/Forgejo (for example pushed/updated timestamp), but update execution is still unsupported. |
 | Manual local path / self-authored local custom skill | `local_custom:/path/to/skill` | No | No | OneSync can inventory, classify, and deploy them, but cannot infer a safe update command. |
 | Manual git source registered without a usable local checkout | `manual_git` remote | No | No | A remote locator alone is not enough; a resolvable local checkout path is required for git update execution. |
 
@@ -126,9 +126,9 @@ If the question is "is the current skill update function complete?", the answer 
 More specifically:
 
 - Complete enough today for package-backed npm updates and git-backed `skill_lock` sources.
-- Partially complete for repo-derived sources: GitHub/GitLab/Bitbucket locators support metadata sync; update execution remains unsupported.
+- Partially complete for repo-derived sources: GitHub/GitLab/Bitbucket/Gitea/Forgejo locators support metadata sync; update execution remains unsupported.
 - Not complete for local custom/manual skills.
-- Git-backed metadata refresh (remote/head + local checkout) is supported; repo-reference metadata sync is supported for GitHub/GitLab/Bitbucket (including self-hosted instances with auth/api-base overrides); unknown providers remain incomplete.
+- Git-backed metadata refresh (remote/head + local checkout) is supported; repo-reference metadata sync is supported for GitHub/GitLab/Bitbucket/Gitea/Forgejo (including self-hosted instances with auth/api-base overrides); unknown providers remain incomplete.
 - `synthetic_single` / `derived` aggregates without a real package boundary are now explicitly downgraded to `manual_only` instead of pretending to be updateable.
 
 ## 6. Maintainer Verification Procedure
@@ -145,7 +145,7 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 What to confirm:
 
 - `counts.source_provenance_unresolved_total == 0` for the current runtime snapshot.
-- `counts.source_syncable_total` now counts npm-backed, git-backed, and repo-metadata-backed sources (GitHub/GitLab/Bitbucket).
+- `counts.source_syncable_total` now counts npm-backed, git-backed, and repo-metadata-backed sources (GitHub/GitLab/Bitbucket/Gitea/Forgejo).
 - Supported install units expose non-empty `update_plan.commands`.
 - Git-backed install units expose `update_plan.precheck_commands`.
 - Git-backed `skill_lock` install units expose `git_checkout_path` on source rows after the first sync/update bootstrap.
@@ -160,13 +160,19 @@ What to confirm:
 
 To call the feature "complete", the next implementation steps should be:
 
-1. Add adapters for unknown/non-GitHub/GitLab/Bitbucket providers and unify auth strategy across adapters.
+1. Add adapters for unknown/non-GitHub/GitLab/Bitbucket/Gitea/Forgejo providers and unify auth strategy across adapters.
 2. Harden the UI rollback workflow on top of the current rollback API (candidate selection, retry handling, visible audit trails, and rollback history).
 3. Surface unsupported/precheck-failure reasons more explicitly in the UI.
 4. Separate "provenance origin" from "update mechanism" more clearly in panel copy.
 5. Add more end-to-end tests around install-unit detail payloads and live sync/update behavior.
 
-## 8. Recent Implementation Progress (2026-04-12)
+## 8. Recent Implementation Progress (2026-04-13)
+
+- Added Gitea/Forgejo repo metadata sync adapter support:
+  - Supports schema-less locator normalization and provider inference for locators like `repo:codeberg.org/<owner>/<repo>#...`
+  - Supports self-hosted Forgejo/Gitea API calls through `managed_by=forgejo|gitea` with optional `sync_api_base`
+  - Added provider-default auth mode for Gitea/Forgejo: `Authorization: token <token>` (still overridable via `sync_auth_header`)
+  - Added dedicated cache key family `repo_metadata:gitea:<owner>/<repo>` to prevent duplicate metadata requests
 
 - Batch aggregate update is now wired in both backend and WebUI:
   - `POST /api/skills/aggregates/update-all`

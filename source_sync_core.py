@@ -23,6 +23,12 @@ _BITBUCKET_PROVIDER_ALIASES = {
     "bitbucket",
     "bitbucket_cloud",
 }
+_GITEA_PROVIDER_ALIASES = {
+    "gitea",
+    "forgejo",
+    "codeberg",
+    "gogs",
+}
 _REPO_LOCATOR_PREFIXES = (
     "repo:",
     "documented:",
@@ -51,6 +57,8 @@ def _normalize_repo_provider(value: Any) -> str:
         return "gitlab"
     if normalized in _BITBUCKET_PROVIDER_ALIASES:
         return "bitbucket"
+    if normalized in _GITEA_PROVIDER_ALIASES:
+        return "gitea"
     return ""
 
 
@@ -116,6 +124,15 @@ def _normalize_repo_locator_url(value: Any) -> str:
         or locator.startswith("www.bitbucket.org/")
     ):
         locator = f"https://{locator}"
+    if "://" not in locator and "/" in locator:
+        first_segment = locator.split("/", 1)[0].strip().lower()
+        if (
+            first_segment
+            and "." in first_segment
+            and "@" not in first_segment
+            and ":" not in first_segment
+        ):
+            locator = f"https://{locator}"
     if locator.startswith("http://") or locator.startswith("https://"):
         return locator
     return ""
@@ -207,6 +224,26 @@ def _extract_repo_path_parts(value: Any) -> tuple[str, list[str]] | None:
     return host, parts
 
 
+def _infer_repo_provider_from_host(host: Any) -> str:
+    normalized_host = _normalize_text(host).lower()
+    if not normalized_host:
+        return ""
+    if normalized_host in {"github.com", "www.github.com"}:
+        return "github"
+    if normalized_host in {"gitlab.com", "www.gitlab.com"}:
+        return "gitlab"
+    if normalized_host in {"bitbucket.org", "www.bitbucket.org"}:
+        return "bitbucket"
+    if (
+        normalized_host == "codeberg.org"
+        or normalized_host.endswith(".codeberg.org")
+        or "gitea" in normalized_host
+        or "forgejo" in normalized_host
+    ):
+        return "gitea"
+    return ""
+
+
 def _resolve_repo_metadata_target_from_locator(
     value: Any,
     *,
@@ -241,11 +278,11 @@ def _resolve_repo_metadata_target_from_locator(
             "homepage": homepage,
         }
 
-    normalized_hint = _normalize_repo_provider(provider_hint)
     path_parts = _extract_repo_path_parts(value)
-    if normalized_hint and path_parts:
+    if path_parts:
         host, parts = path_parts
-        if normalized_hint == "github":
+        resolved_provider = _normalize_repo_provider(provider_hint) or _infer_repo_provider_from_host(host)
+        if resolved_provider == "github":
             owner = parts[0]
             repo = parts[1]
             return {
@@ -254,14 +291,14 @@ def _resolve_repo_metadata_target_from_locator(
                 "repo": repo,
                 "homepage": f"https://{host}/{owner}/{repo}",
             }
-        if normalized_hint == "gitlab":
+        if resolved_provider == "gitlab":
             namespace = "/".join(parts)
             return {
                 "provider": "gitlab",
                 "namespace": namespace,
                 "homepage": f"https://{host}/{namespace}",
             }
-        if normalized_hint == "bitbucket":
+        if resolved_provider == "bitbucket":
             workspace = parts[0]
             repo = parts[1]
             return {
@@ -270,6 +307,16 @@ def _resolve_repo_metadata_target_from_locator(
                 "repo": repo,
                 "homepage": f"https://{host}/{workspace}/{repo}",
             }
+        if resolved_provider == "gitea":
+            owner = parts[0]
+            repo = parts[1]
+            return {
+                "provider": "gitea",
+                "owner": owner,
+                "repo": repo,
+                "host": host,
+                "homepage": f"https://{host}/{owner}/{repo}",
+            }
     return None
 
 
@@ -277,12 +324,16 @@ def _infer_provider_from_api_base(value: Any) -> str:
     api_base = _normalize_text(value).lower()
     if not api_base:
         return ""
+    if "forgejo" in api_base or "gitea" in api_base or "codeberg" in api_base:
+        return "gitea"
     if "gitlab" in api_base:
         return "gitlab"
     if "bitbucket" in api_base:
         return "bitbucket"
     if "github" in api_base:
         return "github"
+    if "/api/v1" in api_base:
+        return "gitea"
     if "/api/v4" in api_base:
         return "gitlab"
     if "/api/v3" in api_base:
@@ -409,6 +460,11 @@ def build_source_sync_cache_key(source: dict[str, Any] | None) -> str:
             repo = _normalize_text(repo_target.get("repo"))
             if workspace and repo:
                 return f"repo_metadata:bitbucket:{workspace}/{repo}"
+        if provider == "gitea":
+            owner = _normalize_text(repo_target.get("owner"))
+            repo = _normalize_text(repo_target.get("repo"))
+            if owner and repo:
+                return f"repo_metadata:gitea:{owner}/{repo}"
         homepage = _normalize_text(repo_target.get("homepage"))
         if homepage:
             return f"repo_metadata:{provider}:{homepage}"
@@ -780,6 +836,8 @@ def fetch_repo_metadata_summary(
 
         if provider == "gitlab":
             return ("PRIVATE-TOKEN", auth_token), None
+        if provider == "gitea":
+            return ("Authorization", f"token {auth_token}"), None
         return ("Authorization", f"Bearer {auth_token}"), None
 
     def _classify_http_error(provider: str, exc: error.HTTPError) -> tuple[str, str]:
@@ -999,6 +1057,62 @@ def fetch_repo_metadata_summary(
         description_field = "description"
         branch_field = ""
         revision_fields = ("updated_on", "created_on")
+    elif provider == "gitea":
+        owner = str(target.get("owner") or "").strip()
+        repo = str(target.get("repo") or "").strip()
+        target_host = _normalize_text(target.get("host"))
+        if not owner or not repo or not target_host:
+            return {
+                "ok": False,
+                "sync_kind": sync_kind,
+                "sync_message": "gitea repo metadata target is invalid",
+                "registry_latest_version": "",
+                "registry_published_at": "",
+                "registry_homepage": homepage,
+                "registry_description": "",
+                "sync_local_revision": "",
+                "sync_remote_revision": "",
+                "sync_resolved_revision": "",
+                "sync_branch": "",
+                "sync_dirty": False,
+                "sync_error_code": "repo_metadata_target_invalid",
+            }
+        target_label = f"{owner}/{repo}"
+        api_base = _normalize_api_base(
+            source_row.get("sync_api_base"),
+            f"https://{target_host}/api/v1",
+        )
+        if not api_base:
+            return {
+                "ok": False,
+                "sync_kind": sync_kind,
+                "sync_message": "sync_api_base is invalid for gitea repo metadata",
+                "registry_latest_version": "",
+                "registry_published_at": "",
+                "registry_homepage": homepage,
+                "registry_description": "",
+                "sync_local_revision": "",
+                "sync_remote_revision": "",
+                "sync_resolved_revision": "",
+                "sync_branch": "",
+                "sync_dirty": False,
+                "sync_error_code": "repo_metadata_api_base_invalid",
+            }
+        api_url = (
+            f"{api_base}/repos/{parse.quote(owner, safe='')}/{parse.quote(repo, safe='')}"
+        )
+        request_headers = {
+            "Accept": "application/json",
+            "User-Agent": "onesync-source-sync",
+        }
+        req = request.Request(
+            api_url,
+            headers=request_headers,
+        )
+        homepage_field = "html_url"
+        description_field = "description"
+        branch_field = "default_branch"
+        revision_fields = ("updated_at", "pushed_at", "updated")
     else:
         return {
             "ok": False,

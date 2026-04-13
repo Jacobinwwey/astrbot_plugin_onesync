@@ -372,6 +372,27 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> `27 passed`
   - `node --check`（提取后的 `webui/index.html` 内联脚本）-> passed
 
+### 2026-04-13 / Step 11
+
+- 已补齐 repo metadata sync 的 Gitea / Forgejo provider 适配：
+  - `source_sync_core.py` 新增 provider 归一化与主机推断：
+    - `gitea` / `forgejo` / `codeberg` 别名归并为 `gitea`
+    - `repo:codeberg.org/<owner>/<repo>#...` 这类无 schema locator 会自动归一化
+  - repo metadata target 现在可解析 `provider=gitea`：
+    - 输出 `owner/repo/host/homepage`
+    - 缓存键新增 `repo_metadata:gitea:<owner>/<repo>`
+  - `fetch_repo_metadata_summary(...)` 新增 `repo_metadata_gitea` 分支：
+    - 默认 API base：`https://{host}/api/v1`
+    - 支持显式 `sync_api_base` 覆盖
+    - 统一回填 `updated_at/pushed_at` 等 revision 字段
+  - 鉴权默认策略补齐：
+    - 当 provider 为 `gitea` 且仅给出 `sync_auth_token` 时，默认使用 `Authorization: token <token>`
+    - 仍支持 `sync_auth_header` 显式覆盖
+- 本轮定向回归：
+  - `pytest -q tests/test_source_sync_core.py` -> passed
+  - `pytest -q` -> passed
+  - `python3 -m py_compile source_sync_core.py tests/test_source_sync_core.py` -> passed
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

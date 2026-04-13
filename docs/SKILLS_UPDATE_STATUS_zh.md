@@ -55,8 +55,8 @@
   - `source_kind == "manual_git"` 且有 `source_path` 或 git locator
   - `update_policy == "source_sync"` 且有 `source_path` 或 git locator
 - npm 走 registry metadata；git 走 remote/head + local checkout metadata。
-- `repo:` / `documented:` / `catalog:` / `community:` 这类来源，现已支持 GitHub / GitLab / Bitbucket 的 repo metadata sync（更新时间、默认分支、描述等）。
-- 自建私有 GitHub/GitLab/Bitbucket 实例现可通过 `sync_api_base + sync_auth_header/sync_auth_token` 做 metadata sync；完全未知 provider 仍需额外适配。
+- `repo:` / `documented:` / `catalog:` / `community:` 这类来源，现已支持 GitHub / GitLab / Bitbucket / Gitea / Forgejo 的 repo metadata sync（更新时间、默认分支、描述等）。
+- 自建私有 GitHub/GitLab/Bitbucket/Gitea/Forgejo 实例现可通过 `sync_api_base + sync_auth_header/sync_auth_token` 做 metadata sync；完全未知 provider 仍需额外适配。
 
 ### 2.3 `Update Install Unit` / `Update Collection`
 
@@ -89,7 +89,7 @@
 | --- | --- | --- | --- | --- |
 | npm 包支撑的 bundle/single | `npm:@every-env/compound-plugin` | 支持 | 支持 | Sync 读取 npm registry 元数据；Update 优先使用 `management_hint`，否则构造 registry 更新命令。 |
 | git 本地 checkout / skill-lock 条目 | `skill_lock:https://github.com/vercel-labs/skills.git#skills/find-skills` | 支持（git remote/head、受管 checkout 或本地 checkout） | 支持 | 若原始 skill 路径不是 git worktree，OneSync 会自动在 `plugin_data/.../skills/git_repos/` 下补齐受管 checkout，再执行 `git pull --ff-only`。 |
-| 只有 repo 引用的 documented/catalog/community 来源 | `repo:https://github.com/...#skills/foo` | 部分支持（仅 metadata） | 通常不支持 | Source Sync 可刷新 GitHub/GitLab/Bitbucket 仓库元数据（如更新时间），但 update 执行仍不支持。 |
+| 只有 repo 引用的 documented/catalog/community 来源 | `repo:https://github.com/...#skills/foo` | 部分支持（仅 metadata） | 通常不支持 | Source Sync 可刷新 GitHub/GitLab/Bitbucket/Gitea/Forgejo 仓库元数据（如更新时间），但 update 执行仍不支持。 |
 | 手工本地路径 / 用户自建 local custom skill | `local_custom:/path/to/skill` | 不支持 | 不支持 | OneSync 可以纳管、归类、部署，但无法安全推导更新命令。 |
 | 已登记但没有可用本地 checkout 的 `manual_git` | `manual_git` 远端 | 不支持 | 不支持 | 只有远端 locator 不够，还需要能解析到本地 checkout 路径。 |
 
@@ -126,9 +126,9 @@
 更具体地说：
 
 - 对 npm 包驱动的 skills 更新，以及 git-backed `skill_lock` 来源更新，已经足够可用。
-- 对只有来源归因意义的 repo 派生 source，已部分完善：GitHub/GitLab/Bitbucket locator 可做 metadata sync，但 update 执行仍不支持。
+- 对只有来源归因意义的 repo 派生 source，已部分完善：GitHub/GitLab/Bitbucket/Gitea/Forgejo locator 可做 metadata sync，但 update 执行仍不支持。
 - 对 local custom / manual skills，还不算完善。
-- 对 git 来源（remote/head、本地 checkout）已支持 metadata sync；对 GitHub/GitLab/Bitbucket repo 引用来源已支持 metadata sync（含自建实例鉴权/自定义 API Base）；完全未知 provider 仍未完善。
+- 对 git 来源（remote/head、本地 checkout）已支持 metadata sync；对 GitHub/GitLab/Bitbucket/Gitea/Forgejo repo 引用来源已支持 metadata sync（含自建实例鉴权/自定义 API Base）；完全未知 provider 仍未完善。
 - 对没有真实包边界的 `synthetic_single` / `derived` install unit，系统现已明确降级到 `manual_only`，不会再伪造 `npx npx_global_*` 这类错误更新命令。
 
 ## 6. 维护者验证方式
@@ -145,7 +145,7 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 建议确认：
 
 - 当前 runtime snapshot 中 `counts.source_provenance_unresolved_total == 0`
-- `counts.source_syncable_total` 现在会统计 npm、git-backed、以及 repo-metadata-backed source（GitHub/GitLab/Bitbucket）
+- `counts.source_syncable_total` 现在会统计 npm、git-backed、以及 repo-metadata-backed source（GitHub/GitLab/Bitbucket/Gitea/Forgejo）
 - 支持更新的 install unit 会暴露非空 `update_plan.commands`
 - git-backed install unit 会暴露 `update_plan.precheck_commands`
 - git-backed `skill_lock` install unit 在首次 update/sync 后，会在 source row 中暴露 `git_checkout_path`
@@ -160,13 +160,19 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 
 如果要把这个能力称为“完善”，下一步建议是：
 
-1. 为未知/非 GitHub/GitLab/Bitbucket 的 provider 补齐 metadata sync 适配器，并统一鉴权策略。
+1. 为未知/非 GitHub/GitLab/Bitbucket/Gitea/Forgejo 的 provider 继续补齐 metadata sync 适配器，并统一鉴权策略。
 2. 在现有 rollback API 基础上继续强化前端交互流（候选勾选、失败重试、可视化审计与历史追踪）。
 3. 在 UI 中更明确展示 unsupported / precheck 失败原因。
 4. 在面板文案中进一步区分“来源归因”和“更新机制”。
 5. 增加更多 install-unit 详情与 live sync/update 行为的端到端测试。
 
-## 8. 最近实现进展（2026-04-12）
+## 8. 最近实现进展（2026-04-13）
+
+- 已新增 Gitea / Forgejo repo metadata sync 适配：
+  - 支持 `repo:codeberg.org/<owner>/<repo>#...` 这类无 schema 的 locator 自动归一化与 provider 推断
+  - 支持 `managed_by=forgejo/gitea` 与 `sync_api_base` 的自建实例 API 调用
+  - 默认鉴权策略新增 `Authorization: token <token>`（Gitea/Forgejo），同时兼容 `sync_auth_header` 显式覆盖
+  - `source_sync_cache_key` 新增 `repo_metadata:gitea:<owner>/<repo>` 维度，避免重复请求
 
 - WebUI 与后端现已新增批量聚合更新入口：
   - `POST /api/skills/aggregates/update-all`
