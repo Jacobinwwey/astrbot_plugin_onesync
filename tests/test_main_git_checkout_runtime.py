@@ -1350,3 +1350,119 @@ class OneSyncPluginSkillsAuditTests(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(1, payload["counts"]["total"])
             self.assertEqual("legacy_1", payload["items"][0]["event_id"])
+
+    def test_webui_sync_skill_source_returns_audit_event_id(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            plugin.skills_state_dir = tmp_path / "state"
+            plugin.skills_audit_path = plugin.skills_state_dir / "audit.log.jsonl"
+
+            plugin.webui_get_skills_payload = lambda: {
+                "source_rows": [
+                    {
+                        "source_id": "source_demo",
+                        "registry_package_name": "@demo/skill",
+                        "registry_package_manager": "npm",
+                    },
+                ],
+            }
+            plugin._augment_source_row_with_git_checkout = lambda source_row: source_row
+            plugin._update_saved_registry_source_metadata = lambda **_kwargs: {}
+            plugin._refresh_inventory_snapshot = lambda sync_skills=True: {"ok": True}
+            plugin._skills_state = lambda: {"last_overview": {"generated_at": "2026-04-13T00:00:00+00:00"}}
+            plugin.webui_get_skill_source_payload = lambda source_id: {
+                "generated_at": "2026-04-13T00:00:00+00:00",
+                "source": {"source_id": source_id},
+                "deploy_rows": [],
+                "warnings": [],
+            }
+            plugin._push_debug_log = lambda *_args, **_kwargs: None
+
+            original_build_source_sync_record = MAIN_MODULE.build_source_sync_record
+            MAIN_MODULE.build_source_sync_record = lambda _source_row: {
+                "sync_status": "ok",
+                "sync_message": "synced",
+                "sync_kind": "registry_metadata",
+                "sync_checked_at": "2026-04-13T00:00:00+00:00",
+                "sync_local_revision": "",
+                "sync_remote_revision": "",
+                "sync_resolved_revision": "",
+                "sync_branch": "",
+                "sync_dirty": False,
+                "sync_error_code": "",
+            }
+            try:
+                result = OneSyncPlugin.webui_sync_skill_source(plugin, "source_demo")
+            finally:
+                MAIN_MODULE.build_source_sync_record = original_build_source_sync_record
+
+            self.assertTrue(result["ok"])
+            audit_event_id = str(result.get("audit_event_id") or "")
+            self.assertTrue(audit_event_id.startswith("audit_"))
+            audit_payload = OneSyncPlugin.webui_get_skills_audit_payload(
+                plugin,
+                limit=10,
+                action="sync",
+            )
+            self.assertTrue(audit_payload["ok"])
+            self.assertEqual(1, audit_payload["counts"]["total"])
+            self.assertEqual("source_sync", audit_payload["items"][0]["action"])
+            self.assertEqual("source_demo", audit_payload["items"][0]["source_id"])
+            self.assertEqual(audit_event_id, audit_payload["items"][0]["event_id"])
+
+    def test_webui_sync_all_skill_sources_returns_audit_event_id(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            plugin.skills_state_dir = tmp_path / "state"
+            plugin.skills_audit_path = plugin.skills_state_dir / "audit.log.jsonl"
+
+            source_rows = [
+                {
+                    "source_id": "source_one",
+                    "registry_package_name": "@demo/one",
+                    "registry_package_manager": "npm",
+                },
+                {
+                    "source_id": "source_two",
+                    "registry_package_name": "@demo/two",
+                    "registry_package_manager": "npm",
+                },
+            ]
+            plugin.webui_get_skills_payload = lambda: {"source_rows": source_rows}
+            plugin._augment_source_row_with_git_checkout = lambda source_row: source_row
+            plugin._update_saved_registry_source_metadata = lambda **_kwargs: {}
+            plugin._load_saved_skills_registry = lambda: {"sources": []}
+            plugin._refresh_inventory_snapshot = lambda sync_skills=True: {"ok": True}
+            plugin._skills_state = lambda: {"last_overview": {"generated_at": "2026-04-13T00:00:00+00:00"}}
+            plugin._push_debug_log = lambda *_args, **_kwargs: None
+
+            original_is_source_syncable = MAIN_MODULE.is_source_syncable
+            original_build_source_sync_record = MAIN_MODULE.build_source_sync_record
+
+            MAIN_MODULE.is_source_syncable = lambda _source_row: True
+            MAIN_MODULE.build_source_sync_record = lambda source_row: {
+                "sync_status": "ok" if str(source_row.get("source_id") or "").endswith("one") else "error",
+                "sync_message": "ok" if str(source_row.get("source_id") or "").endswith("one") else "failed",
+            }
+            try:
+                result = OneSyncPlugin.webui_sync_all_skill_sources(plugin)
+            finally:
+                MAIN_MODULE.is_source_syncable = original_is_source_syncable
+                MAIN_MODULE.build_source_sync_record = original_build_source_sync_record
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(["source_one"], result.get("synced_source_ids"))
+            self.assertEqual(1, len(result.get("failed_sources") or []))
+            audit_event_id = str(result.get("audit_event_id") or "")
+            self.assertTrue(audit_event_id.startswith("audit_"))
+            audit_payload = OneSyncPlugin.webui_get_skills_audit_payload(
+                plugin,
+                limit=10,
+                action="sync",
+            )
+            self.assertTrue(audit_payload["ok"])
+            self.assertEqual(1, audit_payload["counts"]["total"])
+            self.assertEqual("sources_sync_all", audit_payload["items"][0]["action"])
+            self.assertEqual(audit_event_id, audit_payload["items"][0]["event_id"])

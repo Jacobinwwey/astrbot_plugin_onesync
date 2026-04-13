@@ -7416,6 +7416,22 @@ class OneSyncPlugin(Star):
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
         source_payload = self.webui_get_skill_source_payload(normalized_source_id)
         message = str(sync_record.get("sync_message") or "").strip() or f"source sync finished: {normalized_source_id}"
+        audit_event_id = self._append_skills_audit_event(
+            "source_sync",
+            source_id=normalized_source_id,
+            payload={
+                "sync_status": str(sync_record.get("sync_status") or ""),
+                "sync_message": message,
+                "sync_kind": str(sync_record.get("sync_kind") or ""),
+                "sync_checked_at": str(sync_record.get("sync_checked_at") or ""),
+                "sync_local_revision": str(sync_record.get("sync_local_revision") or ""),
+                "sync_remote_revision": str(sync_record.get("sync_remote_revision") or ""),
+                "sync_resolved_revision": str(sync_record.get("sync_resolved_revision") or ""),
+                "sync_branch": str(sync_record.get("sync_branch") or ""),
+                "sync_dirty": _to_bool(sync_record.get("sync_dirty", False), False),
+                "sync_error_code": str(sync_record.get("sync_error_code") or ""),
+            },
+        )
         level = "info" if str(sync_record.get("sync_status") or "") == "ok" else "warn"
         self._push_debug_log(
             level,
@@ -7437,6 +7453,7 @@ class OneSyncPlugin(Star):
             "deploy_rows": source_payload.get("deploy_rows", []),
             "warnings": source_payload.get("warnings", []),
             "sync": sync_record,
+            "audit_event_id": audit_event_id,
         }
 
     def webui_sync_install_unit(self, install_unit_id: str) -> dict[str, Any]:
@@ -7475,6 +7492,16 @@ class OneSyncPlugin(Star):
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
         normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        audit_event_id = self._append_skills_audit_event(
+            "install_unit_sync",
+            source_id=normalized_install_unit_id,
+            payload={
+                "synced_source_ids": synced_source_ids,
+                "failed_sources": failed_sources,
+                "success_count": len(synced_source_ids),
+                "failure_count": len(failed_sources),
+            },
+        )
         self._push_debug_log(
             "info" if not failed_sources else "warn",
             (
@@ -7491,6 +7518,7 @@ class OneSyncPlugin(Star):
                 "registry": registry,
                 "synced_source_ids": synced_source_ids,
                 "failed_sources": failed_sources,
+                "audit_event_id": audit_event_id,
             },
         )
 
@@ -7608,6 +7636,16 @@ class OneSyncPlugin(Star):
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
         normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        audit_event_id = self._append_skills_audit_event(
+            "collection_group_sync",
+            source_id=normalized_collection_group_id,
+            payload={
+                "synced_source_ids": synced_source_ids,
+                "failed_sources": failed_sources,
+                "success_count": len(synced_source_ids),
+                "failure_count": len(failed_sources),
+            },
+        )
         self._push_debug_log(
             "info" if not failed_sources else "warn",
             (
@@ -7624,6 +7662,7 @@ class OneSyncPlugin(Star):
                 "registry": registry,
                 "synced_source_ids": synced_source_ids,
                 "failed_sources": failed_sources,
+                "audit_event_id": audit_event_id,
             },
         )
 
@@ -7810,6 +7849,17 @@ class OneSyncPlugin(Star):
 
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
+        audit_event_id = self._append_skills_audit_event(
+            "sources_sync_all",
+            source_id="all",
+            payload={
+                "candidate_source_total": len(syncable_sources),
+                "synced_source_ids": synced_source_ids,
+                "failed_sources": failed_sources,
+                "success_count": len(synced_source_ids),
+                "failure_count": len(failed_sources),
+            },
+        )
         self._push_debug_log(
             "info" if not failed_sources else "warn",
             (
@@ -7826,6 +7876,7 @@ class OneSyncPlugin(Star):
             "skills": refreshed_skills_snapshot,
             "synced_source_ids": synced_source_ids,
             "failed_sources": failed_sources,
+            "audit_event_id": audit_event_id,
         }
 
     def _update_saved_registry_source_metadata(
@@ -8482,6 +8533,14 @@ class OneSyncPlugin(Star):
         deploy_result = self._deploy_source_ids_to_targets([normalized_source_id], payload)
         if not deploy_result.get("ok"):
             return deploy_result
+        audit_event_id = self._append_skills_audit_event(
+            "source_deploy",
+            source_id=normalized_source_id,
+            payload={
+                "scope": str(deploy_result.get("scope") or ""),
+                "target_ids": _to_str_list(deploy_result.get("target_ids", [])),
+            },
+        )
         self._push_debug_log(
             "info",
             (
@@ -8498,6 +8557,7 @@ class OneSyncPlugin(Star):
             "skills": deploy_result.get("skills", {}),
             "target_ids": deploy_result.get("target_ids", []),
             "source": self.webui_get_skill_source_payload(normalized_source_id).get("source"),
+            "audit_event_id": audit_event_id,
         }
 
     def webui_deploy_install_unit(self, install_unit_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -8513,6 +8573,15 @@ class OneSyncPlugin(Star):
             return deploy_result
 
         normalized_install_unit_id = str(context.get("install_unit_id", "")).strip()
+        audit_event_id = self._append_skills_audit_event(
+            "install_unit_deploy",
+            source_id=normalized_install_unit_id,
+            payload={
+                "scope": str(deploy_result.get("scope") or ""),
+                "target_ids": _to_str_list(deploy_result.get("target_ids", [])),
+                "source_ids": _to_str_list(context.get("source_ids", [])),
+            },
+        )
         self._push_debug_log(
             "info",
             (
@@ -8529,6 +8598,7 @@ class OneSyncPlugin(Star):
             extra={
                 "manifest": deploy_result.get("manifest", {}),
                 "target_ids": deploy_result.get("target_ids", []),
+                "audit_event_id": audit_event_id,
             },
         )
 
@@ -8545,6 +8615,15 @@ class OneSyncPlugin(Star):
             return deploy_result
 
         normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        audit_event_id = self._append_skills_audit_event(
+            "collection_group_deploy",
+            source_id=normalized_collection_group_id,
+            payload={
+                "scope": str(deploy_result.get("scope") or ""),
+                "target_ids": _to_str_list(deploy_result.get("target_ids", [])),
+                "source_ids": _to_str_list(context.get("source_ids", [])),
+            },
+        )
         self._push_debug_log(
             "info",
             (
@@ -8561,6 +8640,7 @@ class OneSyncPlugin(Star):
             extra={
                 "manifest": deploy_result.get("manifest", {}),
                 "target_ids": deploy_result.get("target_ids", []),
+                "audit_event_id": audit_event_id,
             },
         )
 

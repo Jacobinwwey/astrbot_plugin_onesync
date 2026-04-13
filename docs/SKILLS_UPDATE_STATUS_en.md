@@ -190,6 +190,9 @@ To call the feature "complete", the next implementation steps should be:
 - `audit_event_id` is now expanded across core mutation responses:
   - source `register / refresh / remove`, install-unit and collection-group `refresh / update`, `update-all`, and `improve-all` (atom-refresh stage) now return event IDs;
   - the frontend now uses `withInventoryActionAuditEvent(...)` so update, update-all, improve-all, and rollback success alerts all expose a consistent audit-trace hook.
+- `sync / deploy` flows are now on the same audit contract:
+  - source sync, install-unit/collection-group sync, sync-all, and source/install-unit/collection-group deploy now all return `audit_event_id`;
+  - this keeps non-rollback/non-update operations traceable through the same event-id pipeline and reduces instrumentation drift for future notifications.
 - Test-order stability is now fixed:
   - Resolved fake astrbot module initialization conflicts between `tests/test_main_git_checkout_runtime.py` and `tests/test_webui_server.py`.
   - Combined run now passes consistently: `pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`.

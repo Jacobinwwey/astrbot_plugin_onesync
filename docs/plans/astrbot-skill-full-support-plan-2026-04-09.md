@@ -495,6 +495,27 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> passed
   - `pytest -q` -> passed
 
+### 2026-04-13 / Step 17
+
+- 已补齐 sync / deploy 链路的审计事件落盘与响应回填：
+  - `main.py` 现为以下路径写入审计并回填 `audit_event_id`：
+    - `webui_sync_skill_source`
+    - `webui_sync_install_unit`
+    - `webui_sync_collection_group`
+    - `webui_sync_all_skill_sources`
+    - `webui_deploy_skill_source`
+    - `webui_deploy_install_unit`
+    - `webui_deploy_collection_group`
+- 前端能力复用：
+  - 既有 `withInventoryActionAuditEvent(...)` 会优先读取顶层 `audit_event_id`，因此这些动作后续若增加成功提示，可直接获得一致的审计追踪行为，无需再改字段协议。
+- 测试补齐：
+  - `tests/test_main_git_checkout_runtime.py` 新增用例：
+    - `test_webui_sync_skill_source_returns_audit_event_id`
+    - `test_webui_sync_all_skill_sources_returns_audit_event_id`
+- 本轮回归：
+  - `pytest -q tests/test_main_git_checkout_runtime.py -k "sync_skill_source_returns_audit_event_id or sync_all_skill_sources_returns_audit_event_id"` -> passed
+  - `pytest -q` -> `217 passed`
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

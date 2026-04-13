@@ -190,6 +190,9 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 - `audit_event_id` 已扩展到核心 mutation 响应：
   - `register / refresh / remove` source、install-unit/collection-group 的 `refresh / update`、`update-all`、`improve-all(atom refresh)` 都会回填事件号；
   - 前端已统一通过 `withInventoryActionAuditEvent(...)` 在 update / update-all / improve-all/ rollback 成功提示中附加事件号，形成跨动作一致的审计追踪体验。
+- `sync / deploy` 链路也已并入同一审计协议：
+  - `source sync`、`install-unit/collection-group sync`、`sync-all`、`source/install-unit/collection-group deploy` 现在都会回填 `audit_event_id`；
+  - 这让运维在“非回滚、非更新”动作下也能直接拿到可追踪事件号，后续告警/通知渠道可复用同一字段。
 - 测试稳定性已补齐：
   - 修复 `tests/test_main_git_checkout_runtime.py` 与 `tests/test_webui_server.py` 组合执行时的 fake astrbot module 初始化冲突，
   - 现已可稳定通过：`pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`。
