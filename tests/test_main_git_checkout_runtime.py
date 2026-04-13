@@ -1750,6 +1750,109 @@ class OneSyncPluginAstrbotWorkspaceInitTests(unittest.TestCase):
 
 
 class OneSyncPluginAstrbotWorkspaceSelectionTests(unittest.TestCase):
+    def test_resolve_effective_workspace_id_uses_persisted_layout_runtime_precedence(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.config = {"astrbot_workspace_selections": {"astrbot": "session_alpha"}}
+        plugin._config_obj = None
+
+        workspace_profiles = [
+            {"workspace_id": "session_alpha"},
+            {"workspace_id": "session_beta"},
+            {"workspace_id": "session_gamma"},
+        ]
+
+        persisted_selected = OneSyncPlugin._resolve_effective_astrbot_workspace_id(
+            plugin,
+            "astrbot",
+            workspace_profiles=workspace_profiles,
+            layout_selected_workspace_id="session_beta",
+            runtime_selected_workspace_id="session_gamma",
+        )
+        self.assertEqual("session_alpha", persisted_selected)
+
+        plugin.config = {"astrbot_workspace_selections": {}}
+        layout_selected = OneSyncPlugin._resolve_effective_astrbot_workspace_id(
+            plugin,
+            "astrbot",
+            workspace_profiles=workspace_profiles,
+            layout_selected_workspace_id="session_beta",
+            runtime_selected_workspace_id="session_gamma",
+        )
+        self.assertEqual("session_beta", layout_selected)
+
+        runtime_selected = OneSyncPlugin._resolve_effective_astrbot_workspace_id(
+            plugin,
+            "astrbot",
+            workspace_profiles=workspace_profiles,
+            layout_selected_workspace_id="session_missing",
+            runtime_selected_workspace_id="session_gamma",
+        )
+        self.assertEqual("session_gamma", runtime_selected)
+
+    def test_resolve_effective_workspace_id_ignores_stale_persisted_selection(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.config = {"astrbot_workspace_selections": {"astrbot": "session_stale"}}
+        plugin._config_obj = None
+
+        selected_workspace = OneSyncPlugin._resolve_effective_astrbot_workspace_id(
+            plugin,
+            "astrbot",
+            workspace_profiles=[{"workspace_id": "session_alpha"}],
+            layout_selected_workspace_id="",
+            runtime_selected_workspace_id="session_alpha",
+        )
+        self.assertEqual("session_alpha", selected_workspace)
+
+    def test_apply_astrbot_workspace_selection_overrides_updates_host_and_software_rows(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.config = {"astrbot_workspace_selections": {"astrbot": "session_beta"}}
+        plugin._config_obj = None
+
+        snapshot = {
+            "host_rows": [
+                {
+                    "host_id": "astrbot",
+                    "provider_key": "astrbot",
+                    "runtime_state_backend": "astrbot",
+                    "runtime_state_summary": {
+                        "selected_workspace_id": "session_alpha",
+                        "workspace_summaries": {
+                            "session_alpha": {"workspace_id": "session_alpha"},
+                            "session_beta": {"workspace_id": "session_beta"},
+                        },
+                    },
+                },
+                {
+                    "host_id": "codex",
+                    "provider_key": "codex",
+                    "runtime_state_backend": "",
+                    "runtime_state_summary": {
+                        "selected_workspace_id": "workspace_demo",
+                    },
+                },
+            ],
+            "software_hosts": [
+                {"host_id": "astrbot"},
+                {"host_id": "codex"},
+            ],
+        }
+
+        OneSyncPlugin._apply_astrbot_workspace_selection_overrides(plugin, snapshot)
+
+        astrbot_host = snapshot["host_rows"][0]
+        codex_host = snapshot["host_rows"][1]
+        astrbot_software_host = snapshot["software_hosts"][0]
+        codex_software_host = snapshot["software_hosts"][1]
+
+        self.assertEqual("session_beta", astrbot_host.get("selected_workspace_id"))
+        self.assertEqual(
+            "session_beta",
+            astrbot_host.get("runtime_state_summary", {}).get("selected_workspace_id"),
+        )
+        self.assertEqual("session_beta", astrbot_software_host.get("selected_workspace_id"))
+        self.assertIsNone(codex_host.get("selected_workspace_id"))
+        self.assertIsNone(codex_software_host.get("selected_workspace_id"))
+
     def test_resolve_astrbot_host_action_context_prefers_persisted_workspace_selection(self) -> None:
         plugin = object.__new__(OneSyncPlugin)
         plugin.config = {"astrbot_workspace_selections": {"astrbot": "session_alpha"}}
