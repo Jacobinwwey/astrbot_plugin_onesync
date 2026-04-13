@@ -229,6 +229,22 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
         self.assertEqual("", layout["selected_workspace_id"])
         self.assertEqual(1, len(layout["workspace_profiles"]))
 
+    def test_resolve_astrbot_host_layout_selects_workspace_from_workspace_root_target_path(self) -> None:
+        host = {
+            "host_id": "astrbot",
+            "provider_key": "astrbot",
+            "installed": True,
+            "target_paths": {"global": str(self.skills_root), "workspace": str(self.workspace_root)},
+            "resolved_skill_roots": [str(self.skills_root)],
+            "declared_skill_roots": [str(self.skills_root), str(self.workspace_skills_root)],
+        }
+
+        layout = resolve_astrbot_host_layout(host)
+
+        self.assertEqual(["global", "workspace"], layout["available_scopes"])
+        self.assertEqual("session_alpha", layout["selected_workspace_id"])
+        self.assertEqual(1, len(layout["workspace_profiles"]))
+
     def test_build_astrbot_host_runtime_state_tracks_rows_per_scope(self) -> None:
         self._write_skill("global-demo", "global skill", scope="global")
         self._write_skill("workspace-demo", "workspace skill", scope="workspace")
