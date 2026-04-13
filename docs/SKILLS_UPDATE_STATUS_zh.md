@@ -184,6 +184,9 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 - rollback 审计可操作性再增强：
   - 每条审计记录新增“定位聚合”按钮，可直接跳转到对应 Source / Bundle 聚合详情；
   - rollback 响应会回填 `audit_event_id`，便于在动作结果与审计轨迹之间做一跳对齐。
+- rollback 成功提示已补齐事件号回填：
+  - 当前聚合回滚 / 回滚重试 / 审计重试三条成功提示，现会在响应包含 `rollback.audit_event_id` 时附加展示对应事件号；
+  - 现场运维可直接复制事件号定位审计链路，减少“成功了但不知道对应哪条记录”的定位成本。
 - 测试稳定性已补齐：
   - 修复 `tests/test_main_git_checkout_runtime.py` 与 `tests/test_webui_server.py` 组合执行时的 fake astrbot module 初始化冲突，
   - 现已可稳定通过：`pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`。

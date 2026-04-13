@@ -184,6 +184,9 @@ To call the feature "complete", the next implementation steps should be:
 - Rollback audit operability is now stronger:
   - each rollback audit row now includes a `Focus Aggregate` action that jumps directly to the related Source / Bundle aggregate detail;
   - rollback responses now expose `audit_event_id`, so action results and audit history can be correlated in one hop.
+- Rollback success messaging now surfaces audit event IDs directly:
+  - success alerts for aggregate rollback, rollback retry, and audit-row retry now append the `rollback.audit_event_id` when present;
+  - operators can copy the event ID immediately and jump to the exact audit trail record without manual guesswork.
 - Test-order stability is now fixed:
   - Resolved fake astrbot module initialization conflicts between `tests/test_main_git_checkout_runtime.py` and `tests/test_webui_server.py`.
   - Combined run now passes consistently: `pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`.

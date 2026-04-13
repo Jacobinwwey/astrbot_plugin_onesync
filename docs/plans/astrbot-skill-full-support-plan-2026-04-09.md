@@ -458,6 +458,21 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - `pytest -q tests/test_webui_inventory_registry_hosts.py tests/test_main_git_checkout_runtime.py` -> passed
   - `pytest -q` -> passed
 
+### 2026-04-13 / Step 15
+
+- 已补齐 rollback 成功反馈与审计事件的一跳对齐：
+  - `webui/index.html` 新增 `inventoryRollbackSuccessMessage(...)`：
+    - 统一生成回滚成功摘要；
+    - 若后端响应含 `rollback.audit_event_id`，在成功提示中直接附加 `事件: audit_xxx`。
+  - 覆盖范围：
+    - 当前聚合回滚成功提示
+    - 当前聚合回滚重试成功提示
+    - 回滚审计轨迹中的“重试失败项”成功提示
+  - 运维收益：
+    - 操作结果弹窗可直接复制事件号与审计轨迹对齐，不再需要手工在历史中匹配最近一条记录。
+- 本轮定向回归：
+  - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> passed
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

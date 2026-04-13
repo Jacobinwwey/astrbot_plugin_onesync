@@ -10894,6 +10894,22 @@
         .filter(Boolean);
     }
 
+    function inventoryRollbackSuccessMessage(messageKey, rollbackPayload) {
+      const rollback = rollbackPayload && typeof rollbackPayload === "object"
+        ? rollbackPayload
+        : {};
+      const summary = t(messageKey, {
+        restored: Number(rollback.restored_source_total || 0) || 0,
+        notRestored: Number(rollback.not_restored_source_total || 0) || 0,
+        failed: Number(rollback.failure_count || 0) || 0,
+      });
+      const auditEventId = String(rollback.audit_event_id || "").trim();
+      if (!auditEventId) {
+        return summary;
+      }
+      return `${summary}\n${t("inventory_rollback_audit_event_id", { eventId: auditEventId })}`;
+    }
+
     function selectRollbackBeforeRevisions(beforeRevisions) {
       const normalizedBeforeRows = normalizeInventoryRevisionRows(beforeRevisions);
       if (!normalizedBeforeRows.length) {
@@ -11645,11 +11661,7 @@
 
         const result = await executeRollback(selectedBeforeRevisions);
         const rollback = result.rollback && typeof result.rollback === "object" ? result.rollback : {};
-        alert(t("inventory_install_unit_rollback_success", {
-          restored: Number(rollback.restored_source_total) || 0,
-          notRestored: Number(rollback.not_restored_source_total) || 0,
-          failed: Number(rollback.failure_count) || 0,
-        }));
+        alert(inventoryRollbackSuccessMessage("inventory_install_unit_rollback_success", rollback));
         const retryBeforeRevisions = inventoryRollbackRetryBeforeRevisions(result, selectedBeforeRevisions);
         if (retryBeforeRevisions.length) {
           const retryConfirmed = window.confirm(t("inventory_install_unit_rollback_retry_confirm", {
@@ -11660,11 +11672,7 @@
             const retryRollback = retryResult.rollback && typeof retryResult.rollback === "object"
               ? retryResult.rollback
               : {};
-            alert(t("inventory_install_unit_rollback_retry_success", {
-              restored: Number(retryRollback.restored_source_total) || 0,
-              notRestored: Number(retryRollback.not_restored_source_total) || 0,
-              failed: Number(retryRollback.failure_count) || 0,
-            }));
+            alert(inventoryRollbackSuccessMessage("inventory_install_unit_rollback_retry_success", retryRollback));
             await loadRollbackAuditTrail({ silent: true });
             renderInventoryPanel();
             return retryResult;
@@ -11743,11 +11751,7 @@
         const rollback = result && result.rollback && typeof result.rollback === "object"
           ? result.rollback
           : {};
-        alert(t("inventory_rollback_audit_retry_success", {
-          restored: Number(rollback.restored_source_total || 0) || 0,
-          notRestored: Number(rollback.not_restored_source_total || 0) || 0,
-          failed: Number(rollback.failure_count || 0) || 0,
-        }));
+        alert(inventoryRollbackSuccessMessage("inventory_rollback_audit_retry_success", rollback));
         await loadRollbackAuditTrail({ silent: true });
         renderInventoryPanel();
         return result;
