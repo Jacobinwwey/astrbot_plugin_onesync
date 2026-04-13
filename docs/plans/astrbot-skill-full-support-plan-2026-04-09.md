@@ -294,6 +294,37 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
 - 前端语法核验：
   - 提取 `webui/index.html` 内联脚本并执行 `node --check`，通过。
 
+### 2026-04-13 / Step 8
+
+- 已补齐 AstrBot Neo promote / rollback 最小运维闭环：
+  - `main.py` 新增公共 Neo helper：
+    - `_resolve_astrbot_neo_client_config()`：统一解析 endpoint / token，并支持 Bay credentials 自动发现回退
+    - `_resolve_astrbot_neo_operation_context()`：统一 source 校验、client import、sync manager 初始化
+    - `_build_astrbot_neo_mutation_response()`：统一动作后 snapshot 刷新与详情回填
+  - `webui_get_astrbot_neo_source_payload(...)` 现在额外暴露：
+    - `neo_state`
+    - `neo_capabilities`
+    - `neo_defaults`
+    - 供前端在不离开 Source Detail 的情况下直接判断 `sync / promote / rollback` 可执行性
+  - 新增写路径：
+    - `webui_promote_astrbot_neo_source(...)`
+    - `webui_rollback_astrbot_neo_source(...)`
+  - 新增 API：
+    - `POST /api/skills/astrbot-neo-sources/{source_id}/promote`
+    - `POST /api/skills/astrbot-neo-sources/{source_id}/rollback`
+  - 审计事件已纳入既有链路：
+    - `astrbot_neo_source_promote`
+    - `astrbot_neo_source_rollback`
+- WebUI Source Detail 已新增 Neo 生命周期动作条：
+  - `同步 Stable`
+  - `提升到 Stable`
+  - `回滚 Release`
+  - 只在当前选中的 `astrneo:*` 详情区出现，不污染主 Source / Bundle 列表
+  - 同时补充 Candidate / Release / Payload / Local 芯片，降低 promote / rollback 前的信息切换成本
+- 本轮定向回归：
+  - `pytest -q tests/test_webui_server.py tests/test_webui_inventory_registry_hosts.py` -> `37 passed`
+  - `python3 -m py_compile main.py webui_server.py tests/test_webui_server.py tests/test_webui_inventory_registry_hosts.py`
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

@@ -307,6 +307,11 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 - AstrBot Phase 4 Neo 写路径已接入：新增 `POST /api/skills/astrbot-neo-sources/{source_id}/sync`，已支持从 Neo release 同步并回写审计轨迹（`astrbot_neo_source_sync`）。
 - 全量回归已更新：`python3 -m pytest tests -q` -> `161 passed`。
 - WebUI Source / Bundle 面板现已可见并管理 `astrneo:*`：会展示 Neo standalone source，详情接口自动路由到 `/api/skills/astrbot-neo-sources/{source_id}`，同步按钮会自动切换 Neo sync API。
+- AstrBot Neo lifecycle 现已补齐 promote / rollback：
+  - 新增 API：`POST /api/skills/astrbot-neo-sources/{source_id}/promote`、`POST /api/skills/astrbot-neo-sources/{source_id}/rollback`
+  - Neo source detail 新增 `neo_state`、`neo_capabilities`、`neo_defaults`
+  - 详情区新增 `同步 Stable / 提升到 Stable / 回滚 Release` 动作条，只在 `astrneo:*` source 上下文中出现
+  - 审计事件新增：`astrbot_neo_source_promote`、`astrbot_neo_source_rollback`
 
 ## 9. 补充进展（2026-04-13）
 

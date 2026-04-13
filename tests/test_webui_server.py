@@ -227,6 +227,8 @@ class _FakePlugin:
         self.last_astrbot_import_payload = None
         self.last_astrbot_export_payload = None
         self.last_astrbot_neo_sync_payload = None
+        self.last_astrbot_neo_promote_payload = None
+        self.last_astrbot_neo_rollback_payload = None
         self._tempdir = tempfile.TemporaryDirectory()
         self.update_all_progress_snapshot = {
             "run_id": "",
@@ -957,6 +959,18 @@ class _FakePlugin:
                 "astrneo_release_id": "rel-1",
                 "status": "ready",
             },
+            "neo_capabilities": {
+                "sync_supported": True,
+                "promote_supported": True,
+                "rollback_supported": True,
+            },
+            "neo_defaults": {
+                "candidate_id": "cand-1",
+                "release_id": "rel-1",
+                "stage": "stable",
+                "sync_to_local": True,
+                "require_stable": True,
+            },
             "warnings": [],
         }
 
@@ -990,6 +1004,81 @@ class _FakePlugin:
                 "payload_ref": "payload-2",
                 "map_path": "/tmp/astrbot/data/skills/neo_skill_map.json",
                 "synced_at": self.skills_snapshot["generated_at"],
+            },
+            "warnings": [],
+        }
+
+    async def webui_promote_astrbot_neo_source(self, source_id: str, payload: dict | None = None) -> dict:
+        action_payload = payload if isinstance(payload, dict) else {}
+        self.last_astrbot_neo_promote_payload = {"source_id": source_id, "payload": action_payload}
+        if source_id != "astrneo:astrbot:demo.skill":
+            return {"ok": False, "message": "astrbot neo source not found"}
+        if action_payload.get("force_fail"):
+            return {"ok": False, "message": "astrbot neo source promote failed", "reason_code": "neo_promote_failed"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "action": "neo_source_promote",
+            "source": {
+                "source_id": "astrneo:astrbot:demo.skill",
+                "display_name": "neo-demo",
+                "source_kind": "astrneo_release",
+                "provider_key": "astrbot",
+                "astrneo_host_id": "astrbot",
+                "astrneo_skill_key": "demo.skill",
+                "astrneo_release_id": "rel-3",
+                "status": "ready",
+            },
+            "promotion": {
+                "candidate_id": str(action_payload.get("candidate_id") or "cand-1"),
+                "stage": str(action_payload.get("stage") or "stable"),
+                "sync_to_local": bool(action_payload.get("sync_to_local", True)),
+                "release": {
+                    "id": "rel-3",
+                    "skill_key": "demo.skill",
+                    "candidate_id": str(action_payload.get("candidate_id") or "cand-1"),
+                    "stage": str(action_payload.get("stage") or "stable"),
+                },
+                "sync": {
+                    "skill_key": "demo.skill",
+                    "local_skill_name": "neo-demo",
+                    "release_id": "rel-3",
+                    "candidate_id": str(action_payload.get("candidate_id") or "cand-1"),
+                    "payload_ref": "payload-3",
+                    "map_path": "/tmp/astrbot/data/skills/neo_skill_map.json",
+                    "synced_at": self.skills_snapshot["generated_at"],
+                },
+                "rollback": None,
+                "sync_error": None,
+            },
+            "warnings": [],
+        }
+
+    async def webui_rollback_astrbot_neo_source(self, source_id: str, payload: dict | None = None) -> dict:
+        action_payload = payload if isinstance(payload, dict) else {}
+        self.last_astrbot_neo_rollback_payload = {"source_id": source_id, "payload": action_payload}
+        if source_id != "astrneo:astrbot:demo.skill":
+            return {"ok": False, "message": "astrbot neo source not found"}
+        if action_payload.get("force_fail"):
+            return {"ok": False, "message": "astrbot neo source rollback failed", "reason_code": "neo_rollback_failed"}
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "action": "neo_source_rollback",
+            "source": {
+                "source_id": "astrneo:astrbot:demo.skill",
+                "display_name": "neo-demo",
+                "source_kind": "astrneo_release",
+                "provider_key": "astrbot",
+                "astrneo_host_id": "astrbot",
+                "astrneo_skill_key": "demo.skill",
+                "astrneo_release_id": str(action_payload.get("release_id") or "rel-1"),
+                "status": "ready",
+            },
+            "rollback": {
+                "release_id": str(action_payload.get("release_id") or "rel-1"),
+                "active_release_id": "rel-0",
+                "rolled_back": True,
             },
             "warnings": [],
         }
@@ -1585,6 +1674,8 @@ class WebUIServerTests(unittest.TestCase):
             "astrneo:astrbot:demo.skill",
             astrbot_neo_source_detail_resp.json()["source"]["source_id"],
         )
+        self.assertTrue(astrbot_neo_source_detail_resp.json()["neo_capabilities"]["promote_supported"])
+        self.assertEqual("cand-1", astrbot_neo_source_detail_resp.json()["neo_defaults"]["candidate_id"])
 
         missing_astrbot_neo_source_detail_resp = self.client.get("/api/skills/astrbot-neo-sources/missing")
         self.assertEqual(404, missing_astrbot_neo_source_detail_resp.status_code)
@@ -1818,6 +1909,54 @@ class WebUIServerTests(unittest.TestCase):
         )
         self.assertEqual(404, astrbot_neo_sync_missing_resp.status_code)
         self.assertFalse(astrbot_neo_sync_missing_resp.json()["ok"])
+
+        astrbot_neo_promote_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill/promote",
+            json={"candidate_id": "cand-3", "stage": "stable", "sync_to_local": True},
+        )
+        self.assertEqual(200, astrbot_neo_promote_resp.status_code)
+        self.assertTrue(astrbot_neo_promote_resp.json()["ok"])
+        self.assertEqual("neo_source_promote", astrbot_neo_promote_resp.json()["action"])
+        self.assertEqual("astrneo:astrbot:demo.skill", self.plugin.last_astrbot_neo_promote_payload["source_id"])
+        self.assertEqual("cand-3", astrbot_neo_promote_resp.json()["promotion"]["candidate_id"])
+
+        astrbot_neo_promote_bad_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill/promote",
+            json={"force_fail": True},
+        )
+        self.assertEqual(400, astrbot_neo_promote_bad_resp.status_code)
+        self.assertFalse(astrbot_neo_promote_bad_resp.json()["ok"])
+
+        astrbot_neo_promote_missing_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/missing/promote",
+            json={},
+        )
+        self.assertEqual(404, astrbot_neo_promote_missing_resp.status_code)
+        self.assertFalse(astrbot_neo_promote_missing_resp.json()["ok"])
+
+        astrbot_neo_rollback_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill/rollback",
+            json={"release_id": "rel-3"},
+        )
+        self.assertEqual(200, astrbot_neo_rollback_resp.status_code)
+        self.assertTrue(astrbot_neo_rollback_resp.json()["ok"])
+        self.assertEqual("neo_source_rollback", astrbot_neo_rollback_resp.json()["action"])
+        self.assertEqual("astrneo:astrbot:demo.skill", self.plugin.last_astrbot_neo_rollback_payload["source_id"])
+        self.assertEqual("rel-3", astrbot_neo_rollback_resp.json()["rollback"]["release_id"])
+
+        astrbot_neo_rollback_bad_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/astrneo%3Aastrbot%3Ademo.skill/rollback",
+            json={"force_fail": True},
+        )
+        self.assertEqual(400, astrbot_neo_rollback_bad_resp.status_code)
+        self.assertFalse(astrbot_neo_rollback_bad_resp.json()["ok"])
+
+        astrbot_neo_rollback_missing_resp = self.client.post(
+            "/api/skills/astrbot-neo-sources/missing/rollback",
+            json={},
+        )
+        self.assertEqual(404, astrbot_neo_rollback_missing_resp.status_code)
+        self.assertFalse(astrbot_neo_rollback_missing_resp.json()["ok"])
 
         astrbot_toggle_bad_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/skills/toggle",

@@ -444,6 +444,22 @@ class OneSyncWebUIServer:
                 return JSONResponse(_public(ret), status_code=status_code)
             return _public(ret)
 
+        @self.app.post("/api/skills/astrbot-neo-sources/{source_id:path}/promote")
+        async def skills_astrbot_neo_source_promote(source_id: str, payload: dict[str, Any]):
+            ret = await self.plugin.webui_promote_astrbot_neo_source(source_id, payload)
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(_public(ret), status_code=status_code)
+            return _public(ret)
+
+        @self.app.post("/api/skills/astrbot-neo-sources/{source_id:path}/rollback")
+        async def skills_astrbot_neo_source_rollback(source_id: str, payload: dict[str, Any]):
+            ret = await self.plugin.webui_rollback_astrbot_neo_source(source_id, payload)
+            if not ret.get("ok"):
+                status_code = 404 if "not found" in str(ret.get("message") or "").lower() else 400
+                return JSONResponse(_public(ret), status_code=status_code)
+            return _public(ret)
+
         @self.app.get("/api/skills/hosts/{host_id}/astrbot")
         async def skills_host_astrbot(host_id: str):
             ret = self.plugin.webui_get_astrbot_host_payload(host_id)

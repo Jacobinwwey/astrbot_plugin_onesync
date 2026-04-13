@@ -197,6 +197,30 @@ def _to_bool(value: Any, default: bool) -> bool:
     return default
 
 
+def _to_jsonable_like(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _to_jsonable_like(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_to_jsonable_like(item) for item in value]
+    if isinstance(value, tuple):
+        return [_to_jsonable_like(item) for item in value]
+    if hasattr(value, "model_dump"):
+        try:
+            dumped = value.model_dump()
+        except Exception:
+            dumped = None
+        if dumped is not None:
+            return _to_jsonable_like(dumped)
+    if hasattr(value, "__dict__") and not isinstance(value, (str, bytes, bytearray)):
+        try:
+            payload = dict(vars(value))
+        except Exception:
+            payload = None
+        if payload is not None:
+            return _to_jsonable_like(payload)
+    return value
+
+
 def _to_int(value: Any, default: int, min_value: int | None = None) -> int:
     try:
         parsed = int(value)
@@ -2891,6 +2915,35 @@ class OneSyncPlugin(Star):
             "warnings": snapshot.get("warnings", []),
         }
 
+    def _build_astrbot_neo_source_detail_contract(self, source_row: dict[str, Any]) -> dict[str, Any]:
+        source = source_row if isinstance(source_row, dict) else {}
+        skill_key = str(source.get("astrneo_skill_key") or "").strip()
+        release_id = str(source.get("astrneo_release_id") or "").strip()
+        candidate_id = str(source.get("astrneo_candidate_id") or "").strip()
+        return {
+            "neo_state": {
+                "host_id": str(source.get("astrneo_host_id") or "").strip(),
+                "skill_key": skill_key,
+                "local_skill_name": str(source.get("astrneo_skill_name") or "").strip(),
+                "release_id": release_id,
+                "candidate_id": candidate_id,
+                "payload_ref": str(source.get("astrneo_payload_ref") or "").strip(),
+                "updated_at": str(source.get("astrneo_updated_at") or "").strip(),
+            },
+            "neo_capabilities": {
+                "sync_supported": bool(skill_key),
+                "promote_supported": bool(skill_key and candidate_id),
+                "rollback_supported": bool(skill_key and release_id),
+            },
+            "neo_defaults": {
+                "candidate_id": candidate_id,
+                "release_id": release_id,
+                "stage": "stable",
+                "sync_to_local": True,
+                "require_stable": True,
+            },
+        }
+
     def webui_get_astrbot_neo_source_payload(self, source_id: str) -> dict[str, Any]:
         normalized_source_id = str(source_id or "").strip()
         if not normalized_source_id:
@@ -2911,39 +2964,16 @@ class OneSyncPlugin(Star):
         )
         if not source_row:
             return {"ok": False, "message": f"astrbot neo source not found: {normalized_source_id}"}
+        detail_contract = self._build_astrbot_neo_source_detail_contract(source_row)
         return {
             "ok": True,
             "generated_at": snapshot.get("generated_at"),
             "source": source_row,
+            **detail_contract,
             "warnings": snapshot.get("warnings", []),
         }
 
-
-    async def webui_sync_astrbot_neo_source(
-        self,
-        source_id: str,
-        payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        normalized_source_id = str(source_id or "").strip()
-        if not normalized_source_id:
-            return {"ok": False, "message": "source_id is required"}
-        action_payload = payload if isinstance(payload, dict) else {}
-        detail = self.webui_get_astrbot_neo_source_payload(normalized_source_id)
-        if not detail.get("ok"):
-            return detail
-
-        source_row = detail.get("source", {}) if isinstance(detail.get("source"), dict) else {}
-        host_id = str(source_row.get("astrneo_host_id") or "").strip()
-        skill_key = str(source_row.get("astrneo_skill_key") or "").strip()
-        release_id = str(action_payload.get("release_id") or "").strip()
-        require_stable = _to_bool(action_payload.get("require_stable"), True)
-        if not skill_key:
-            return {
-                "ok": False,
-                "message": f"astrbot neo source missing skill key: {normalized_source_id}",
-                "reason_code": "invalid_neo_source",
-            }
-
+    def _resolve_astrbot_neo_client_config(self) -> dict[str, Any]:
         provider_settings = self.config.get("provider_settings", {}) if hasattr(self.config, "get") else {}
         if not isinstance(provider_settings, dict):
             provider_settings = {}
@@ -2952,6 +2982,20 @@ class OneSyncPlugin(Star):
             sandbox_cfg = {}
         neo_endpoint = str(sandbox_cfg.get("shipyard_neo_endpoint") or "").strip()
         neo_access_token = str(sandbox_cfg.get("shipyard_neo_access_token") or "").strip()
+        access_token_discovered = False
+        if neo_endpoint and not neo_access_token:
+            try:
+                from astrbot.core.computer.computer_client import _discover_bay_credentials
+            except Exception:
+                _discover_bay_credentials = None
+            if callable(_discover_bay_credentials):
+                try:
+                    discovered_token = str(_discover_bay_credentials(neo_endpoint) or "").strip()
+                except Exception:
+                    discovered_token = ""
+                if discovered_token:
+                    neo_access_token = discovered_token
+                    access_token_discovered = True
         if not neo_endpoint or not neo_access_token:
             return {
                 "ok": False,
@@ -2961,6 +3005,51 @@ class OneSyncPlugin(Star):
                 ),
                 "reason_code": "neo_client_not_configured",
             }
+        return {
+            "ok": True,
+            "endpoint": neo_endpoint,
+            "access_token": neo_access_token,
+            "access_token_discovered": access_token_discovered,
+        }
+
+    def _resolve_astrbot_neo_sync_manager_kwargs(self, host_id: str) -> dict[str, Any]:
+        sync_manager_kwargs: dict[str, Any] = {}
+        normalized_host_id = str(host_id or "").strip()
+        if not normalized_host_id:
+            return sync_manager_kwargs
+        host_context = self._resolve_astrbot_host_action_context(normalized_host_id)
+        if not host_context.get("ok"):
+            return sync_manager_kwargs
+        layout = host_context.get("layout", {}) if isinstance(host_context.get("layout"), dict) else {}
+        skills_root = str(layout.get("skills_root") or "").strip()
+        neo_map_path = str(layout.get("neo_map_path") or "").strip()
+        if skills_root:
+            sync_manager_kwargs["skills_root"] = skills_root
+        if neo_map_path:
+            sync_manager_kwargs["map_path"] = neo_map_path
+        return sync_manager_kwargs
+
+    def _resolve_astrbot_neo_operation_context(self, source_id: str) -> dict[str, Any]:
+        normalized_source_id = str(source_id or "").strip()
+        if not normalized_source_id:
+            return {"ok": False, "message": "source_id is required"}
+        detail = self.webui_get_astrbot_neo_source_payload(normalized_source_id)
+        if not detail.get("ok"):
+            return detail
+
+        source_row = detail.get("source", {}) if isinstance(detail.get("source"), dict) else {}
+        host_id = str(source_row.get("astrneo_host_id") or "").strip()
+        skill_key = str(source_row.get("astrneo_skill_key") or "").strip()
+        if not skill_key:
+            return {
+                "ok": False,
+                "message": f"astrbot neo source missing skill key: {normalized_source_id}",
+                "reason_code": "invalid_neo_source",
+            }
+
+        client_config = self._resolve_astrbot_neo_client_config()
+        if not client_config.get("ok"):
+            return client_config
 
         try:
             from shipyard_neo import BayClient
@@ -2979,20 +3068,8 @@ class OneSyncPlugin(Star):
                 "reason_code": "neo_sync_manager_unavailable",
             }
 
-        sync_manager_kwargs: dict[str, Any] = {}
-        if host_id:
-            host_context = self._resolve_astrbot_host_action_context(host_id)
-            if host_context.get("ok"):
-                layout = host_context.get("layout", {}) if isinstance(host_context.get("layout"), dict) else {}
-                skills_root = str(layout.get("skills_root") or "").strip()
-                neo_map_path = str(layout.get("neo_map_path") or "").strip()
-                if skills_root:
-                    sync_manager_kwargs["skills_root"] = skills_root
-                if neo_map_path:
-                    sync_manager_kwargs["map_path"] = neo_map_path
-
         try:
-            sync_manager = NeoSkillSyncManager(**sync_manager_kwargs)
+            sync_manager = NeoSkillSyncManager(**self._resolve_astrbot_neo_sync_manager_kwargs(host_id))
         except Exception as exc:
             return {
                 "ok": False,
@@ -3000,10 +3077,115 @@ class OneSyncPlugin(Star):
                 "reason_code": "neo_sync_manager_init_failed",
             }
 
+        return {
+            "ok": True,
+            "source_id": normalized_source_id,
+            "detail": detail,
+            "source_row": source_row,
+            "host_id": host_id,
+            "skill_key": skill_key,
+            "BayClient": BayClient,
+            "NeoSkillSyncManager": NeoSkillSyncManager,
+            "sync_manager": sync_manager,
+            "client_config": client_config,
+        }
+
+    @staticmethod
+    def _coerce_astrbot_neo_sync_payload(
+        sync_result: Any,
+        *,
+        sync_manager_cls: Any,
+        fallback_skill_key: str,
+        fallback_release_id: str,
+    ) -> dict[str, Any]:
+        sync_payload: dict[str, Any] = {}
+        try:
+            if hasattr(sync_manager_cls, "sync_result_to_dict"):
+                converted = sync_manager_cls.sync_result_to_dict(sync_result)
+                if isinstance(converted, dict):
+                    sync_payload = _to_jsonable_like(converted)
+        except Exception:
+            sync_payload = {}
+        if sync_payload:
+            return sync_payload
+        return {
+            "skill_key": str(getattr(sync_result, "skill_key", "") or fallback_skill_key),
+            "local_skill_name": str(getattr(sync_result, "local_skill_name", "") or ""),
+            "release_id": str(getattr(sync_result, "release_id", "") or fallback_release_id),
+            "candidate_id": str(getattr(sync_result, "candidate_id", "") or ""),
+            "payload_ref": str(getattr(sync_result, "payload_ref", "") or ""),
+            "map_path": str(getattr(sync_result, "map_path", "") or ""),
+            "synced_at": str(getattr(sync_result, "synced_at", "") or _now_iso()),
+        }
+
+    def _build_astrbot_neo_mutation_response(
+        self,
+        source_id: str,
+        *,
+        prior_detail: dict[str, Any],
+        prior_source_row: dict[str, Any],
+        action: str,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
+        skills_snapshot = self._skills_state().get("last_overview", {})
+        refreshed_detail = self.webui_get_astrbot_neo_source_payload(source_id)
+        refreshed_source = (
+            refreshed_detail.get("source", prior_source_row)
+            if isinstance(refreshed_detail, dict)
+            else prior_source_row
+        )
+        response = {
+            "ok": True,
+            "generated_at": (
+                refreshed_detail.get("generated_at", skills_snapshot.get("generated_at"))
+                if isinstance(refreshed_detail, dict)
+                else skills_snapshot.get("generated_at")
+            ),
+            "source": refreshed_source,
+            "warnings": (
+                refreshed_detail.get("warnings", [])
+                if isinstance(refreshed_detail, dict)
+                else prior_detail.get("warnings", [])
+            ),
+            "action": action,
+            "skills": skills_snapshot,
+            "inventory": inventory_snapshot,
+        }
+        if isinstance(refreshed_detail, dict):
+            for key in ("neo_state", "neo_capabilities", "neo_defaults"):
+                if key in refreshed_detail:
+                    response[key] = refreshed_detail.get(key)
+        if isinstance(extra, dict):
+            response.update(extra)
+        return response
+
+    async def webui_sync_astrbot_neo_source(
+        self,
+        source_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_astrbot_neo_operation_context(source_id)
+        if not context.get("ok"):
+            return context
+
+        normalized_source_id = str(context.get("source_id") or "").strip()
+        detail = context.get("detail", {}) if isinstance(context.get("detail"), dict) else {}
+        source_row = context.get("source_row", {}) if isinstance(context.get("source_row"), dict) else {}
+        host_id = str(context.get("host_id") or "").strip()
+        skill_key = str(context.get("skill_key") or "").strip()
+        sync_manager = context.get("sync_manager")
+        BayClient = context.get("BayClient")
+        NeoSkillSyncManager = context.get("NeoSkillSyncManager")
+        client_config = context.get("client_config", {}) if isinstance(context.get("client_config"), dict) else {}
+        release_id = str(action_payload.get("release_id") or "").strip()
+        require_stable = _to_bool(action_payload.get("require_stable"), True)
+
         try:
             async with BayClient(
-                endpoint_url=neo_endpoint,
-                access_token=neo_access_token,
+                endpoint_url=str(client_config.get("endpoint") or ""),
+                access_token=str(client_config.get("access_token") or ""),
             ) as client:
                 sync_result = await sync_manager.sync_release(
                     client,
@@ -3018,32 +3200,11 @@ class OneSyncPlugin(Star):
                 "reason_code": "neo_sync_failed",
             }
 
-        sync_payload: dict[str, Any] = {}
-        try:
-            if hasattr(NeoSkillSyncManager, "sync_result_to_dict"):
-                converted = NeoSkillSyncManager.sync_result_to_dict(sync_result)
-                if isinstance(converted, dict):
-                    sync_payload = converted
-        except Exception:
-            sync_payload = {}
-        if not sync_payload:
-            sync_payload = {
-                "skill_key": str(getattr(sync_result, "skill_key", "") or skill_key),
-                "local_skill_name": str(getattr(sync_result, "local_skill_name", "") or ""),
-                "release_id": str(getattr(sync_result, "release_id", "") or release_id),
-                "candidate_id": str(getattr(sync_result, "candidate_id", "") or ""),
-                "payload_ref": str(getattr(sync_result, "payload_ref", "") or ""),
-                "map_path": str(getattr(sync_result, "map_path", "") or ""),
-                "synced_at": str(getattr(sync_result, "synced_at", "") or _now_iso()),
-            }
-
-        inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
-        skills_snapshot = self._skills_state().get("last_overview", {})
-        refreshed_detail = self.webui_get_astrbot_neo_source_payload(normalized_source_id)
-        refreshed_source = (
-            refreshed_detail.get("source", source_row)
-            if isinstance(refreshed_detail, dict)
-            else source_row
+        sync_payload = self._coerce_astrbot_neo_sync_payload(
+            sync_result,
+            sync_manager_cls=NeoSkillSyncManager,
+            fallback_skill_key=skill_key,
+            fallback_release_id=release_id,
         )
         self._append_skills_audit_event(
             "astrbot_neo_source_sync",
@@ -3069,24 +3230,225 @@ class OneSyncPlugin(Star):
             ),
             source="webui",
         )
-        return {
-            "ok": True,
-            "generated_at": (
-                refreshed_detail.get("generated_at", skills_snapshot.get("generated_at"))
-                if isinstance(refreshed_detail, dict)
-                else skills_snapshot.get("generated_at")
-            ),
-            "source": refreshed_source,
-            "warnings": (
-                refreshed_detail.get("warnings", [])
-                if isinstance(refreshed_detail, dict)
-                else detail.get("warnings", [])
-            ),
-            "sync": sync_payload,
-            "action": "neo_source_sync",
-            "skills": skills_snapshot,
-            "inventory": inventory_snapshot,
+        return self._build_astrbot_neo_mutation_response(
+            normalized_source_id,
+            prior_detail=detail,
+            prior_source_row=source_row,
+            action="neo_source_sync",
+            extra={
+                "sync": sync_payload,
+            },
+        )
+
+    async def webui_promote_astrbot_neo_source(
+        self,
+        source_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_astrbot_neo_operation_context(source_id)
+        if not context.get("ok"):
+            return context
+
+        normalized_source_id = str(context.get("source_id") or "").strip()
+        detail = context.get("detail", {}) if isinstance(context.get("detail"), dict) else {}
+        source_row = context.get("source_row", {}) if isinstance(context.get("source_row"), dict) else {}
+        host_id = str(context.get("host_id") or "").strip()
+        skill_key = str(context.get("skill_key") or "").strip()
+        sync_manager = context.get("sync_manager")
+        BayClient = context.get("BayClient")
+        client_config = context.get("client_config", {}) if isinstance(context.get("client_config"), dict) else {}
+
+        default_candidate_id = str(source_row.get("astrneo_candidate_id") or "").strip()
+        candidate_id = str(action_payload.get("candidate_id") or default_candidate_id).strip()
+        if not candidate_id:
+            return {
+                "ok": False,
+                "message": f"astrbot neo source missing candidate id: {normalized_source_id}",
+                "reason_code": "neo_candidate_missing",
+            }
+        stage = str(action_payload.get("stage") or "stable").strip().lower() or "stable"
+        if stage not in {"stable", "canary"}:
+            return {
+                "ok": False,
+                "message": "astrbot neo promote stage must be stable or canary",
+                "reason_code": "neo_promote_invalid_stage",
+            }
+        sync_to_local = _to_bool(action_payload.get("sync_to_local"), stage == "stable")
+
+        try:
+            async with BayClient(
+                endpoint_url=str(client_config.get("endpoint") or ""),
+                access_token=str(client_config.get("access_token") or ""),
+            ) as client:
+                if hasattr(sync_manager, "promote_with_optional_sync"):
+                    promotion_result = await sync_manager.promote_with_optional_sync(
+                        client,
+                        candidate_id=candidate_id,
+                        stage=stage,
+                        sync_to_local=sync_to_local,
+                    )
+                else:
+                    release = await client.skills.promote_candidate(candidate_id, stage=stage)
+                    release_json = _to_jsonable_like(release)
+                    sync_payload = None
+                    rollback_payload = None
+                    sync_error = None
+                    if stage == "stable" and sync_to_local:
+                        try:
+                            sync_result = await sync_manager.sync_release(
+                                client,
+                                release_id=str(release_json.get("id") or ""),
+                                require_stable=True,
+                            )
+                            sync_payload = self._coerce_astrbot_neo_sync_payload(
+                                sync_result,
+                                sync_manager_cls=type(sync_manager),
+                                fallback_skill_key=skill_key,
+                                fallback_release_id=str(release_json.get("id") or ""),
+                            )
+                        except Exception as exc:
+                            sync_error = str(exc)
+                            rollback = await client.skills.rollback_release(str(release_json.get("id") or ""))
+                            rollback_payload = _to_jsonable_like(rollback)
+                    promotion_result = {
+                        "release": release_json,
+                        "sync": sync_payload,
+                        "rollback": rollback_payload,
+                        "sync_error": sync_error,
+                    }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot neo source promote failed: {exc}",
+                "reason_code": "neo_promote_failed",
+            }
+
+        promotion_payload = {
+            "candidate_id": candidate_id,
+            "stage": stage,
+            "sync_to_local": sync_to_local,
+            "release": _to_jsonable_like((promotion_result or {}).get("release")),
+            "sync": _to_jsonable_like((promotion_result or {}).get("sync")),
+            "rollback": _to_jsonable_like((promotion_result or {}).get("rollback")),
+            "sync_error": str((promotion_result or {}).get("sync_error") or "").strip() or None,
         }
+        if promotion_payload["sync_error"]:
+            return {
+                "ok": False,
+                "message": (
+                    "astrbot neo promote failed during local sync and was rolled back: "
+                    f"{promotion_payload['sync_error']}"
+                ),
+                "reason_code": "neo_promote_sync_rolled_back",
+                "promotion": promotion_payload,
+            }
+
+        if not promotion_payload["sync"]:
+            await self._trigger_astrbot_sandbox_sync()
+
+        release_payload = promotion_payload["release"] if isinstance(promotion_payload["release"], dict) else {}
+        self._append_skills_audit_event(
+            "astrbot_neo_source_promote",
+            source_id=normalized_source_id,
+            payload={
+                "host_id": host_id,
+                "skill_key": skill_key,
+                "candidate_id": candidate_id,
+                "stage": stage,
+                "sync_to_local": sync_to_local,
+                "release_id": str(release_payload.get("id") or ""),
+                "rolled_back": bool(promotion_payload["rollback"]),
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot neo source promoted: "
+                f"source={normalized_source_id} "
+                f"candidate_id={candidate_id} "
+                f"stage={stage} "
+                f"release_id={str(release_payload.get('id') or '')}"
+            ),
+            source="webui",
+        )
+        return self._build_astrbot_neo_mutation_response(
+            normalized_source_id,
+            prior_detail=detail,
+            prior_source_row=source_row,
+            action="neo_source_promote",
+            extra={
+                "promotion": promotion_payload,
+            },
+        )
+
+    async def webui_rollback_astrbot_neo_source(
+        self,
+        source_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action_payload = payload if isinstance(payload, dict) else {}
+        context = self._resolve_astrbot_neo_operation_context(source_id)
+        if not context.get("ok"):
+            return context
+
+        normalized_source_id = str(context.get("source_id") or "").strip()
+        detail = context.get("detail", {}) if isinstance(context.get("detail"), dict) else {}
+        source_row = context.get("source_row", {}) if isinstance(context.get("source_row"), dict) else {}
+        host_id = str(context.get("host_id") or "").strip()
+        skill_key = str(context.get("skill_key") or "").strip()
+        BayClient = context.get("BayClient")
+        client_config = context.get("client_config", {}) if isinstance(context.get("client_config"), dict) else {}
+
+        release_id = str(action_payload.get("release_id") or source_row.get("astrneo_release_id") or "").strip()
+        if not release_id:
+            return {
+                "ok": False,
+                "message": f"astrbot neo source missing release id: {normalized_source_id}",
+                "reason_code": "neo_release_missing",
+            }
+
+        try:
+            async with BayClient(
+                endpoint_url=str(client_config.get("endpoint") or ""),
+                access_token=str(client_config.get("access_token") or ""),
+            ) as client:
+                rollback_result = await client.skills.rollback_release(release_id)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"astrbot neo source rollback failed: {exc}",
+                "reason_code": "neo_rollback_failed",
+            }
+
+        rollback_payload = _to_jsonable_like(rollback_result)
+        self._append_skills_audit_event(
+            "astrbot_neo_source_rollback",
+            source_id=normalized_source_id,
+            payload={
+                "host_id": host_id,
+                "skill_key": skill_key,
+                "release_id": release_id,
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot neo source rollback executed: "
+                f"source={normalized_source_id} "
+                f"release_id={release_id}"
+            ),
+            source="webui",
+        )
+        return self._build_astrbot_neo_mutation_response(
+            normalized_source_id,
+            prior_detail=detail,
+            prior_source_row=source_row,
+            action="neo_source_rollback",
+            extra={
+                "rollback": rollback_payload,
+            },
+        )
 
     def _resolve_astrbot_host_action_context(
         self,

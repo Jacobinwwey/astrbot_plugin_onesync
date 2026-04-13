@@ -189,6 +189,8 @@ Recommendation:
 | GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | export a local AstrBot skill ZIP |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | trigger sandbox sync |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | sync one AstrBot Neo source |
+| POST | `/api/skills/astrbot-neo-sources/{source_id}/promote` | promote one AstrBot Neo candidate |
+| POST | `/api/skills/astrbot-neo-sources/{source_id}/rollback` | roll back one AstrBot Neo release |
 
 ### 9.1 Host detail response shape
 
@@ -208,6 +210,17 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
   - per-scope summaries such as `local_skill_total`, `active_skill_total`, `sandbox_cache_exists`, and `sandbox_cache_ready`
 - `runtime_state.state_rows[]`
   - per-skill rows carrying `scope`, `skill_name`, `state_classification`, `local_exists`, `sandbox_exists`, and `active`
+
+### 9.1.1 Neo source detail extras
+
+`GET /api/skills/astrbot-neo-sources/{source_id}` also returns:
+
+- `neo_state`
+  - `host_id`, `skill_key`, `local_skill_name`, `release_id`, `candidate_id`, `payload_ref`, `updated_at`
+- `neo_capabilities`
+  - action-level booleans for `sync_supported`, `promote_supported`, and `rollback_supported`
+- `neo_defaults`
+  - frontend-ready default action parameters: `candidate_id`, `release_id`, `stage`, `sync_to_local`, `require_stable`
 
 ### 9.2 AstrBot mutation payloads
 
@@ -261,6 +274,24 @@ Pass `scope` explicitly whenever the caller already knows which root it wants.
 }
 ```
 
+- `POST /api/skills/astrbot-neo-sources/{source_id}/promote`
+
+```json
+{
+  "candidate_id": "cand-3",
+  "stage": "stable",
+  "sync_to_local": true
+}
+```
+
+- `POST /api/skills/astrbot-neo-sources/{source_id}/rollback`
+
+```json
+{
+  "release_id": "rel-3"
+}
+```
+
 Notes:
 
 - `scope` should be `global` or `workspace`.
@@ -268,6 +299,8 @@ Notes:
 - ZIP import only accepts `.zip`; missing upload content returns `reason_code = "zip_path_required"`.
 - ZIP export returns an `application/zip` stream; sandbox-only skills return `reason_code = "sandbox_only_skill"`.
 - Neo sync may omit `release_id`; when omitted, backend default candidate/release selection is used.
+- Neo promote falls back to the current source detail `neo_defaults.candidate_id` when `candidate_id` is omitted.
+- Neo rollback falls back to the current source detail `neo_defaults.release_id` when `release_id` is omitted.
 
 ## 10. Config routes
 

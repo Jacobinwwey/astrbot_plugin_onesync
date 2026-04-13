@@ -190,6 +190,8 @@
 | GET | `/api/skills/hosts/{host_id}/astrbot/skills/export-zip` | 导出本地 AstrBot skill ZIP 包 |
 | POST | `/api/skills/hosts/{host_id}/astrbot/sandbox/sync` | 触发 sandbox 同步 |
 | POST | `/api/skills/astrbot-neo-sources/{source_id}/sync` | 同步 AstrBot Neo source |
+| POST | `/api/skills/astrbot-neo-sources/{source_id}/promote` | 提升 AstrBot Neo candidate |
+| POST | `/api/skills/astrbot-neo-sources/{source_id}/rollback` | 回滚 AstrBot Neo release |
 
 ### 9.1 宿主详情响应结构
 
@@ -209,6 +211,17 @@
   - 每个范围各自的 `local_skill_total`、`active_skill_total`、`sandbox_cache_exists`、`sandbox_cache_ready` 等摘要。
 - `runtime_state.state_rows[]`
   - 逐 skill 状态行，包含 `scope`、`skill_name`、`state_classification`、`local_exists`、`sandbox_exists`、`active`。
+
+### 9.1.1 Neo source detail 补充字段
+
+`GET /api/skills/astrbot-neo-sources/{source_id}` 额外返回：
+
+- `neo_state`
+  - 当前 source 的 `host_id`、`skill_key`、`local_skill_name`、`release_id`、`candidate_id`、`payload_ref`、`updated_at`
+- `neo_capabilities`
+  - 当前详情下 `sync_supported`、`promote_supported`、`rollback_supported`
+- `neo_defaults`
+  - 前端可直接复用的默认动作参数：`candidate_id`、`release_id`、`stage`、`sync_to_local`、`require_stable`
 
 ### 9.2 AstrBot 变更请求 payload
 
@@ -262,6 +275,24 @@
 }
 ```
 
+- `POST /api/skills/astrbot-neo-sources/{source_id}/promote`
+
+```json
+{
+  "candidate_id": "cand-3",
+  "stage": "stable",
+  "sync_to_local": true
+}
+```
+
+- `POST /api/skills/astrbot-neo-sources/{source_id}/rollback`
+
+```json
+{
+  "release_id": "rel-3"
+}
+```
+
 注意：
 
 - `scope` 可取 `global` 或 `workspace`。
@@ -269,6 +300,8 @@
 - ZIP 导入当前只接受 `.zip` 文件；无文件时返回 `reason_code = "zip_path_required"`。
 - ZIP 导出会返回 `application/zip` 文件流；若 skill 仅存在于 sandbox cache，会返回 `reason_code = "sandbox_only_skill"`。
 - Neo sync 可省略 `release_id`，省略时按当前后端默认 candidate/release 选择执行。
+- Neo promote 若未显式传入 `candidate_id`，后端会优先回退到当前 source detail 的 `neo_defaults.candidate_id`。
+- Neo rollback 若未显式传入 `release_id`，后端会优先回退到当前 source detail 的 `neo_defaults.release_id`。
 
 ## 10. 配置接口
 

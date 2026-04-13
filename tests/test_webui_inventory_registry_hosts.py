@@ -185,6 +185,21 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("function setInventoryAggregateProgressPhase(", html)
         self.assertIn("function finishInventoryAggregateProgress(", html)
 
+    def test_inventory_panel_exposes_neo_lifecycle_actions_in_source_detail(self) -> None:
+        html = WEBUI_HTML.read_text(encoding="utf-8")
+
+        self.assertIn("inventory_neo_actions_title", html)
+        self.assertIn("inventory_neo_sync_action", html)
+        self.assertIn("inventory_neo_promote_action", html)
+        self.assertIn("inventory_neo_rollback_action", html)
+        self.assertIn("function inventoryNeoDetailState(", html)
+        self.assertIn("function promoteInventoryNeoSource(", html)
+        self.assertIn("function rollbackInventoryNeoSource(", html)
+        self.assertIn("data-inventory-neo-action", html)
+        self.assertIn("inventorySourceHero\").addEventListener(\"click", html)
+        self.assertIn("/api/skills/astrbot-neo-sources/${encodeURIComponent(normalizedSourceId)}/promote", html)
+        self.assertIn("/api/skills/astrbot-neo-sources/${encodeURIComponent(normalizedSourceId)}/rollback", html)
+
     def test_inventory_display_settings_live_in_utility_panel(self) -> None:
         html = WEBUI_HTML.read_text(encoding="utf-8")
 

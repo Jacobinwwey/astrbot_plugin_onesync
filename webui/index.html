@@ -1455,6 +1455,24 @@
       font-size: 11px;
     }
 
+    .inventory-target-action-row {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .inventory-target-action-note {
+      flex: 1 1 280px;
+      min-width: 220px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .inventory-target-metrics {
       position: relative;
       z-index: 1;
@@ -4135,6 +4153,9 @@
       inventoryRefreshingAtomInstallUnitIds: [],
       inventoryImprovingAllSkills: false,
       inventorySyncingSourceIds: [],
+      inventoryPromotingNeoSourceIds: [],
+      inventoryRollingBackNeoSourceIds: [],
+      inventoryNeoLastActionNote: "",
       inventorySyncAllRunning: false,
       inventoryImportSaving: false,
       inventorySaving: false,
@@ -4921,6 +4942,26 @@
         inventory_boundary_install_unit: "Install unit 边界: {installUnit}",
         inventory_boundary_fanout: "扇出范围: {count} 个 install unit",
         inventory_boundary_subpaths: "子路径边界: {subpaths}",
+        inventory_neo_actions_title: "Neo 生命周期动作",
+        inventory_neo_actions_note: "直接在当前 Neo source 详情内执行 promote、sync 与 rollback，避免跳出到额外运维入口。",
+        inventory_neo_sync_action: "同步 Stable",
+        inventory_neo_syncing: "同步 Stable 中",
+        inventory_neo_promote_action: "提升到 Stable",
+        inventory_neo_promoting: "提升中",
+        inventory_neo_rollback_action: "回滚 Release",
+        inventory_neo_rolling_back: "回滚中",
+        inventory_neo_promote_confirm: "即将提升当前 Neo source。\n\nCandidate: {candidate}\nStage: {stage}\n同步到本地: {sync}\n\n确认继续？",
+        inventory_neo_promote_success: "Neo 提升完成：release={release} · stage={stage}",
+        inventory_neo_promote_error: "Neo 提升失败: {msg}",
+        inventory_neo_rollback_confirm: "即将回滚当前 Neo release。\n\nRelease: {release}\n\n确认继续？",
+        inventory_neo_rollback_success: "Neo 回滚完成：release={release}",
+        inventory_neo_rollback_error: "Neo 回滚失败: {msg}",
+        inventory_neo_candidate_missing: "当前 Neo source 缺少 candidate_id，无法执行提升。",
+        inventory_neo_release_missing: "当前 Neo source 缺少 release_id，无法执行回滚。",
+        inventory_neo_chip_candidate: "Candidate",
+        inventory_neo_chip_release: "Release",
+        inventory_neo_chip_payload: "Payload",
+        inventory_neo_chip_local: "Local",
         inventory_source_sync: "同步源",
         inventory_source_syncing: "同步中",
         inventory_sync_pending: "未同步",
@@ -5697,6 +5738,26 @@
         inventory_boundary_install_unit: "Install-unit boundary: {installUnit}",
         inventory_boundary_fanout: "Fan out: {count} install units",
         inventory_boundary_subpaths: "Subpath boundaries: {subpaths}",
+        inventory_neo_actions_title: "Neo Lifecycle Actions",
+        inventory_neo_actions_note: "Run promote, sync, and rollback directly from the current Neo source detail instead of leaving the focused inspector.",
+        inventory_neo_sync_action: "Sync Stable",
+        inventory_neo_syncing: "Syncing Stable",
+        inventory_neo_promote_action: "Promote Stable",
+        inventory_neo_promoting: "Promoting",
+        inventory_neo_rollback_action: "Rollback Release",
+        inventory_neo_rolling_back: "Rolling Back",
+        inventory_neo_promote_confirm: "You are about to promote the current Neo source.\n\nCandidate: {candidate}\nStage: {stage}\nSync to local: {sync}\n\nContinue?",
+        inventory_neo_promote_success: "Neo promote finished: release={release} · stage={stage}",
+        inventory_neo_promote_error: "Neo promote failed: {msg}",
+        inventory_neo_rollback_confirm: "You are about to roll back the current Neo release.\n\nRelease: {release}\n\nContinue?",
+        inventory_neo_rollback_success: "Neo rollback finished: release={release}",
+        inventory_neo_rollback_error: "Neo rollback failed: {msg}",
+        inventory_neo_candidate_missing: "The current Neo source does not expose a candidate_id, so promote is unavailable.",
+        inventory_neo_release_missing: "The current Neo source does not expose a release_id, so rollback is unavailable.",
+        inventory_neo_chip_candidate: "Candidate",
+        inventory_neo_chip_release: "Release",
+        inventory_neo_chip_payload: "Payload",
+        inventory_neo_chip_local: "Local",
         inventory_source_sync: "Sync Source",
         inventory_source_syncing: "Syncing",
         inventory_sync_pending: "unsynced",
@@ -7955,6 +8016,41 @@
         return String(detail.source.source_id || "").trim();
       }
       return "";
+    }
+
+    function inventoryNeoDetailState(detail, fallbackRow = null) {
+      const detailPayload = detail && typeof detail === "object" ? detail : {};
+      const detailSource = detailPayload.source && typeof detailPayload.source === "object"
+        ? detailPayload.source
+        : {};
+      const fallbackSource = fallbackRow && typeof fallbackRow === "object" ? fallbackRow : {};
+      const sourceId = String(
+        detailSource.source_id
+        || fallbackSource.primary_source_id
+        || fallbackSource.source_id
+        || "",
+      ).trim();
+      const sourceKind = String(
+        detailSource.source_kind
+        || fallbackSource.source_kind
+        || "",
+      ).trim().toLowerCase();
+      const isNeoSource = sourceKind === "astrneo_release" || sourceId.startsWith("astrneo:");
+      if (!isNeoSource) {
+        return null;
+      }
+      return {
+        sourceId,
+        neoState: detailPayload.neo_state && typeof detailPayload.neo_state === "object"
+          ? detailPayload.neo_state
+          : {},
+        neoCapabilities: detailPayload.neo_capabilities && typeof detailPayload.neo_capabilities === "object"
+          ? detailPayload.neo_capabilities
+          : {},
+        neoDefaults: detailPayload.neo_defaults && typeof detailPayload.neo_defaults === "object"
+          ? detailPayload.neo_defaults
+          : {},
+      };
     }
 
     function getSelectedInstallUnitRowFromDetail() {
@@ -11949,6 +12045,35 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
         const heroSyncErrorCode = syncErrorCodeCandidates[0] || "";
         const heroSyncErrorLabel = inventorySyncErrorCodeLabel(heroSyncErrorCode);
         const heroSyncErrorHint = inventorySyncErrorHint(heroSyncErrorCode);
+        const neoDetail = inventoryNeoDetailState(sourceDetail, selectedSourceRow);
+        const neoSourceId = neoDetail ? String(neoDetail.sourceId || "").trim() : "";
+        const neoState = neoDetail && neoDetail.neoState && typeof neoDetail.neoState === "object"
+          ? neoDetail.neoState
+          : {};
+        const neoCapabilities = neoDetail && neoDetail.neoCapabilities && typeof neoDetail.neoCapabilities === "object"
+          ? neoDetail.neoCapabilities
+          : {};
+        const neoDefaults = neoDetail && neoDetail.neoDefaults && typeof neoDetail.neoDefaults === "object"
+          ? neoDetail.neoDefaults
+          : {};
+        const neoCandidateId = String(neoState.candidate_id || neoDefaults.candidate_id || "").trim();
+        const neoReleaseId = String(neoState.release_id || neoDefaults.release_id || "").trim();
+        const neoPayloadRef = String(neoState.payload_ref || "").trim();
+        const neoLocalSkillName = String(neoState.local_skill_name || "").trim();
+        const neoUpdatedAtText = String(neoState.updated_at || "").trim()
+          ? toLocalTime(String(neoState.updated_at || "").trim())
+          : "-";
+        const neoSyncing = Array.isArray(state.inventorySyncingSourceIds) && neoSourceId
+          ? state.inventorySyncingSourceIds.includes(neoSourceId)
+          : false;
+        const neoPromoting = Array.isArray(state.inventoryPromotingNeoSourceIds) && neoSourceId
+          ? state.inventoryPromotingNeoSourceIds.includes(neoSourceId)
+          : false;
+        const neoRollingBack = Array.isArray(state.inventoryRollingBackNeoSourceIds) && neoSourceId
+          ? state.inventoryRollingBackNeoSourceIds.includes(neoSourceId)
+          : false;
+        const neoActionNote = String(state.inventoryNeoLastActionNote || "").trim()
+          || t("inventory_neo_actions_note");
         const memberPreview = [...new Set(
           activeDetailSourceRows.flatMap((row) => {
             const preview = Array.isArray(row && row.member_skill_preview)
@@ -12044,7 +12169,38 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             <span class="inventory-chip">Sync<strong>${escapeHtml(syncStatus)}</strong></span>
             <span class="inventory-chip">Latest<strong>${escapeHtml(latestVersion)}</strong></span>
             ${heroSyncErrorCode ? `<span class="inventory-chip">${escapeHtml(t("inventory_skill_meta_sync_error"))}<strong>${escapeHtml(heroSyncErrorLabel)}</strong></span>` : ""}
+            ${neoCandidateId ? `<span class="inventory-chip">${escapeHtml(t("inventory_neo_chip_candidate"))}<strong>${escapeHtml(neoCandidateId)}</strong></span>` : ""}
+            ${neoReleaseId ? `<span class="inventory-chip">${escapeHtml(t("inventory_neo_chip_release"))}<strong>${escapeHtml(neoReleaseId)}</strong></span>` : ""}
+            ${neoPayloadRef ? `<span class="inventory-chip">${escapeHtml(t("inventory_neo_chip_payload"))}<strong>${escapeHtml(neoPayloadRef)}</strong></span>` : ""}
+            ${neoLocalSkillName ? `<span class="inventory-chip">${escapeHtml(t("inventory_neo_chip_local"))}<strong>${escapeHtml(neoLocalSkillName)}</strong></span>` : ""}
           </div>
+          ${neoDetail ? `
+            <div class="inventory-target-action-row">
+              <button
+                type="button"
+                data-inventory-neo-action="sync"
+                data-inventory-neo-source-id="${escapeHtml(neoSourceId)}"
+                ${!neoCapabilities.sync_supported || neoPromoting || neoRollingBack ? "disabled" : ""}
+              >${escapeHtml(neoSyncing ? t("inventory_neo_syncing") : t("inventory_neo_sync_action"))}</button>
+              <button
+                type="button"
+                data-inventory-neo-action="promote"
+                data-inventory-neo-source-id="${escapeHtml(neoSourceId)}"
+                data-inventory-neo-candidate-id="${escapeHtml(neoCandidateId)}"
+                ${!neoCapabilities.promote_supported || neoSyncing || neoRollingBack ? "disabled" : ""}
+              >${escapeHtml(neoPromoting ? t("inventory_neo_promoting") : t("inventory_neo_promote_action"))}</button>
+              <button
+                type="button"
+                data-inventory-neo-action="rollback"
+                data-inventory-neo-source-id="${escapeHtml(neoSourceId)}"
+                data-inventory-neo-release-id="${escapeHtml(neoReleaseId)}"
+                ${!neoCapabilities.rollback_supported || neoSyncing || neoPromoting ? "disabled" : ""}
+              >${escapeHtml(neoRollingBack ? t("inventory_neo_rolling_back") : t("inventory_neo_rollback_action"))}</button>
+              <div class="inventory-target-action-note">
+                ${escapeHtml(t("inventory_neo_actions_title"))}: ${escapeHtml(neoActionNote)}${neoUpdatedAtText !== "-" ? ` · ${escapeHtml(neoUpdatedAtText)}` : ""}
+              </div>
+            </div>
+          ` : ""}
           <div class="inventory-target-metrics">
             <div class="inventory-target-metric">
               <div class="label">Install Units</div>
@@ -13218,6 +13374,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           body: JSON.stringify({}),
         });
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        if (isNeoSync) {
+          state.inventoryNeoLastActionNote = t("inventory_neo_sync_action");
+        }
         renderInventoryPanel();
         await refreshSelectedDeployTargetDetail();
         await refreshSelectedInventorySourceDetail();
@@ -13229,6 +13388,143 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         );
         nextSyncing.delete(normalizedSourceId);
         state.inventorySyncingSourceIds = [...nextSyncing];
+        renderInventoryPanel();
+      }
+    }
+
+    async function promoteInventoryNeoSource(sourceId, options = {}) {
+      const normalizedSourceId = String(sourceId || "").trim();
+      if (!normalizedSourceId) {
+        return;
+      }
+      const neoDetail = inventoryNeoDetailState(state.inventorySourceDetail, null);
+      const candidateId = String(
+        options.candidateId
+        || (neoDetail && neoDetail.neoDefaults && neoDetail.neoDefaults.candidate_id)
+        || (neoDetail && neoDetail.neoState && neoDetail.neoState.candidate_id)
+        || "",
+      ).trim();
+      if (!candidateId) {
+        alert(t("inventory_neo_candidate_missing"));
+        return;
+      }
+      const stage = String(options.stage || "stable").trim().toLowerCase() || "stable";
+      const syncToLocal = Object.prototype.hasOwnProperty.call(options, "syncToLocal")
+        ? Boolean(options.syncToLocal)
+        : true;
+      const confirmed = window.confirm(t("inventory_neo_promote_confirm", {
+        candidate: candidateId,
+        stage,
+        sync: syncToLocal ? t("yes") : t("no"),
+      }));
+      if (!confirmed) {
+        return;
+      }
+
+      const currentPromoting = new Set(
+        Array.isArray(state.inventoryPromotingNeoSourceIds)
+          ? state.inventoryPromotingNeoSourceIds.map((item) => String(item || "").trim()).filter(Boolean)
+          : [],
+      );
+      if (currentPromoting.has(normalizedSourceId)) {
+        return;
+      }
+      currentPromoting.add(normalizedSourceId);
+      state.inventoryPromotingNeoSourceIds = [...currentPromoting];
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/astrbot-neo-sources/${encodeURIComponent(normalizedSourceId)}/promote`, {
+          method: "POST",
+          body: JSON.stringify({
+            candidate_id: candidateId,
+            stage,
+            sync_to_local: syncToLocal,
+          }),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventoryNeoLastActionNote = t("inventory_neo_promote_success", {
+          release: String(result && result.promotion && result.promotion.release && result.promotion.release.id || "-").trim() || "-",
+          stage,
+        });
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+        await refreshSelectedInventorySourceDetail();
+        alert(state.inventoryNeoLastActionNote);
+      } finally {
+        const nextPromoting = new Set(
+          (state.inventoryPromotingNeoSourceIds || [])
+            .map((item) => String(item || "").trim())
+            .filter(Boolean),
+        );
+        nextPromoting.delete(normalizedSourceId);
+        state.inventoryPromotingNeoSourceIds = [...nextPromoting];
+        renderInventoryPanel();
+      }
+    }
+
+    async function rollbackInventoryNeoSource(sourceId, options = {}) {
+      const normalizedSourceId = String(sourceId || "").trim();
+      if (!normalizedSourceId) {
+        return;
+      }
+      const neoDetail = inventoryNeoDetailState(state.inventorySourceDetail, null);
+      const releaseId = String(
+        options.releaseId
+        || (neoDetail && neoDetail.neoDefaults && neoDetail.neoDefaults.release_id)
+        || (neoDetail && neoDetail.neoState && neoDetail.neoState.release_id)
+        || "",
+      ).trim();
+      if (!releaseId) {
+        alert(t("inventory_neo_release_missing"));
+        return;
+      }
+      const confirmed = window.confirm(t("inventory_neo_rollback_confirm", {
+        release: releaseId,
+      }));
+      if (!confirmed) {
+        return;
+      }
+
+      const currentRollingBack = new Set(
+        Array.isArray(state.inventoryRollingBackNeoSourceIds)
+          ? state.inventoryRollingBackNeoSourceIds.map((item) => String(item || "").trim()).filter(Boolean)
+          : [],
+      );
+      if (currentRollingBack.has(normalizedSourceId)) {
+        return;
+      }
+      currentRollingBack.add(normalizedSourceId);
+      state.inventoryRollingBackNeoSourceIds = [...currentRollingBack];
+      renderInventoryPanel();
+      try {
+        const result = await api(`/api/skills/astrbot-neo-sources/${encodeURIComponent(normalizedSourceId)}/rollback`, {
+          method: "POST",
+          body: JSON.stringify({
+            release_id: releaseId,
+          }),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventoryNeoLastActionNote = t("inventory_neo_rollback_success", {
+          release: String(
+            result && result.rollback && (
+              result.rollback.release_id
+              || result.rollback.id
+              || releaseId
+            ) || releaseId,
+          ).trim() || releaseId,
+        });
+        renderInventoryPanel();
+        await refreshSelectedDeployTargetDetail();
+        await refreshSelectedInventorySourceDetail();
+        alert(state.inventoryNeoLastActionNote);
+      } finally {
+        const nextRollingBack = new Set(
+          (state.inventoryRollingBackNeoSourceIds || [])
+            .map((item) => String(item || "").trim())
+            .filter(Boolean),
+        );
+        nextRollingBack.delete(normalizedSourceId);
+        state.inventoryRollingBackNeoSourceIds = [...nextRollingBack];
         renderInventoryPanel();
       }
     }
@@ -15326,11 +15622,51 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         state.inventorySelectedSourceKey = sourceKey;
         state.inventorySourceDetail = null;
         state.inventorySelectedDetailInstallUnitId = "";
+        state.inventoryNeoLastActionNote = "";
         renderInventoryPanel();
         try {
           await refreshSelectedInventorySourceDetail({ silent: false });
         } catch (err) {
           alert(`Failed to load source detail: ${err.message}`);
+        }
+      });
+
+      $("inventorySourceHero").addEventListener("click", async (evt) => {
+        const actionEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-neo-action]")
+          : null;
+        if (!actionEl || actionEl.disabled) return;
+        const action = String(actionEl.getAttribute("data-inventory-neo-action") || "").trim();
+        const sourceId = String(actionEl.getAttribute("data-inventory-neo-source-id") || "").trim();
+        if (!sourceId) return;
+        try {
+          if (action === "sync") {
+            await syncInventorySource(sourceId, { mode: "neo" });
+            return;
+          }
+          if (action === "promote") {
+            await promoteInventoryNeoSource(sourceId, {
+              candidateId: String(actionEl.getAttribute("data-inventory-neo-candidate-id") || "").trim(),
+              stage: "stable",
+              syncToLocal: true,
+            });
+            return;
+          }
+          if (action === "rollback") {
+            await rollbackInventoryNeoSource(sourceId, {
+              releaseId: String(actionEl.getAttribute("data-inventory-neo-release-id") || "").trim(),
+            });
+          }
+        } catch (err) {
+          if (action === "promote") {
+            alert(t("inventory_neo_promote_error", { msg: err.message }));
+            return;
+          }
+          if (action === "rollback") {
+            alert(t("inventory_neo_rollback_error", { msg: err.message }));
+            return;
+          }
+          alert(t("inventory_sync_error", { msg: err.message }));
         }
       });
 

@@ -307,6 +307,11 @@ To call the feature "complete", the next implementation steps should be:
 - AstrBot Phase 4 Neo write path is now wired: added `POST /api/skills/astrbot-neo-sources/{source_id}/sync` with Neo release sync execution and audit trail writeback (`astrbot_neo_source_sync`).
 - Full regression is now: `python3 -m pytest tests -q` -> `161 passed`.
 - WebUI Source / Bundle now surfaces and operates `astrneo:*` rows: Neo standalone sources are visible, detail loading auto-routes to `/api/skills/astrbot-neo-sources/{source_id}`, and the sync button auto-switches to the Neo sync API.
+- AstrBot Neo lifecycle now covers promote / rollback as well:
+  - added `POST /api/skills/astrbot-neo-sources/{source_id}/promote` and `POST /api/skills/astrbot-neo-sources/{source_id}/rollback`
+  - Neo source detail now exposes `neo_state`, `neo_capabilities`, and `neo_defaults`
+  - the focused source-detail inspector now shows `Sync Stable / Promote Stable / Rollback Release` only for `astrneo:*` sources
+  - new audit events: `astrbot_neo_source_promote` and `astrbot_neo_source_rollback`
 
 ## 9. Follow-up Progress (2026-04-13)
 
