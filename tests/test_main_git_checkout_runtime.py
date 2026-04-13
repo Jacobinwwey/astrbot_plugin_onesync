@@ -556,6 +556,88 @@ class OneSyncPluginGitCheckoutPrewarmTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(0, result["source_sync_failure_count"])
         self.assertEqual(1, result["source_sync_cache_hit_total"])
 
+    async def test_execute_install_unit_source_sync_plans_reuses_gitea_repo_metadata_sync_records(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin._augment_source_row_with_git_checkout = lambda source: dict(source)
+        plugin._update_saved_registry_source_metadata = lambda **kwargs: {}
+
+        source_rows = [
+            {
+                "source_id": "codeberg_find_skills",
+                "install_unit_id": "repo:codeberg.org/astral/skills#skills/find-skills",
+                "source_path": "/root/.codex/skills/find-skills",
+                "locator": "/root/.codex/skills/find-skills",
+                "install_ref": "repo:codeberg.org/astral/skills#skills/find-skills",
+                "install_manager": "manual",
+                "managed_by": "manual",
+                "update_policy": "manual",
+            },
+            {
+                "source_id": "codeberg_frontend_design",
+                "install_unit_id": "repo:codeberg.org/astral/skills#skills/frontend-design",
+                "source_path": "/root/.codex/skills/frontend-design",
+                "locator": "/root/.codex/skills/frontend-design",
+                "install_ref": "repo:codeberg.org/astral/skills#skills/frontend-design",
+                "install_manager": "manual",
+                "managed_by": "manual",
+                "update_policy": "manual",
+            },
+        ]
+        plans = [
+            {
+                "install_unit_id": "repo:codeberg.org/astral/skills#skills/find-skills",
+                "display_name": "astral/skills :: find-skills",
+                "manager": "manual",
+                "policy": "source_sync",
+                "source_ids": ["codeberg_find_skills"],
+            },
+            {
+                "install_unit_id": "repo:codeberg.org/astral/skills#skills/frontend-design",
+                "display_name": "astral/skills :: frontend-design",
+                "manager": "manual",
+                "policy": "source_sync",
+                "source_ids": ["codeberg_frontend_design"],
+            },
+        ]
+
+        original_builder = MAIN_MODULE.build_source_sync_record
+        call_count = {"value": 0}
+
+        def _fake_build_source_sync_record(source_row, *, checked_at=None, urlopen=None, git_runner=None, timeout_s=8):
+            _ = checked_at, urlopen, git_runner, timeout_s
+            call_count["value"] += 1
+            return {
+                "ok": True,
+                "sync_status": "ok",
+                "sync_kind": "repo_metadata_gitea",
+                "sync_message": f"fetched gitea repository metadata for {source_row.get('source_id')}",
+                "sync_local_revision": "",
+                "sync_remote_revision": "rev-gitea-demo",
+                "sync_resolved_revision": "rev-gitea-demo",
+                "sync_branch": "main",
+                "sync_dirty": False,
+                "sync_error_code": "",
+                "registry_latest_version": "rev-gitea-demo",
+                "registry_published_at": "",
+                "registry_homepage": "https://codeberg.org/astral/skills",
+                "registry_description": "codeberg demo",
+            }
+
+        MAIN_MODULE.build_source_sync_record = _fake_build_source_sync_record
+        try:
+            result = OneSyncPlugin._execute_install_unit_source_sync_plans(
+                plugin,
+                plans,
+                source_rows,
+            )
+        finally:
+            MAIN_MODULE.build_source_sync_record = original_builder
+
+        self.assertEqual(1, call_count["value"])
+        self.assertEqual(2, result["source_sync_success_count"])
+        self.assertEqual(0, result["source_sync_failure_count"])
+        self.assertEqual(1, result["source_sync_cache_hit_total"])
+
     async def test_execute_install_unit_update_plans_treats_successful_fallback_chain_as_success(self) -> None:
         plugin = object.__new__(OneSyncPlugin)
         plugin.webui_get_skills_payload = lambda: {"source_rows": []}

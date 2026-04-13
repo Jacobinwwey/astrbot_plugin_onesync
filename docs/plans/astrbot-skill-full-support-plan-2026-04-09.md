@@ -389,6 +389,7 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
     - 当 provider 为 `gitea` 且仅给出 `sync_auth_token` 时，默认使用 `Authorization: token <token>`
     - 仍支持 `sync_auth_header` 显式覆盖
 - 本轮定向回归：
+  - `pytest -q tests/test_main_git_checkout_runtime.py -k "gitea_repo_metadata_sync_records"` -> passed
   - `pytest -q tests/test_source_sync_core.py` -> passed
   - `pytest -q` -> passed
   - `python3 -m py_compile source_sync_core.py tests/test_source_sync_core.py` -> passed
