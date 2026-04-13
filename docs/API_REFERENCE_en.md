@@ -204,12 +204,16 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
   - the scopes currently exposed by the host (`global / workspace`)
 - `layout.selected_scope`
   - the default read scope
+- `layout.selected_workspace_id`
+  - populated only when the host provides an explicit `target_paths.workspace` mapping; discovered workspace candidates are intentionally not auto-selected
 - `layout.scoped_layouts.{scope}`
   - per-scope paths and availability such as `skills_root`, `skills_config_path`, `sandbox_cache_path`, `neo_map_path`, and `state_available`
 - `runtime_state.summary.available_scopes`
   - the runtime layer re-exposes usable scopes so the client does not need to infer from layout only
 - `runtime_state.summary.scope_summaries.{scope}`
   - per-scope summaries such as `local_skill_total`, `active_skill_total`, `sandbox_cache_exists`, and `sandbox_cache_ready`
+- `runtime_state.summary.selected_workspace_id`
+  - follows the same explicit-target semantics as `layout.selected_workspace_id`
 - `runtime_state.state_rows[]`
   - per-skill rows carrying `scope`, `skill_name`, `state_classification`, `local_exists`, `sandbox_exists`, and `active`
 

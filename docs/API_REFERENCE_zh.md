@@ -205,12 +205,16 @@
   - 当前宿主可用的 `global / workspace` 范围。
 - `layout.selected_scope`
   - 默认读取范围。
+- `layout.selected_workspace_id`
+  - 仅当宿主提供显式 `target_paths.workspace` 映射时才会填充；自动发现到的 workspace 候选不会被隐式默认选中。
 - `layout.scoped_layouts.{scope}`
   - 每个 scope 下的 `skills_root`、`skills_config_path`、`sandbox_cache_path`、`neo_map_path`、`state_available`。
 - `runtime_state.summary.available_scopes`
   - 运行态层再次暴露可用范围，便于前端不依赖 layout 推断。
 - `runtime_state.summary.scope_summaries.{scope}`
   - 每个范围各自的 `local_skill_total`、`active_skill_total`、`sandbox_cache_exists`、`sandbox_cache_ready` 等摘要。
+- `runtime_state.summary.selected_workspace_id`
+  - 与 `layout.selected_workspace_id` 保持同一“仅显式 target 才选中”的语义。
 - `runtime_state.state_rows[]`
   - 逐 skill 状态行，包含 `scope`、`skill_name`、`state_classification`、`local_exists`、`sandbox_exists`、`active`。
 
