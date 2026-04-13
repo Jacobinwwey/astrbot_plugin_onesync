@@ -3775,22 +3775,107 @@ class OneSyncPlugin(Star):
             if isinstance(context.get("runtime_state"), dict)
             else {}
         )
+        runtime_summary = (
+            runtime_state.get("summary", {})
+            if isinstance(runtime_state.get("summary"), dict)
+            else {}
+        )
         snapshot = context.get("snapshot", {}) if isinstance(context.get("snapshot"), dict) else {}
+        selected_workspace_id = str(
+            layout.get("selected_workspace_id")
+            or runtime_summary.get("selected_workspace_id")
+            or "",
+        ).strip()
         return {
             "ok": True,
             "generated_at": snapshot.get("generated_at"),
             "host": context.get("host", {}),
             "runtime_state": runtime_state,
+            "selected_workspace_id": selected_workspace_id,
             "layout": {
                 "host_id": str(layout.get("host_id") or "").strip(),
                 "selected_scope": str(layout.get("selected_scope") or "").strip(),
                 "available_scopes": list(layout.get("available_scopes", [])) if isinstance(layout.get("available_scopes", []), list) else [],
+                "selected_workspace_id": selected_workspace_id,
                 "skills_root": str(layout.get("skills_root") or "").strip(),
                 "astrbot_data_dir": str(layout.get("astrbot_data_dir") or "").strip(),
                 "skills_config_path": str(layout.get("skills_config_path") or "").strip(),
                 "sandbox_cache_path": str(layout.get("sandbox_cache_path") or "").strip(),
                 "neo_map_path": str(layout.get("neo_map_path") or "").strip(),
+                "workspace_profiles": (
+                    list(layout.get("workspace_profiles", []))
+                    if isinstance(layout.get("workspace_profiles", []), list)
+                    else []
+                ),
                 "scoped_layouts": layout.get("scoped_layouts", {}) if isinstance(layout.get("scoped_layouts", {}), dict) else {},
+            },
+            "warnings": snapshot.get("warnings", []),
+        }
+
+    def webui_get_astrbot_workspaces_payload(self, host_id: str) -> dict[str, Any]:
+        context = self._resolve_astrbot_host_action_context(host_id)
+        if not context.get("ok"):
+            return context
+        layout = context.get("layout", {}) if isinstance(context.get("layout"), dict) else {}
+        runtime_state = (
+            context.get("runtime_state", {})
+            if isinstance(context.get("runtime_state"), dict)
+            else {}
+        )
+        runtime_summary = (
+            runtime_state.get("summary", {})
+            if isinstance(runtime_state.get("summary"), dict)
+            else {}
+        )
+        snapshot = context.get("snapshot", {}) if isinstance(context.get("snapshot"), dict) else {}
+        workspace_profiles = (
+            list(layout.get("workspace_profiles", []))
+            if isinstance(layout.get("workspace_profiles", []), list)
+            else []
+        )
+        workspace_summaries = (
+            runtime_summary.get("workspace_summaries", {})
+            if isinstance(runtime_summary.get("workspace_summaries"), dict)
+            else {}
+        )
+        selected_workspace_id = str(
+            layout.get("selected_workspace_id")
+            or runtime_summary.get("selected_workspace_id")
+            or "",
+        ).strip()
+        items: list[dict[str, Any]] = []
+        for profile in workspace_profiles:
+            if not isinstance(profile, dict):
+                continue
+            workspace_id = str(profile.get("workspace_id") or "").strip()
+            item = {
+                "workspace_id": workspace_id,
+                "workspace_root": str(profile.get("workspace_root") or "").strip(),
+                "skills_root": str(profile.get("skills_root") or "").strip(),
+                "extra_prompt_path": str(profile.get("extra_prompt_path") or "").strip(),
+                "exists": _to_bool(profile.get("exists"), False),
+                "summary": (
+                    workspace_summaries.get(workspace_id, {})
+                    if isinstance(workspace_summaries.get(workspace_id, {}), dict)
+                    else {}
+                ),
+            }
+            items.append(item)
+
+        return {
+            "ok": True,
+            "generated_at": snapshot.get("generated_at"),
+            "host": context.get("host", {}),
+            "selected_workspace_id": selected_workspace_id,
+            "workspace_profiles": workspace_profiles,
+            "workspace_summaries": workspace_summaries,
+            "items": items,
+            "counts": {
+                "workspace_total": len(workspace_profiles),
+                "workspace_exists_total": sum(
+                    1 for item in workspace_profiles
+                    if isinstance(item, dict) and _to_bool(item.get("exists"), False)
+                ),
             },
             "warnings": snapshot.get("warnings", []),
         }

@@ -178,6 +178,12 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
         self.assertEqual(str(self.skills_root / "neo_skill_map.json"), layout["neo_map_path"])
         self.assertEqual(["global", "workspace"], layout["available_scopes"])
         self.assertEqual(str(self.workspace_skills_root), layout["scoped_layouts"]["workspace"]["skills_root"])
+        self.assertEqual("session_alpha", layout["selected_workspace_id"])
+        self.assertEqual(1, len(layout["workspace_profiles"]))
+        self.assertEqual(
+            str(self.workspace_root),
+            layout["workspace_profiles"][0]["workspace_root"],
+        )
 
     def test_resolve_astrbot_host_layout_does_not_treat_secondary_global_root_as_workspace(self) -> None:
         isolated_skills_root = Path(self._tempdir.name) / "isolated-astrbot" / "data" / "skills"
@@ -198,6 +204,8 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
         self.assertTrue(layout["scoped_layouts"]["global"]["state_available"])
         self.assertFalse(layout["scoped_layouts"]["workspace"]["state_available"])
         self.assertEqual(str(isolated_skills_root), layout["scoped_layouts"]["global"]["skills_root"])
+        self.assertEqual("", layout["selected_workspace_id"])
+        self.assertEqual([], layout["workspace_profiles"])
 
     def test_resolve_astrbot_host_layout_discovers_workspace_roots_from_data_workspaces(self) -> None:
         discovered_workspace_skills_root = self.root / "data" / "workspaces" / "session-alpha" / "skills"
@@ -218,6 +226,8 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
             str(discovered_workspace_skills_root),
             layout["scoped_layouts"]["workspace"]["skills_root"],
         )
+        self.assertEqual("session_alpha", layout["selected_workspace_id"])
+        self.assertEqual(1, len(layout["workspace_profiles"]))
 
     def test_build_astrbot_host_runtime_state_tracks_rows_per_scope(self) -> None:
         self._write_skill("global-demo", "global skill", scope="global")
@@ -244,12 +254,56 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
 
         self.assertEqual(2, state["summary"]["local_skill_total"])
         self.assertEqual(2, state["summary"]["state_row_total"])
+        self.assertEqual("session_alpha", state["summary"]["selected_workspace_id"])
         self.assertEqual(1, state["summary"]["scope_summaries"]["global"]["local_skill_total"])
         self.assertEqual(1, state["summary"]["scope_summaries"]["workspace"]["local_skill_total"])
+        self.assertEqual(1, state["summary"]["workspace_summaries"]["session_alpha"]["local_skill_total"])
 
         rows = {(item["scope"], item["skill_name"]): item for item in state["state_rows"]}
         self.assertTrue(rows[("global", "global-demo")]["active"])
         self.assertFalse(rows[("workspace", "workspace-demo")]["active"])
+
+    def test_build_astrbot_host_runtime_state_supports_multiple_workspace_profiles(self) -> None:
+        workspace_beta_root = self.root / "data" / "workspaces" / "session-beta"
+        workspace_beta_skills_root = workspace_beta_root / "skills"
+        workspace_beta_skills_root.mkdir(parents=True, exist_ok=True)
+
+        self._write_skill("workspace-alpha", "workspace alpha", scope="workspace")
+        skill_dir_beta = workspace_beta_skills_root / "workspace-beta"
+        skill_dir_beta.mkdir(parents=True, exist_ok=True)
+        (skill_dir_beta / "SKILL.md").write_text("# workspace-beta\n", encoding="utf-8")
+
+        (self.workspace_root / "skills.json").write_text(
+            json.dumps({"skills": {"workspace-alpha": {"active": True}}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (workspace_beta_root / "skills.json").write_text(
+            json.dumps({"skills": {"workspace-beta": {"active": False}}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        host = self._build_host()
+        host["declared_skill_roots"] = [
+            str(self.skills_root),
+            str(self.workspace_skills_root),
+            str(workspace_beta_skills_root),
+        ]
+
+        state = build_astrbot_host_runtime_state(host)
+
+        self.assertEqual(2, len(state["summary"]["workspace_summaries"]))
+        self.assertEqual(1, state["summary"]["workspace_summaries"]["session_alpha"]["local_skill_total"])
+        self.assertEqual(1, state["summary"]["workspace_summaries"]["session_beta"]["local_skill_total"])
+
+        workspace_rows = [
+            item for item in state["state_rows"]
+            if item.get("scope") == "workspace"
+        ]
+        self.assertEqual(2, len(workspace_rows))
+        self.assertEqual(
+            {"session_alpha", "session_beta"},
+            {str(item.get("workspace_id") or "") for item in workspace_rows},
+        )
 
 
 if __name__ == "__main__":

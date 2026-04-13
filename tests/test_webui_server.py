@@ -1133,6 +1133,7 @@ class _FakePlugin:
         return {
             "ok": True,
             "generated_at": self.skills_snapshot["generated_at"],
+            "selected_workspace_id": "session_alpha",
             "host": {
                 "host_id": "astrbot",
                 "display_name": "AstrBot",
@@ -1143,6 +1144,7 @@ class _FakePlugin:
                     "state_available": True,
                     "skills_root": "/tmp/astrbot/data/skills",
                     "selected_scope": "global",
+                    "selected_workspace_id": "session_alpha",
                     "available_scopes": ["global", "workspace"],
                     "scope_summaries": {
                         "global": {
@@ -1156,6 +1158,15 @@ class _FakePlugin:
                             "local_skill_total": 2,
                         },
                     },
+                    "workspace_summaries": {
+                        "session_alpha": {
+                            "workspace_id": "session_alpha",
+                            "workspace_root": "/tmp/workspace-astrbot/data/workspaces/session-alpha",
+                            "skills_root": "/tmp/workspace-astrbot/data/skills",
+                            "state_available": True,
+                            "local_skill_total": 2,
+                        }
+                    },
                 },
                 "state_rows": [],
                 "warnings": [],
@@ -1168,7 +1179,17 @@ class _FakePlugin:
                 "sandbox_cache_path": "/tmp/astrbot/data/sandbox_skills_cache.json",
                 "neo_map_path": "/tmp/astrbot/data/skills/neo_skill_map.json",
                 "selected_scope": "global",
+                "selected_workspace_id": "session_alpha",
                 "available_scopes": ["global", "workspace"],
+                "workspace_profiles": [
+                    {
+                        "workspace_id": "session_alpha",
+                        "workspace_root": "/tmp/workspace-astrbot/data/workspaces/session-alpha",
+                        "skills_root": "/tmp/workspace-astrbot/data/skills",
+                        "extra_prompt_path": "/tmp/workspace-astrbot/data/workspaces/session-alpha/EXTRA_PROMPT.md",
+                        "exists": True,
+                    }
+                ],
                 "scoped_layouts": {
                     "global": {
                         "scope": "global",
@@ -1180,6 +1201,38 @@ class _FakePlugin:
                     },
                 },
             },
+            "warnings": [],
+        }
+
+    def webui_get_astrbot_workspaces_payload(self, host_id: str) -> dict:
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        workspace_profile = {
+            "workspace_id": "session_alpha",
+            "workspace_root": "/tmp/workspace-astrbot/data/workspaces/session-alpha",
+            "skills_root": "/tmp/workspace-astrbot/data/skills",
+            "extra_prompt_path": "/tmp/workspace-astrbot/data/workspaces/session-alpha/EXTRA_PROMPT.md",
+            "exists": True,
+        }
+        workspace_summary = {
+            "workspace_id": "session_alpha",
+            "workspace_root": "/tmp/workspace-astrbot/data/workspaces/session-alpha",
+            "skills_root": "/tmp/workspace-astrbot/data/skills",
+            "state_available": True,
+            "local_skill_total": 2,
+        }
+        return {
+            "ok": True,
+            "generated_at": self.skills_snapshot["generated_at"],
+            "host": {
+                "host_id": "astrbot",
+                "display_name": "AstrBot",
+            },
+            "selected_workspace_id": "session_alpha",
+            "workspace_profiles": [workspace_profile],
+            "workspace_summaries": {"session_alpha": workspace_summary},
+            "items": [{**workspace_profile, "summary": workspace_summary}],
+            "counts": {"workspace_total": 1, "workspace_exists_total": 1},
             "warnings": [],
         }
 
@@ -1735,13 +1788,34 @@ class WebUIServerTests(unittest.TestCase):
             astrbot_host_resp.json()["runtime_state"]["summary"]["available_scopes"],
         )
         self.assertEqual(
+            "session_alpha",
+            astrbot_host_resp.json()["selected_workspace_id"],
+        )
+        self.assertEqual(
             "/tmp/workspace-astrbot/data/skills",
             astrbot_host_resp.json()["layout"]["scoped_layouts"]["workspace"]["skills_root"],
+        )
+        self.assertEqual(
+            1,
+            len(astrbot_host_resp.json()["layout"]["workspace_profiles"]),
+        )
+
+        astrbot_workspaces_resp = self.client.get("/api/skills/hosts/astrbot/astrbot/workspaces")
+        self.assertEqual(200, astrbot_workspaces_resp.status_code)
+        self.assertEqual("session_alpha", astrbot_workspaces_resp.json()["selected_workspace_id"])
+        self.assertEqual(1, astrbot_workspaces_resp.json()["counts"]["workspace_total"])
+        self.assertEqual(
+            "/tmp/workspace-astrbot/data/workspaces/session-alpha",
+            astrbot_workspaces_resp.json()["items"][0]["workspace_root"],
         )
 
         missing_astrbot_host_resp = self.client.get("/api/skills/hosts/missing/astrbot")
         self.assertEqual(404, missing_astrbot_host_resp.status_code)
         self.assertFalse(missing_astrbot_host_resp.json()["ok"])
+
+        missing_astrbot_workspaces_resp = self.client.get("/api/skills/hosts/missing/astrbot/workspaces")
+        self.assertEqual(404, missing_astrbot_workspaces_resp.status_code)
+        self.assertFalse(missing_astrbot_workspaces_resp.json()["ok"])
 
         sources_resp = self.client.get("/api/skills/sources")
         self.assertEqual(200, sources_resp.status_code)

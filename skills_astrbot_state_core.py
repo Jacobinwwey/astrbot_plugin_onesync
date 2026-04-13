@@ -245,6 +245,49 @@ def _discover_workspace_skill_roots(global_roots: list[str]) -> list[str]:
     return _dedupe_keep_order(discovered)
 
 
+def _workspace_root_from_skills_root(skills_root: Path) -> Path:
+    normalized = Path(str(skills_root or "").strip()).expanduser()
+    if normalized.name == "skills":
+        return normalized.parent
+    return normalized
+
+
+def _build_workspace_profiles(workspace_roots: list[Path]) -> tuple[list[dict[str, Any]], str]:
+    profiles: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for index, skills_root in enumerate(workspace_roots):
+        normalized_skills_root = Path(str(skills_root or "").strip()).expanduser()
+        if not str(normalized_skills_root):
+            continue
+        workspace_root = _workspace_root_from_skills_root(normalized_skills_root)
+
+        base_workspace_id = _slug(workspace_root.name, default=f"workspace_{index + 1}")
+        workspace_id = base_workspace_id
+        duplicate_seq = 2
+        while workspace_id in seen_ids:
+            workspace_id = f"{base_workspace_id}_{duplicate_seq}"
+            duplicate_seq += 1
+        seen_ids.add(workspace_id)
+
+        extra_prompt_path = workspace_root / "EXTRA_PROMPT.md"
+        profile = {
+            "workspace_id": workspace_id,
+            "workspace_root": str(workspace_root),
+            "skills_root": str(normalized_skills_root),
+            "extra_prompt_path": str(extra_prompt_path),
+            "exists": workspace_root.is_dir() and normalized_skills_root.is_dir(),
+        }
+        profiles.append(profile)
+    selected_workspace_id = ""
+    for profile in profiles:
+        if _to_bool(profile.get("exists"), False):
+            selected_workspace_id = str(profile.get("workspace_id") or "").strip()
+            break
+    if not selected_workspace_id and profiles:
+        selected_workspace_id = str(profiles[0].get("workspace_id") or "").strip()
+    return profiles, selected_workspace_id
+
+
 def _merged_scope_root_candidates(host: dict[str, Any]) -> list[str]:
     resolved_roots = _to_str_list(host.get("resolved_skill_roots", []))
     declared_roots = _to_str_list(host.get("declared_skill_roots", []))
@@ -471,6 +514,9 @@ def resolve_astrbot_host_layout(host: dict[str, Any] | None) -> dict[str, Any]:
         scope: _build_scoped_astrbot_layout(scope, candidates[0] if candidates else Path())
         for scope, candidates in scoped_candidates.items()
     }
+    workspace_profiles, selected_workspace_id = _build_workspace_profiles(
+        scoped_candidates.get("workspace", []),
+    )
     available_scopes = [
         scope
         for scope in ASTRBOT_SCOPE_ORDER
@@ -486,6 +532,8 @@ def resolve_astrbot_host_layout(host: dict[str, Any] | None) -> dict[str, Any]:
         "state_available": bool(available_scopes),
         "available_scopes": available_scopes,
         "selected_scope": selected_scope,
+        "workspace_profiles": workspace_profiles,
+        "selected_workspace_id": selected_workspace_id,
         "scoped_layouts": scoped_layouts,
         "skills_root": str(selected_layout.get("skills_root") or "").strip(),
         "astrbot_root": str(selected_layout.get("astrbot_root") or "").strip(),
@@ -507,20 +555,77 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
     installed = _to_bool(host.get("installed", False), False)
     state_rows: list[dict[str, Any]] = []
     scope_summaries: dict[str, dict[str, Any]] = {}
+    workspace_summaries: dict[str, dict[str, Any]] = {}
     scoped_layouts = layout.get("scoped_layouts", {}) if isinstance(layout.get("scoped_layouts", {}), dict) else {}
-    for scope in ASTRBOT_SCOPE_ORDER:
-        scope_layout = scoped_layouts.get(scope, {})
-        if not isinstance(scope_layout, dict) or not _to_bool(scope_layout.get("state_available"), False):
-            continue
-        scope_state = _build_scope_runtime_state(
+    global_layout = scoped_layouts.get("global", {})
+    if isinstance(global_layout, dict) and _to_bool(global_layout.get("state_available"), False):
+        global_state = _build_scope_runtime_state(
             host_id=host_id,
             provider_key=provider_key,
-            scope=scope,
-            layout=scope_layout,
+            scope="global",
+            layout=global_layout,
         )
-        scope_summaries[scope] = copy.deepcopy(scope_state.get("summary", {}))
-        state_rows.extend(copy.deepcopy(scope_state.get("state_rows", [])))
-        warnings.extend(_to_str_list(scope_state.get("warnings", [])))
+        scope_summaries["global"] = copy.deepcopy(global_state.get("summary", {}))
+        for row in global_state.get("state_rows", []):
+            if not isinstance(row, dict):
+                continue
+            normalized_row = copy.deepcopy(row)
+            normalized_row["workspace_id"] = ""
+            normalized_row["workspace_root"] = ""
+            normalized_row["extra_prompt_path"] = ""
+            state_rows.append(normalized_row)
+        warnings.extend(_to_str_list(global_state.get("warnings", [])))
+
+    workspace_profiles = layout.get("workspace_profiles", [])
+    if not isinstance(workspace_profiles, list):
+        workspace_profiles = []
+    selected_workspace_id = str(layout.get("selected_workspace_id") or "").strip()
+    for profile in workspace_profiles:
+        if not isinstance(profile, dict):
+            continue
+        workspace_id = str(profile.get("workspace_id") or "").strip()
+        workspace_skills_root = str(profile.get("skills_root") or "").strip()
+        if not workspace_id or not workspace_skills_root:
+            continue
+        workspace_layout = _build_scoped_astrbot_layout("workspace", Path(workspace_skills_root))
+        workspace_state = _build_scope_runtime_state(
+            host_id=host_id,
+            provider_key=provider_key,
+            scope="workspace",
+            layout=workspace_layout,
+        )
+        workspace_summary = copy.deepcopy(workspace_state.get("summary", {}))
+        workspace_summary["workspace_id"] = workspace_id
+        workspace_summary["workspace_root"] = str(profile.get("workspace_root") or "").strip()
+        workspace_summary["skills_root"] = workspace_skills_root
+        workspace_summary["extra_prompt_path"] = str(profile.get("extra_prompt_path") or "").strip()
+        workspace_summary["workspace_exists"] = _to_bool(profile.get("exists"), False)
+        workspace_summaries[workspace_id] = workspace_summary
+
+        if workspace_id == selected_workspace_id:
+            scope_summaries["workspace"] = copy.deepcopy(workspace_summary)
+
+        for row in workspace_state.get("state_rows", []):
+            if not isinstance(row, dict):
+                continue
+            normalized_row = copy.deepcopy(row)
+            skill_name = str(normalized_row.get("skill_name") or "").strip()
+            normalized_row["workspace_id"] = workspace_id
+            normalized_row["workspace_root"] = str(profile.get("workspace_root") or "").strip()
+            normalized_row["extra_prompt_path"] = str(profile.get("extra_prompt_path") or "").strip()
+            normalized_row["row_id"] = f"workspace:{workspace_id}:{skill_name}" if skill_name else f"workspace:{workspace_id}"
+            state_rows.append(normalized_row)
+
+        warnings.extend(
+            f"[workspace:{workspace_id}] {item}"
+            for item in _to_str_list(workspace_state.get("warnings", []))
+        )
+
+    if "workspace" not in scope_summaries and workspace_summaries:
+        fallback_workspace_id = selected_workspace_id or next(iter(workspace_summaries), "")
+        fallback_summary = workspace_summaries.get(fallback_workspace_id, {})
+        if isinstance(fallback_summary, dict):
+            scope_summaries["workspace"] = copy.deepcopy(fallback_summary)
 
     selected_scope = _normalize_astrbot_scope(
         layout.get("selected_scope"),
@@ -537,7 +642,9 @@ def build_astrbot_host_runtime_state(host: dict[str, Any]) -> dict[str, Any]:
         "state_available": _to_bool(layout.get("state_available"), False),
         "available_scopes": list(layout.get("available_scopes", [])) if isinstance(layout.get("available_scopes", []), list) else [],
         "selected_scope": selected_scope,
+        "selected_workspace_id": selected_workspace_id,
         "scope_summaries": scope_summaries,
+        "workspace_summaries": workspace_summaries,
         "skills_root": str(selected_summary.get("skills_root") or layout.get("skills_root") or "").strip(),
         "astrbot_root": str(selected_summary.get("astrbot_root") or layout.get("astrbot_root") or "").strip(),
         "astrbot_data_dir": str(selected_summary.get("astrbot_data_dir") or layout.get("astrbot_data_dir") or "").strip(),
