@@ -1837,6 +1837,30 @@
       line-height: 1.45;
     }
 
+    .inventory-rollback-audit-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .inventory-rollback-audit-actions button {
+      border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+      background: color-mix(in srgb, var(--accent) 14%, var(--panel) 86%);
+      color: var(--fg);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .inventory-rollback-audit-actions button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      border-style: dashed;
+    }
+
     .inventory-install-unit-item {
       border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
       border-radius: 10px;
@@ -4206,6 +4230,8 @@
       inventoryExecutionHistoryMode: "batch",
       inventoryRollbackAuditRows: [],
       inventoryRollbackAuditLoading: false,
+      inventoryRollbackAuditRetrying: false,
+      inventoryRollbackAuditRetryingRowIndex: -1,
       inventoryRepairing: false,
       inventoryRepairAllRunning: false,
       inventoryReprojecting: false,
@@ -4767,6 +4793,14 @@
         inventory_rollback_audit_scope_all: "最近回滚",
         inventory_rollback_audit_scope_current: "当前聚合",
         inventory_rollback_audit_stats: "候选 {candidate} · 恢复 {restored} · 未恢复 {notRestored} · 失败 {failed}",
+        inventory_rollback_audit_failure_groups: "失败原因: {summary}",
+        inventory_rollback_audit_retry_action: "重试失败项",
+        inventory_rollback_audit_retry_running: "重试中...",
+        inventory_rollback_audit_retry_missing: "该回滚记录没有可重试的 Source 快照。",
+        inventory_rollback_audit_retry_confirm: "即将按审计记录重试回滚。\n\n范围: {scope}\nID: {sourceId}\n候选 Source: {count}\n\n确认继续？",
+        inventory_rollback_audit_retry_success: "审计重试完成: 恢复 {restored} 条 Source，未恢复 {notRestored} 条，失败命令 {failed} 条。",
+        inventory_rollback_audit_retry_error: "审计重试失败: {msg}",
+        inventory_rollback_audit_retry_busy: "当前有进行中的聚合操作，请稍后再试。",
         inventory_target_empty: "等待选择宿主软件...",
         inventory_target_kicker: "当前 Deploy Target",
         inventory_target_scope_host: "{host} · {scope}",
@@ -5599,6 +5633,14 @@
         inventory_rollback_audit_scope_all: "Recent Rollbacks",
         inventory_rollback_audit_scope_current: "Current Aggregate",
         inventory_rollback_audit_stats: "Candidates {candidate} · Restored {restored} · Not restored {notRestored} · Failed {failed}",
+        inventory_rollback_audit_failure_groups: "Failure reasons: {summary}",
+        inventory_rollback_audit_retry_action: "Retry Failed",
+        inventory_rollback_audit_retry_running: "Retrying...",
+        inventory_rollback_audit_retry_missing: "This rollback record does not include retryable source snapshots.",
+        inventory_rollback_audit_retry_confirm: "Retry rollback using this audit record.\n\nScope: {scope}\nID: {sourceId}\nCandidate sources: {count}\n\nContinue?",
+        inventory_rollback_audit_retry_success: "Audit retry finished: {restored} sources restored, {notRestored} not restored, {failed} commands failed.",
+        inventory_rollback_audit_retry_error: "Audit retry failed: {msg}",
+        inventory_rollback_audit_retry_busy: "Another aggregate operation is in progress. Retry after it finishes.",
         inventory_target_empty: "Select a host to inspect the current deploy target.",
         inventory_target_kicker: "Current Deploy Target",
         inventory_target_scope_host: "{host} · {scope}",
@@ -9582,6 +9624,7 @@
         || state.inventorySyncingInstallUnit
         || state.inventoryUpdatingInstallUnit
         || state.inventoryRollingBackInstallUnit
+        || state.inventoryRollbackAuditRetrying
         || state.inventoryRepairingInstallUnit
         || state.inventoryDeployingInstallUnit
         || state.inventorySyncAllRunning) {
@@ -10607,12 +10650,45 @@
 
     function normalizeInventoryRollbackAuditRows(rows) {
       const normalizedRows = [];
-      (Array.isArray(rows) ? rows : []).forEach((item) => {
+      (Array.isArray(rows) ? rows : []).forEach((item, rowIndex) => {
         if (!item || typeof item !== "object") return;
         const payload = item.payload && typeof item.payload === "object"
           ? item.payload
           : {};
+        const failedSources = (Array.isArray(payload.failed_sources) ? payload.failed_sources : [])
+          .filter((entry) => entry && typeof entry === "object")
+          .map((entry) => ({
+            source_id: String(entry.source_id || "").trim(),
+            reason: String(entry.reason || "").trim(),
+            message: String(entry.message || "").trim(),
+          }))
+          .filter((entry) => entry.source_id);
+        const failureReasonGroupsMap = new Map();
+        failedSources.forEach((entry) => {
+          const reason = String(entry.reason || "").trim() || "rollback_failed";
+          failureReasonGroupsMap.set(reason, Number(failureReasonGroupsMap.get(reason) || 0) + 1);
+        });
+        const failureReasonGroups = [...failureReasonGroupsMap.entries()]
+          .map(([reason, count]) => ({ reason, count }))
+          .sort((left, right) => {
+            const countDiff = Number(right.count || 0) - Number(left.count || 0);
+            if (countDiff) return countDiff;
+            return String(left.reason || "").localeCompare(String(right.reason || ""));
+          });
+        const failureReasonSummary = failureReasonGroups
+          .slice(0, 3)
+          .map((item) => `${item.reason}:${item.count}`)
+          .join(", ");
+        const retryBeforeRevisions = normalizeInventoryRevisionRows(
+          payload.retry_before_revisions,
+        );
+        const notRestoredSourceIds = dedupeInventorySourceIds(payload.not_restored_source_ids);
+        const retrySupportedByAction = (() => {
+          const normalizedAction = String(item.action || "").trim().toLowerCase();
+          return normalizedAction.includes("install_unit") || normalizedAction.includes("collection_group");
+        })();
         normalizedRows.push({
+          row_index: Number(rowIndex) || 0,
           timestamp: String(item.timestamp || "").trim(),
           action: String(item.action || "").trim(),
           source_id: String(item.source_id || "").trim(),
@@ -10626,6 +10702,12 @@
           not_restored_source_total: Number(payload.not_restored_source_total ?? 0) || 0,
           failure_count: Number(payload.failure_count ?? 0) || 0,
           success_count: Number(payload.success_count ?? 0) || 0,
+          failed_sources: failedSources,
+          failure_reason_groups: failureReasonGroups,
+          failure_reason_summary: failureReasonSummary,
+          not_restored_source_ids: notRestoredSourceIds,
+          retry_before_revisions: retryBeforeRevisions,
+          retry_supported: retrySupportedByAction && retryBeforeRevisions.length > 0,
           payload,
         });
       });
@@ -10642,6 +10724,21 @@
         return t("inventory_rollback_audit_action_install_unit");
       }
       return String(action || "").trim() || "-";
+    }
+
+    function inventoryRollbackAuditActionEndpoint(action, sourceId) {
+      const normalizedAction = String(action || "").trim().toLowerCase();
+      const normalizedSourceId = String(sourceId || "").trim();
+      if (!normalizedAction || !normalizedSourceId) {
+        return "";
+      }
+      if (normalizedAction.includes("collection_group")) {
+        return `/api/skills/collections/${encodeURIComponent(normalizedSourceId)}/rollback`;
+      }
+      if (normalizedAction.includes("install_unit")) {
+        return `/api/skills/install-units/${encodeURIComponent(normalizedSourceId)}/rollback`;
+      }
+      return "";
     }
 
     function inventoryRollbackRetrySourceIdsFromRollbackPayload(rollbackPayload) {
@@ -10832,6 +10929,25 @@
         const sourceId = String(item.source_id || "").trim() || "-";
         const timestamp = String(item.timestamp || "").trim();
         const timeText = timestamp ? toLocalTime(timestamp) : "-";
+        const retryBusy = Boolean(state.inventoryRollbackAuditRetrying);
+        const retryForCurrentRow = retryBusy && Number(state.inventoryRollbackAuditRetryingRowIndex) === Number(item.row_index);
+        const retryButtonLabel = retryForCurrentRow
+          ? t("inventory_rollback_audit_retry_running")
+          : t("inventory_rollback_audit_retry_action");
+        const retrySupported = Boolean(item.retry_supported)
+          && Boolean(inventoryRollbackAuditActionEndpoint(item.action, item.source_id));
+        const retryButtonDisabled = !retrySupported || retryBusy;
+        const retryButton = retrySupported
+          ? `
+            <div class="inventory-rollback-audit-actions">
+              <button
+                type="button"
+                data-inventory-rollback-retry-row-index="${escapeHtml(String(item.row_index || 0))}"
+                ${retryButtonDisabled ? "disabled" : ""}
+              >${escapeHtml(retryButtonLabel)}</button>
+            </div>
+          `
+          : "";
         return `
           <div class="inventory-rollback-audit-item" data-tone="${escapeHtml(tone)}">
             <div class="title">
@@ -10845,6 +10961,10 @@
               notRestored,
               failed,
             }))}</div>
+            ${item.failure_reason_summary
+              ? `<div class="meta">${escapeHtml(t("inventory_rollback_audit_failure_groups", { summary: item.failure_reason_summary }))}</div>`
+              : ""}
+            ${retryButton}
           </div>
         `;
         }).join(""),
@@ -11453,6 +11573,82 @@
         return result;
       } finally {
         state.inventoryRollingBackInstallUnit = false;
+        renderInventoryPanel();
+      }
+    }
+
+    async function retryInventoryRollbackAuditRow(rowIndex) {
+      if (state.inventoryRollbackAuditRetrying
+        || state.inventoryUpdatingAllAggregates
+        || state.inventoryImprovingAllSkills
+        || state.inventoryRefreshingInstallUnit
+        || state.inventorySyncingInstallUnit
+        || state.inventoryUpdatingInstallUnit
+        || state.inventoryRollingBackInstallUnit
+        || state.inventoryRepairingInstallUnit
+        || state.inventoryDeployingInstallUnit
+        || state.inventorySyncAllRunning) {
+        alert(t("inventory_rollback_audit_retry_busy"));
+        return null;
+      }
+
+      const normalizedRowIndex = Number(rowIndex);
+      if (!Number.isFinite(normalizedRowIndex)) {
+        return null;
+      }
+      const rollbackRows = normalizeInventoryRollbackAuditRows(state.inventoryRollbackAuditRows);
+      const targetRow = rollbackRows.find((item) => Number(item.row_index) === normalizedRowIndex);
+      if (!targetRow || typeof targetRow !== "object") {
+        return null;
+      }
+
+      const endpoint = inventoryRollbackAuditActionEndpoint(targetRow.action, targetRow.source_id);
+      const retryBeforeRevisions = normalizeInventoryRevisionRows(targetRow.retry_before_revisions);
+      if (!endpoint || !retryBeforeRevisions.length) {
+        alert(t("inventory_rollback_audit_retry_missing"));
+        return null;
+      }
+
+      const confirmed = window.confirm(t("inventory_rollback_audit_retry_confirm", {
+        scope: inventoryRollbackAuditActionLabel(targetRow.action),
+        sourceId: String(targetRow.source_id || "").trim() || "-",
+        count: retryBeforeRevisions.length,
+      }));
+      if (!confirmed) {
+        return null;
+      }
+
+      state.inventoryRollbackAuditRetrying = true;
+      state.inventoryRollbackAuditRetryingRowIndex = normalizedRowIndex;
+      renderInventoryPanel();
+      try {
+        const result = await api(endpoint, {
+          method: "POST",
+          body: JSON.stringify({
+            execute: true,
+            confirm: SKILLS_ROLLBACK_CONFIRM_TOKEN,
+            before_revisions: retryBeforeRevisions,
+          }),
+        });
+        state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+        state.inventorySourceDetail = null;
+        renderInventoryPanel();
+        await refreshSelectedInventorySourceDetail();
+        await refreshSelectedDeployTargetDetail();
+        const rollback = result && result.rollback && typeof result.rollback === "object"
+          ? result.rollback
+          : {};
+        alert(t("inventory_rollback_audit_retry_success", {
+          restored: Number(rollback.restored_source_total || 0) || 0,
+          notRestored: Number(rollback.not_restored_source_total || 0) || 0,
+          failed: Number(rollback.failure_count || 0) || 0,
+        }));
+        await loadRollbackAuditTrail({ silent: true });
+        renderInventoryPanel();
+        return result;
+      } finally {
+        state.inventoryRollbackAuditRetrying = false;
+        state.inventoryRollbackAuditRetryingRowIndex = -1;
         renderInventoryPanel();
       }
     }
@@ -12989,6 +13185,7 @@ ${escapeHtml(t("inventory_skill_meta_resolver"))}: ${escapeHtml(resolverPath)}
         || state.inventoryImprovingAllSkills
         || state.inventoryUpdatingAllAggregates
         || state.inventoryRollingBackInstallUnit
+        || state.inventoryRollbackAuditRetrying
         || state.inventoryRepairingInstallUnit
         || state.inventoryDeployingInstallUnit
         || state.inventorySyncAllRunning,
@@ -16028,6 +16225,22 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           await focusInventorySourceByInstallUnit(installUnitId, { silent: false });
         } catch (err) {
           alert(err && err.message ? err.message : t("inventory_install_atom_locate_error", { installUnit: installUnitId }));
+        }
+      });
+
+      $("inventoryRollbackAuditRows").addEventListener("click", async (evt) => {
+        const retryEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-rollback-retry-row-index]")
+          : null;
+        if (!retryEl || retryEl.disabled) return;
+        const rowIndex = Number(retryEl.getAttribute("data-inventory-rollback-retry-row-index"));
+        if (!Number.isFinite(rowIndex)) return;
+        try {
+          await retryInventoryRollbackAuditRow(rowIndex);
+        } catch (err) {
+          alert(t("inventory_rollback_audit_retry_error", {
+            msg: err && err.message ? err.message : String(err || "unknown error"),
+          }));
         }
       });
 

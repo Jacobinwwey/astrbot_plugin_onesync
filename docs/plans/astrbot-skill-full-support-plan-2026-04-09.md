@@ -394,6 +394,29 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - `pytest -q` -> passed
   - `python3 -m py_compile source_sync_core.py tests/test_source_sync_core.py` -> passed
 
+### 2026-04-13 / Step 12
+
+- 已补齐 rollback 审计记录的“可执行重试”闭环（后端 + 前端）：
+  - `main.py`：
+    - install-unit rollback 审计 payload 现追加：
+      - `failed_sources`
+      - `not_restored_source_ids`
+      - `retry_before_revisions`
+    - collection-group rollback 审计 payload 同步追加上述字段，并按 install-unit 结果聚合去重
+  - `webui/index.html`：
+    - 回滚审计轨迹新增失败原因摘要（reason:count）
+    - 每条可重试记录新增 `重试失败项 / Retry Failed` 按钮
+    - 重试直接复用审计中的 `retry_before_revisions` 调用 rollback API，不再要求用户重新粘贴 source_id
+    - 新增重试忙状态管理，避免与 update/sync/deploy 等聚合动作并发冲突
+  - `tests/test_webui_inventory_registry_hosts.py`：
+    - 新增回滚审计重试相关字符串、函数与 DOM hook 的静态断言
+- 本轮定向回归：
+  - `python3 -m py_compile main.py webui_server.py` -> passed
+  - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> passed
+  - `pytest -q tests/test_webui_server.py` -> passed
+  - `pytest -q tests/test_main_git_checkout_runtime.py` -> passed
+  - `pytest -q` -> passed
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

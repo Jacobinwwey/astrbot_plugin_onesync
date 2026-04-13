@@ -168,6 +168,16 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
 
 ## 8. 最近实现进展（2026-04-13）
 
+- rollback 审计链路已补齐“可执行重试”闭环：
+  - install-unit / collection-group rollback 的审计 payload 现会保存：
+    - `failed_sources`
+    - `not_restored_source_ids`
+    - `retry_before_revisions`
+  - 前端“回滚审计轨迹”面板已新增：
+    - 失败原因分组摘要（reason:count）
+    - 按审计记录一键“重试失败项”按钮（直接复用 `retry_before_revisions` 调 rollback API）
+  - 重试期间会与 update/sync/deploy 等聚合动作互斥，避免并发写路径冲突。
+
 - 已新增 Gitea / Forgejo repo metadata sync 适配：
   - 支持 `repo:codeberg.org/<owner>/<repo>#...` 这类无 schema 的 locator 自动归一化与 provider 推断
   - 支持 `managed_by=forgejo/gitea` 与 `sync_api_base` 的自建实例 API 调用

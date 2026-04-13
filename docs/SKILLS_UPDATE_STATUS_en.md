@@ -168,6 +168,16 @@ To call the feature "complete", the next implementation steps should be:
 
 ## 8. Recent Implementation Progress (2026-04-13)
 
+- Rollback audit now includes an executable retry loop:
+  - install-unit / collection-group rollback audit payloads now persist:
+    - `failed_sources`
+    - `not_restored_source_ids`
+    - `retry_before_revisions`
+  - The frontend Rollback Audit panel now adds:
+    - failure reason grouping (`reason:count`)
+    - per-record `Retry Failed` action that reuses `retry_before_revisions` directly against rollback APIs
+  - Retry execution is now mutually exclusive with aggregate update/sync/deploy flows to avoid concurrent mutation collisions.
+
 - Added Gitea/Forgejo repo metadata sync adapter support:
   - Supports schema-less locator normalization and provider inference for locators like `repo:codeberg.org/<owner>/<repo>#...`
   - Supports self-hosted Forgejo/Gitea API calls through `managed_by=forgejo|gitea` with optional `sync_api_base`

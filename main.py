@@ -6772,6 +6772,21 @@ class OneSyncPlugin(Star):
             source_rows=target_source_rows,
             before_rows=target_before_rows,
         )
+        retry_source_ids = _dedupe_keep_order(
+            _to_str_list(execution.get("not_restored_source_ids", []))
+            + [
+                _normalize_inventory_id(item.get("source_id", ""), default="")
+                for item in execution.get("failed_sources", [])
+                if isinstance(item, dict) and _normalize_inventory_id(item.get("source_id", ""), default="")
+            ],
+        )
+        retry_source_id_set = set(retry_source_ids)
+        retry_before_revisions = [
+            item
+            for item in target_before_rows
+            if isinstance(item, dict)
+            and _normalize_inventory_id(item.get("source_id", ""), default="") in retry_source_id_set
+        ]
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         await self._save_state()
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
@@ -6779,6 +6794,7 @@ class OneSyncPlugin(Star):
         rollback_summary = {
             **rollback_preview,
             **execution,
+            "retry_before_revisions": retry_before_revisions,
             "message": (
                 "install unit rollback finished: "
                 f"{execution.get('success_count', 0)} commands ok, "
@@ -6796,6 +6812,9 @@ class OneSyncPlugin(Star):
                 "failure_count": execution.get("failure_count", 0),
                 "restored_source_total": execution.get("restored_source_total", 0),
                 "not_restored_source_total": execution.get("not_restored_source_total", 0),
+                "failed_sources": execution.get("failed_sources", []),
+                "not_restored_source_ids": execution.get("not_restored_source_ids", []),
+                "retry_before_revisions": retry_before_revisions,
             },
         )
         self._push_debug_log(
@@ -6871,6 +6890,8 @@ class OneSyncPlugin(Star):
         rollback_preview_candidate_total = 0
         restored_source_total = 0
         not_restored_source_total = 0
+        all_not_restored_source_ids: list[str] = []
+        all_failed_sources: list[dict[str, Any]] = []
 
         for install_unit in install_unit_rows:
             install_unit_id = str(install_unit.get("install_unit_id") or "").strip()
@@ -6944,6 +6965,23 @@ class OneSyncPlugin(Star):
             rollback_preview_candidate_total += int(rollback_preview.get("candidate_total", 0))
             restored_source_total += int(execution.get("restored_source_total", 0))
             not_restored_source_total += int(execution.get("not_restored_source_total", 0))
+            all_not_restored_source_ids.extend(
+                _to_str_list(execution.get("not_restored_source_ids", [])),
+            )
+            for failed_source in execution.get("failed_sources", []):
+                if not isinstance(failed_source, dict):
+                    continue
+                failed_source_id = _normalize_inventory_id(failed_source.get("source_id", ""), default="")
+                if not failed_source_id:
+                    continue
+                all_failed_sources.append(
+                    {
+                        "install_unit_id": install_unit_id,
+                        "source_id": failed_source_id,
+                        "reason": str(failed_source.get("reason") or "").strip(),
+                        "message": str(failed_source.get("message") or "").strip(),
+                    },
+                )
             if unit_ok:
                 executed_install_unit_ids.append(install_unit_id)
             else:
@@ -6965,6 +7003,22 @@ class OneSyncPlugin(Star):
         await self._save_state()
         refreshed_skills_snapshot = self._skills_state().get("last_overview", {})
         normalized_collection_group_id = str(context.get("collection_group_id", "")).strip()
+        deduped_not_restored_source_ids = _dedupe_keep_order(all_not_restored_source_ids)
+        retry_source_ids = _dedupe_keep_order(
+            deduped_not_restored_source_ids
+            + [
+                _normalize_inventory_id(item.get("source_id", ""), default="")
+                for item in all_failed_sources
+                if _normalize_inventory_id(item.get("source_id", ""), default="")
+            ],
+        )
+        retry_source_id_set = set(retry_source_ids)
+        retry_before_revisions = [
+            item
+            for item in before_rows
+            if isinstance(item, dict)
+            and _normalize_inventory_id(item.get("source_id", ""), default="") in retry_source_id_set
+        ]
         rollback_summary = {
             "collection_group_id": normalized_collection_group_id,
             "install_unit_results": install_unit_results,
@@ -6977,6 +7031,9 @@ class OneSyncPlugin(Star):
             "rollback_preview_candidate_total": rollback_preview_candidate_total,
             "restored_source_total": restored_source_total,
             "not_restored_source_total": not_restored_source_total,
+            "not_restored_source_ids": deduped_not_restored_source_ids,
+            "failed_sources": all_failed_sources,
+            "retry_before_revisions": retry_before_revisions,
             "message": (
                 "collection group rollback finished: "
                 f"{success_count} commands ok, "
@@ -6995,6 +7052,9 @@ class OneSyncPlugin(Star):
                 "failure_count": failure_count,
                 "restored_source_total": restored_source_total,
                 "not_restored_source_total": not_restored_source_total,
+                "failed_sources": all_failed_sources,
+                "not_restored_source_ids": deduped_not_restored_source_ids,
+                "retry_before_revisions": retry_before_revisions,
             },
         )
         self._push_debug_log(
