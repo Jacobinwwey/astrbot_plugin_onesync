@@ -7,7 +7,7 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.2.1-2563eb" alt="version v0.2.1">
+  <img src="https://img.shields.io/badge/version-v0.2.2-2563eb" alt="version v0.2.2">
   <img src="https://img.shields.io/badge/AstrBot-%3E%3D4.16-16a34a" alt="AstrBot >=4.16">
   <img src="https://img.shields.io/badge/WebUI-127.0.0.1%3A8099-f59e0b" alt="WebUI 127.0.0.1:8099">
   <img src="https://img.shields.io/badge/Skills-aggregate--first-7c3aed" alt="aggregate-first skills">

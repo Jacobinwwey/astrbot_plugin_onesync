@@ -62,7 +62,7 @@ Recommendations:
 Run in the plugin repository:
 
 ```bash
-./scripts/release.sh v0.2.1
+./scripts/release.sh v0.2.2
 ```
 
 This script will:
@@ -74,7 +74,7 @@ This script will:
 ### 4.2 Local dry run (no push)
 
 ```bash
-NO_PUSH=1 ./scripts/release.sh v0.2.1
+NO_PUSH=1 ./scripts/release.sh v0.2.2
 ```
 
 ### 4.3 Versioning strategy
@@ -84,8 +84,8 @@ NO_PUSH=1 ./scripts/release.sh v0.2.1
 
 ### 4.4 Current repository baseline
 
-- `metadata.yaml` version: `v0.2.1`
-- Embedded WebUI OpenAPI version: `0.2.1`
+- `metadata.yaml` version: `v0.2.2`
+- Embedded WebUI OpenAPI version: `0.2.2`
 - Current full regression baseline: `pytest -q -> 191 passed`
 
 ## 5. Code Sync Workflow (Local -> GitHub)

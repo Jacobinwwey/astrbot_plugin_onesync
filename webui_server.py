@@ -48,7 +48,7 @@ class OneSyncWebUIServer:
         self.app = FastAPI(
             title="OneSync WebUI",
             description="OneSync software updater dashboard",
-            version="0.2.1",
+            version="0.2.2",
         )
         self.app.add_middleware(
             CORSMiddleware,

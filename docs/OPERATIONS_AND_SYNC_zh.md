@@ -64,7 +64,7 @@
 在插件仓库目录执行：
 
 ```bash
-./scripts/release.sh v0.2.1
+./scripts/release.sh v0.2.2
 ```
 
 该脚本会自动：
@@ -76,7 +76,7 @@
 ### 4.2 本地演练（不推送）
 
 ```bash
-NO_PUSH=1 ./scripts/release.sh v0.2.1
+NO_PUSH=1 ./scripts/release.sh v0.2.2
 ```
 
 ### 4.3 版本策略建议
@@ -86,8 +86,8 @@ NO_PUSH=1 ./scripts/release.sh v0.2.1
 
 ### 4.4 当前仓库基线
 
-- `metadata.yaml` 当前版本：`v0.2.1`
-- 内置 WebUI OpenAPI 版本：`0.2.1`
+- `metadata.yaml` 当前版本：`v0.2.2`
+- 内置 WebUI OpenAPI 版本：`0.2.2`
 - 当前完整回归基线：`pytest -q -> 191 passed`
 
 ## 5. 代码同步流程（本地 -> GitHub）

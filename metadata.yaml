@@ -1,7 +1,7 @@
 name: astrbot_plugin_onesync
 display_name: OneSync
 desc: Extensible periodic software updater with retries, state persistence, and mirror fallback.
-version: v0.2.1
+version: v0.2.2
 author: Jacobinwwey
 repo: https://github.com/Jacobinwwey/astrbot_plugin_onesync
 astrbot_version: ">=4.16"

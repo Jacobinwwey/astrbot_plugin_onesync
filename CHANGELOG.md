@@ -6,6 +6,19 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.2.2] - 2026-04-13
+
+### Added
+- Added dedicated bilingual developer and API reference docs so user onboarding, extension work, and interface lookup are no longer mixed into one long homepage.
+
+### Changed
+- Reframed both README files as user-facing landing pages that foreground core capabilities, deployment fit, quick start flow, WebUI highlights, and skills-management design.
+- Tightened the docs boundary between install/config, operations, developer extension, and API reference so operators can find the right guidance faster.
+
+### Fixed
+- The Skills inventory `结构与成员` panel now defaults to collapsed, which reduces first-screen noise for operators who only need the primary management actions.
+- Added a static regression test to keep the inventory source-structure panel from silently reverting to open-by-default.
+
 ## [v0.2.1] - 2026-04-13
 
 ### Added
