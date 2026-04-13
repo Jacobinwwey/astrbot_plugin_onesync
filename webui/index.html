@@ -6931,6 +6931,9 @@
         if (typeof parsed.inventoryInstallAtomRefreshStrategy === "string") {
           state.inventoryInstallAtomRefreshStrategy = normalizeInventoryInstallAtomRefreshStrategy(parsed.inventoryInstallAtomRefreshStrategy);
         }
+        if (typeof parsed.inventoryAstrbotSelectedWorkspaceId === "string") {
+          state.inventoryAstrbotSelectedWorkspaceId = String(parsed.inventoryAstrbotSelectedWorkspaceId || "").trim().toLowerCase();
+        }
       } catch (_err) {}
       document.body.dataset.theme = state.themes[state.themeIndex];
       document.body.dataset.density = state.density;
@@ -6965,6 +6968,7 @@
         inventorySourceHeroSectionOpen: normalizeInventorySourceHeroSectionState(state.inventorySourceHeroSectionOpen),
         inventoryInstallAtomFilter: normalizeInventoryInstallAtomFilter(state.inventoryInstallAtomFilter),
         inventoryInstallAtomRefreshStrategy: normalizeInventoryInstallAtomRefreshStrategy(state.inventoryInstallAtomRefreshStrategy),
+        inventoryAstrbotSelectedWorkspaceId: String(state.inventoryAstrbotSelectedWorkspaceId || "").trim().toLowerCase(),
       };
       try {
         localStorage.setItem("onesync:webui:prefs", JSON.stringify(payload));
@@ -11666,6 +11670,7 @@
         state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
         state.inventorySourceDetail = null;
         state.inventoryAstrbotSelectedWorkspaceId = resolvedWorkspaceId;
+        persistPreferences();
         if (workspaceInputEl) {
           workspaceInputEl.value = resolvedWorkspaceId;
         }
@@ -16653,6 +16658,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       $("inventoryAstrbotWorkspaceSelect").addEventListener("change", (evt) => {
         const workspaceId = evt && evt.target ? String(evt.target.value || "").trim().toLowerCase() : "";
         state.inventoryAstrbotSelectedWorkspaceId = workspaceId;
+        persistPreferences();
         const workspaceIdInputEl = $("inventoryAstrbotWorkspaceIdInput");
         if (workspaceIdInputEl && !String(workspaceIdInputEl.value || "").trim()) {
           workspaceIdInputEl.value = workspaceId;
