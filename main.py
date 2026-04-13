@@ -312,6 +312,30 @@ def _normalize_astrbot_workspace_id(value: Any) -> str:
     return _normalize_inventory_id(value, default="")
 
 
+def _normalize_astrbot_workspace_selection_map(value: Any) -> dict[str, str]:
+    parsed: dict[str, Any] = {}
+    if isinstance(value, dict):
+        parsed = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if text:
+            try:
+                raw = json.loads(text)
+                if isinstance(raw, dict):
+                    parsed = raw
+            except Exception:
+                parsed = {}
+
+    normalized: dict[str, str] = {}
+    for host_id, workspace_id in parsed.items():
+        normalized_host_id = _normalize_inventory_id(host_id, default="")
+        normalized_workspace_id = _normalize_astrbot_workspace_id(workspace_id)
+        if not normalized_host_id or not normalized_workspace_id:
+            continue
+        normalized[normalized_host_id] = normalized_workspace_id
+    return normalized
+
+
 def _normalize_update_manager(value: Any) -> str:
     manager = str(value or "").strip().lower()
     if manager in {"pnpm dlx"}:
@@ -785,13 +809,170 @@ class OneSyncPlugin(Star):
         return entry
 
     def _persist_plugin_config(self) -> None:
-        cfg_obj = self._config_obj
+        cfg_obj = getattr(self, "_config_obj", None)
         if cfg_obj is None:
             return
         try:
             cfg_obj.save_config(replace_config=dict(self.config))
         except Exception as exc:
             logger.warning("[onesync] persist plugin config failed: %s", exc)
+
+    def _get_astrbot_workspace_selection_map(self) -> dict[str, str]:
+        config = getattr(self, "config", None)
+        raw_value: Any = {}
+        if config is not None and hasattr(config, "get"):
+            try:
+                raw_value = config.get("astrbot_workspace_selections", {})
+            except Exception:
+                raw_value = {}
+        return _normalize_astrbot_workspace_selection_map(
+            raw_value,
+        )
+
+    def _get_persisted_astrbot_workspace_id(self, host_id: Any) -> str:
+        normalized_host_id = _normalize_inventory_id(host_id, default="")
+        if not normalized_host_id:
+            return ""
+        selection_map = self._get_astrbot_workspace_selection_map()
+        return _normalize_astrbot_workspace_id(selection_map.get(normalized_host_id))
+
+    def _set_persisted_astrbot_workspace_id(
+        self,
+        host_id: Any,
+        workspace_id: Any,
+    ) -> dict[str, str]:
+        normalized_host_id = _normalize_inventory_id(host_id, default="")
+        if not normalized_host_id:
+            return self._get_astrbot_workspace_selection_map()
+        normalized_workspace_id = _normalize_astrbot_workspace_id(workspace_id)
+        selection_map = self._get_astrbot_workspace_selection_map()
+        if normalized_workspace_id:
+            selection_map[normalized_host_id] = normalized_workspace_id
+        else:
+            selection_map.pop(normalized_host_id, None)
+        config = getattr(self, "config", None)
+        if config is None:
+            self.config = {}
+            config = self.config
+        try:
+            config["astrbot_workspace_selections"] = selection_map
+        except Exception:
+            if not isinstance(config, dict):
+                self.config = {}
+                config = self.config
+            config["astrbot_workspace_selections"] = selection_map
+        self._persist_plugin_config()
+        return selection_map
+
+    @staticmethod
+    def _workspace_profile_ids(workspace_profiles: list[dict[str, Any]] | None) -> set[str]:
+        profile_ids: set[str] = set()
+        for profile in workspace_profiles or []:
+            if not isinstance(profile, dict):
+                continue
+            workspace_id = _normalize_astrbot_workspace_id(profile.get("workspace_id"))
+            if workspace_id:
+                profile_ids.add(workspace_id)
+        return profile_ids
+
+    def _resolve_effective_astrbot_workspace_id(
+        self,
+        host_id: Any,
+        *,
+        workspace_profiles: list[dict[str, Any]] | None = None,
+        layout_selected_workspace_id: Any = None,
+        runtime_selected_workspace_id: Any = None,
+    ) -> str:
+        available_profile_ids = self._workspace_profile_ids(workspace_profiles)
+        persisted_workspace_id = self._get_persisted_astrbot_workspace_id(host_id)
+        if persisted_workspace_id and (
+            not available_profile_ids or persisted_workspace_id in available_profile_ids
+        ):
+            return persisted_workspace_id
+
+        layout_selected = _normalize_astrbot_workspace_id(layout_selected_workspace_id)
+        if layout_selected and (
+            not available_profile_ids or layout_selected in available_profile_ids
+        ):
+            return layout_selected
+
+        runtime_selected = _normalize_astrbot_workspace_id(runtime_selected_workspace_id)
+        if runtime_selected and (
+            not available_profile_ids or runtime_selected in available_profile_ids
+        ):
+            return runtime_selected
+        return ""
+
+    def _apply_astrbot_workspace_selection_overrides(
+        self,
+        snapshot: dict[str, Any],
+    ) -> None:
+        if not isinstance(snapshot, dict):
+            return
+        host_rows = snapshot.get("host_rows", [])
+        if not isinstance(host_rows, list):
+            return
+
+        for host in host_rows:
+            if not isinstance(host, dict):
+                continue
+            host_id = str(host.get("host_id") or host.get("id") or "").strip()
+            provider_key = _normalize_inventory_id(host.get("provider_key"), default="")
+            runtime_state_backend = _normalize_inventory_id(
+                host.get("runtime_state_backend"),
+                default="",
+            )
+            if provider_key != "astrbot" and runtime_state_backend != "astrbot":
+                continue
+
+            runtime_summary = (
+                host.get("runtime_state_summary", {})
+                if isinstance(host.get("runtime_state_summary", {}), dict)
+                else {}
+            )
+            workspace_profiles: list[dict[str, Any]] = []
+            workspace_summaries = (
+                runtime_summary.get("workspace_summaries", {})
+                if isinstance(runtime_summary.get("workspace_summaries", {}), dict)
+                else {}
+            )
+            for workspace_id, workspace_summary in workspace_summaries.items():
+                if not isinstance(workspace_summary, dict):
+                    continue
+                workspace_profiles.append(
+                    {
+                        "workspace_id": str(workspace_summary.get("workspace_id") or workspace_id or "").strip(),
+                    },
+                )
+
+            effective_workspace_id = self._resolve_effective_astrbot_workspace_id(
+                host_id,
+                workspace_profiles=workspace_profiles,
+                runtime_selected_workspace_id=runtime_summary.get("selected_workspace_id"),
+            )
+            host["selected_workspace_id"] = effective_workspace_id
+            if runtime_summary:
+                runtime_summary["selected_workspace_id"] = effective_workspace_id
+                host["runtime_state_summary"] = runtime_summary
+
+        software_hosts = snapshot.get("software_hosts", [])
+        if isinstance(software_hosts, list):
+            host_index = {
+                str(item.get("host_id") or item.get("id") or "").strip(): item
+                for item in host_rows
+                if isinstance(item, dict)
+            }
+            for software_host in software_hosts:
+                if not isinstance(software_host, dict):
+                    continue
+                host_id = str(software_host.get("host_id") or software_host.get("id") or "").strip()
+                if not host_id:
+                    continue
+                host_row = host_index.get(host_id, {})
+                if not isinstance(host_row, dict):
+                    continue
+                if "selected_workspace_id" in host_row:
+                    software_host["selected_workspace_id"] = host_row["selected_workspace_id"]
 
     def _bootstrap_human_targets_if_needed(self) -> None:
         mode = str(self.config.get("target_config_mode", "human")).strip().lower()
@@ -2520,6 +2701,9 @@ class OneSyncPlugin(Star):
                 "compatibility": {},
             }
 
+        if isinstance(skills_snapshot, dict) and skills_snapshot:
+            self._apply_astrbot_workspace_selection_overrides(skills_snapshot)
+
         skills_state = self._skills_state()
         skills_state["last_overview"] = skills_snapshot
         skills_state["last_synced_at"] = skills_snapshot.get("generated_at", _now_iso())
@@ -2603,6 +2787,7 @@ class OneSyncPlugin(Star):
             snapshot = skills_state.get("last_overview", {})
         if isinstance(snapshot, dict) and snapshot:
             self._augment_skills_runtime_health(snapshot)
+            self._apply_astrbot_workspace_selection_overrides(snapshot)
             skills_state["last_overview"] = snapshot
         return snapshot if isinstance(snapshot, dict) else {}
 
@@ -3767,7 +3952,6 @@ class OneSyncPlugin(Star):
             default=_normalize_astrbot_scope(layout.get("selected_scope"), default="global"),
         )
         requested_workspace_id = _normalize_astrbot_workspace_id(workspace_id)
-        selected_workspace_id = _normalize_astrbot_workspace_id(layout.get("selected_workspace_id"))
         workspace_profiles = (
             list(layout.get("workspace_profiles", []))
             if isinstance(layout.get("workspace_profiles", []), list)
@@ -3783,6 +3967,11 @@ class OneSyncPlugin(Star):
                 continue
             workspace_profile_by_id[profile_workspace_id] = profile
             available_workspace_ids.append(profile_workspace_id)
+        selected_workspace_id = self._resolve_effective_astrbot_workspace_id(
+            normalized_host_id,
+            workspace_profiles=workspace_profiles,
+            layout_selected_workspace_id=layout.get("selected_workspace_id"),
+        )
 
         scoped_layouts = (
             layout.get("scoped_layouts", {})
@@ -3951,11 +4140,17 @@ class OneSyncPlugin(Star):
             else {}
         )
         snapshot = context.get("snapshot", {}) if isinstance(context.get("snapshot"), dict) else {}
-        selected_workspace_id = str(
-            layout.get("selected_workspace_id")
-            or runtime_summary.get("selected_workspace_id")
-            or "",
-        ).strip()
+        workspace_profiles = (
+            list(layout.get("workspace_profiles", []))
+            if isinstance(layout.get("workspace_profiles", []), list)
+            else []
+        )
+        selected_workspace_id = self._resolve_effective_astrbot_workspace_id(
+            str(layout.get("host_id") or host_id or "").strip(),
+            workspace_profiles=workspace_profiles,
+            layout_selected_workspace_id=layout.get("selected_workspace_id"),
+            runtime_selected_workspace_id=runtime_summary.get("selected_workspace_id"),
+        )
         return {
             "ok": True,
             "generated_at": snapshot.get("generated_at"),
@@ -3972,11 +4167,7 @@ class OneSyncPlugin(Star):
                 "skills_config_path": str(layout.get("skills_config_path") or "").strip(),
                 "sandbox_cache_path": str(layout.get("sandbox_cache_path") or "").strip(),
                 "neo_map_path": str(layout.get("neo_map_path") or "").strip(),
-                "workspace_profiles": (
-                    list(layout.get("workspace_profiles", []))
-                    if isinstance(layout.get("workspace_profiles", []), list)
-                    else []
-                ),
+                "workspace_profiles": workspace_profiles,
                 "scoped_layouts": layout.get("scoped_layouts", {}) if isinstance(layout.get("scoped_layouts", {}), dict) else {},
             },
             "warnings": snapshot.get("warnings", []),
@@ -4008,11 +4199,12 @@ class OneSyncPlugin(Star):
             if isinstance(runtime_summary.get("workspace_summaries"), dict)
             else {}
         )
-        selected_workspace_id = str(
-            layout.get("selected_workspace_id")
-            or runtime_summary.get("selected_workspace_id")
-            or "",
-        ).strip()
+        selected_workspace_id = self._resolve_effective_astrbot_workspace_id(
+            str(layout.get("host_id") or host_id or "").strip(),
+            workspace_profiles=workspace_profiles,
+            layout_selected_workspace_id=layout.get("selected_workspace_id"),
+            runtime_selected_workspace_id=runtime_summary.get("selected_workspace_id"),
+        )
         items: list[dict[str, Any]] = []
         for profile in workspace_profiles:
             if not isinstance(profile, dict):
@@ -4049,6 +4241,91 @@ class OneSyncPlugin(Star):
             },
             "warnings": snapshot.get("warnings", []),
         }
+
+    def webui_select_astrbot_workspace(
+        self,
+        host_id: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action_payload = payload if isinstance(payload, dict) else {}
+        requested_workspace_id = _normalize_astrbot_workspace_id(
+            action_payload.get("workspace_id")
+            or action_payload.get("workspaceId")
+            or action_payload.get("workspace")
+        )
+        context = self._resolve_astrbot_host_action_context(host_id)
+        if not context.get("ok"):
+            return context
+
+        normalized_host_id = str(context.get("host_id") or "").strip()
+        layout = context.get("layout", {}) if isinstance(context.get("layout"), dict) else {}
+        workspace_profiles = (
+            list(layout.get("workspace_profiles", []))
+            if isinstance(layout.get("workspace_profiles", []), list)
+            else []
+        )
+        workspace_profile_by_id: dict[str, dict[str, Any]] = {}
+        available_workspace_ids: list[str] = []
+        for profile in workspace_profiles:
+            if not isinstance(profile, dict):
+                continue
+            profile_workspace_id = _normalize_astrbot_workspace_id(profile.get("workspace_id"))
+            if not profile_workspace_id or profile_workspace_id in workspace_profile_by_id:
+                continue
+            workspace_profile_by_id[profile_workspace_id] = profile
+            available_workspace_ids.append(profile_workspace_id)
+
+        if requested_workspace_id and requested_workspace_id not in workspace_profile_by_id:
+            return {
+                "ok": False,
+                "message": (
+                    "astrbot workspace not found for "
+                    f"host={normalized_host_id} workspace_id={requested_workspace_id}"
+                ),
+                "reason_code": "workspace_not_found",
+                "workspace_id": requested_workspace_id,
+                "available_workspace_ids": available_workspace_ids,
+            }
+
+        self._set_persisted_astrbot_workspace_id(normalized_host_id, requested_workspace_id)
+        selected_profile = workspace_profile_by_id.get(requested_workspace_id, {}) if requested_workspace_id else {}
+        selected_workspace_root = str(selected_profile.get("workspace_root") or "").strip()
+        selected_skills_root = str(selected_profile.get("skills_root") or "").strip()
+
+        self._append_skills_audit_event(
+            "astrbot_workspace_select",
+            source_id=normalized_host_id,
+            payload={
+                "workspace_id": requested_workspace_id,
+                "workspace_root": selected_workspace_root,
+                "skills_root": selected_skills_root,
+            },
+        )
+        self._push_debug_log(
+            "info",
+            (
+                "astrbot workspace selection updated: "
+                f"host={normalized_host_id} "
+                f"workspace={requested_workspace_id or '-'}"
+            ),
+            source="webui",
+        )
+
+        inventory_snapshot = self.webui_get_inventory_payload()
+        skills_snapshot = self.webui_get_skills_payload()
+        return self._build_astrbot_host_mutation_response(
+            normalized_host_id,
+            inventory_snapshot=inventory_snapshot,
+            skills_snapshot=skills_snapshot if isinstance(skills_snapshot, dict) else {},
+            extra={
+                "action": "select_workspace",
+                "scope": "workspace",
+                "workspace_id": requested_workspace_id,
+                "workspace_root": selected_workspace_root,
+                "skills_root": selected_skills_root,
+                "available_workspace_ids": available_workspace_ids,
+            },
+        )
 
     def webui_init_astrbot_workspace(
         self,
@@ -4204,6 +4481,7 @@ class OneSyncPlugin(Star):
             "workspace_root_source": workspace_root_source,
         }
 
+        self._set_persisted_astrbot_workspace_id(normalized_host_id, requested_workspace_id)
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         skills_snapshot = self._skills_state().get("last_overview", {})
 

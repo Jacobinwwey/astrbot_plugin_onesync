@@ -1747,3 +1747,143 @@ class OneSyncPluginAstrbotWorkspaceInitTests(unittest.TestCase):
             )
             self.assertFalse(result["ok"])
             self.assertEqual("workspace_root_out_of_bounds", result["reason_code"])
+
+
+class OneSyncPluginAstrbotWorkspaceSelectionTests(unittest.TestCase):
+    def test_resolve_astrbot_host_action_context_prefers_persisted_workspace_selection(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.config = {"astrbot_workspace_selections": {"astrbot": "session_alpha"}}
+        plugin._config_obj = None
+        plugin._augment_skills_runtime_health = lambda *_args, **_kwargs: None
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            global_skills_root = tmp_path / "astrbot" / "data" / "skills"
+            workspace_skills_root = tmp_path / "astrbot" / "data" / "workspaces" / "session-alpha" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+            workspace_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host_row = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "runtime_state_backend": "astrbot",
+                "target_paths": {
+                    "global": str(global_skills_root),
+                    "workspace": "",
+                },
+                "resolved_skill_roots": [str(global_skills_root)],
+                "declared_skill_roots": [str(global_skills_root), str(workspace_skills_root)],
+                "runtime_state_summary": {
+                    "workspace_summaries": {
+                        "session_alpha": {
+                            "workspace_id": "session_alpha",
+                        },
+                    },
+                    "selected_workspace_id": "",
+                },
+            }
+            skills_snapshot = {
+                "ok": True,
+                "generated_at": "2026-04-13T00:00:00+00:00",
+                "host_rows": [host_row],
+                "software_hosts": [dict(host_row)],
+                "astrbot_state_by_host": {"astrbot": {"summary": {}}},
+                "warnings": [],
+                "doctor": {"ok": True, "warnings": [], "warning_count": 0},
+                "counts": {},
+            }
+            plugin.state = {
+                "inventory": {"last_snapshot": {"ok": True, "generated_at": "2026-04-13T00:00:00+00:00"}},
+                "skills": {"last_overview": skills_snapshot},
+            }
+            plugin._inventory_state = lambda: plugin.state["inventory"]
+            plugin._skills_state = lambda: plugin.state["skills"]
+
+            context = OneSyncPlugin._resolve_astrbot_host_action_context(
+                plugin,
+                "astrbot",
+                "workspace",
+                "",
+                require_workspace=False,
+            )
+
+            self.assertTrue(context["ok"])
+            self.assertEqual("session_alpha", context["workspace_id"])
+
+    def test_webui_select_astrbot_workspace_persists_selection_and_supports_reset(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        plugin.config = {}
+        plugin._config_obj = None
+        plugin._augment_skills_runtime_health = lambda *_args, **_kwargs: None
+        plugin._append_skills_audit_event = lambda *_args, **_kwargs: "audit-demo"
+        plugin._push_debug_log = lambda *_args, **_kwargs: None
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            global_skills_root = tmp_path / "astrbot" / "data" / "skills"
+            workspace_skills_root = tmp_path / "astrbot" / "data" / "workspaces" / "session-alpha" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+            workspace_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host_row = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "runtime_state_backend": "astrbot",
+                "target_paths": {
+                    "global": str(global_skills_root),
+                    "workspace": "",
+                },
+                "resolved_skill_roots": [str(global_skills_root)],
+                "declared_skill_roots": [str(global_skills_root), str(workspace_skills_root)],
+                "runtime_state_summary": {
+                    "workspace_summaries": {
+                        "session_alpha": {
+                            "workspace_id": "session_alpha",
+                            "workspace_root": str(workspace_skills_root.parent),
+                            "skills_root": str(workspace_skills_root),
+                        },
+                    },
+                    "selected_workspace_id": "",
+                },
+            }
+            skills_snapshot = {
+                "ok": True,
+                "generated_at": "2026-04-13T00:00:00+00:00",
+                "host_rows": [host_row],
+                "software_hosts": [dict(host_row)],
+                "astrbot_state_by_host": {"astrbot": {"summary": {}}},
+                "warnings": [],
+                "doctor": {"ok": True, "warnings": [], "warning_count": 0},
+                "counts": {},
+            }
+            inventory_snapshot = {"ok": True, "generated_at": "2026-04-13T00:00:00+00:00"}
+            plugin.state = {
+                "inventory": {"last_snapshot": inventory_snapshot},
+                "skills": {"last_overview": skills_snapshot},
+            }
+            plugin._inventory_state = lambda: plugin.state["inventory"]
+            plugin._skills_state = lambda: plugin.state["skills"]
+
+            select_result = OneSyncPlugin.webui_select_astrbot_workspace(
+                plugin,
+                "astrbot",
+                {"workspace_id": "session-alpha"},
+            )
+            self.assertTrue(select_result["ok"])
+            self.assertEqual("select_workspace", select_result["action"])
+            self.assertEqual("session_alpha", select_result["workspace_id"])
+            self.assertEqual(
+                {"astrbot": "session_alpha"},
+                plugin.config.get("astrbot_workspace_selections"),
+            )
+
+            reset_result = OneSyncPlugin.webui_select_astrbot_workspace(
+                plugin,
+                "astrbot",
+                {"workspace_id": ""},
+            )
+            self.assertTrue(reset_result["ok"])
+            self.assertEqual("", reset_result["workspace_id"])
+            self.assertEqual({}, plugin.config.get("astrbot_workspace_selections"))

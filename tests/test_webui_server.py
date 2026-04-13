@@ -227,6 +227,7 @@ class _FakePlugin:
         self.last_astrbot_import_payload = None
         self.last_astrbot_export_payload = None
         self.last_astrbot_workspace_init_payload = None
+        self.last_astrbot_workspace_select_payload = None
         self.last_astrbot_neo_sync_payload = None
         self.last_astrbot_neo_promote_payload = None
         self.last_astrbot_neo_rollback_payload = None
@@ -1237,6 +1238,35 @@ class _FakePlugin:
             "warnings": [],
         }
 
+    def webui_select_astrbot_workspace(self, host_id: str, payload: dict | None = None) -> dict:
+        action_payload = payload if isinstance(payload, dict) else {}
+        self.last_astrbot_workspace_select_payload = {"host_id": host_id, "payload": action_payload}
+        if host_id != "astrbot":
+            return {"ok": False, "message": "host_id not found"}
+        workspace_id = str(action_payload.get("workspace_id") or "").strip().lower()
+        if workspace_id and workspace_id != "session_alpha":
+            return {
+                "ok": False,
+                "message": f"workspace not found: {workspace_id}",
+                "reason_code": "workspace_not_found",
+            }
+        workspace_root = (
+            "/tmp/workspace-astrbot/data/workspaces/session-alpha"
+            if workspace_id
+            else ""
+        )
+        return {
+            "ok": True,
+            "action": "select_workspace",
+            "scope": "workspace",
+            "workspace_id": workspace_id,
+            "workspace_root": workspace_root,
+            "skills_root": f"{workspace_root}/skills" if workspace_root else "",
+            "available_workspace_ids": ["session_alpha"],
+            "skills": self.skills_snapshot,
+            "inventory": self.inventory_snapshot,
+        }
+
     def webui_init_astrbot_workspace(self, host_id: str, payload: dict | None = None) -> dict:
         action_payload = payload if isinstance(payload, dict) else {}
         self.last_astrbot_workspace_init_payload = {"host_id": host_id, "payload": action_payload}
@@ -1875,6 +1905,35 @@ class WebUIServerTests(unittest.TestCase):
             astrbot_workspaces_resp.json()["items"][0]["workspace_root"],
         )
 
+        astrbot_workspace_select_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/workspaces/select",
+            json={"workspace_id": "session_alpha"},
+        )
+        self.assertEqual(200, astrbot_workspace_select_resp.status_code)
+        self.assertTrue(astrbot_workspace_select_resp.json()["ok"])
+        self.assertEqual("select_workspace", astrbot_workspace_select_resp.json()["action"])
+        self.assertEqual("session_alpha", astrbot_workspace_select_resp.json()["workspace_id"])
+        self.assertEqual(
+            "session_alpha",
+            self.plugin.last_astrbot_workspace_select_payload["payload"]["workspace_id"],
+        )
+
+        astrbot_workspace_select_reset_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/workspaces/select",
+            json={"workspace_id": ""},
+        )
+        self.assertEqual(200, astrbot_workspace_select_reset_resp.status_code)
+        self.assertTrue(astrbot_workspace_select_reset_resp.json()["ok"])
+        self.assertEqual("", astrbot_workspace_select_reset_resp.json()["workspace_id"])
+
+        astrbot_workspace_select_bad_resp = self.client.post(
+            "/api/skills/hosts/astrbot/astrbot/workspaces/select",
+            json={"workspace_id": "missing"},
+        )
+        self.assertEqual(404, astrbot_workspace_select_bad_resp.status_code)
+        self.assertFalse(astrbot_workspace_select_bad_resp.json()["ok"])
+        self.assertEqual("workspace_not_found", astrbot_workspace_select_bad_resp.json()["reason_code"])
+
         astrbot_workspace_init_resp = self.client.post(
             "/api/skills/hosts/astrbot/astrbot/workspaces/init",
             json={"workspace_id": "session_beta"},
@@ -1917,6 +1976,13 @@ class WebUIServerTests(unittest.TestCase):
         missing_astrbot_workspaces_resp = self.client.get("/api/skills/hosts/missing/astrbot/workspaces")
         self.assertEqual(404, missing_astrbot_workspaces_resp.status_code)
         self.assertFalse(missing_astrbot_workspaces_resp.json()["ok"])
+
+        missing_astrbot_workspace_select_resp = self.client.post(
+            "/api/skills/hosts/missing/astrbot/workspaces/select",
+            json={"workspace_id": "session_beta"},
+        )
+        self.assertEqual(404, missing_astrbot_workspace_select_resp.status_code)
+        self.assertFalse(missing_astrbot_workspace_select_resp.json()["ok"])
 
         missing_astrbot_workspace_init_resp = self.client.post(
             "/api/skills/hosts/missing/astrbot/workspaces/init",

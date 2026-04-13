@@ -9400,7 +9400,11 @@
       const workspaceIds = Object.keys(workspaceSummaries)
         .map((item) => normalizeWorkspaceId(item))
         .filter(Boolean);
+      const runtimeSelectedWorkspaceId = normalizeWorkspaceId(runtimeSummary.selected_workspace_id);
       let workspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
+      if (!workspaceId && runtimeSelectedWorkspaceId && workspaceIds.includes(runtimeSelectedWorkspaceId)) {
+        workspaceId = runtimeSelectedWorkspaceId;
+      }
       if (workspaceId && !workspaceIds.includes(workspaceId)) {
         workspaceId = "";
       }
@@ -11644,6 +11648,35 @@
       noteEl.textContent = view.note;
       rowsEl.innerHTML = view.html;
       return view.payload;
+    }
+
+    async function selectPersistedAstrbotWorkspace(workspaceId, { quiet = false } = {}) {
+      const context = getSelectedAstrbotHostActionContext();
+      if (!context || !context.hostId) {
+        return null;
+      }
+      const normalizedWorkspaceId = String(workspaceId || "").trim().toLowerCase();
+      const result = await api(`/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/workspaces/select`, {
+        method: "POST",
+        body: JSON.stringify({
+          workspace_id: normalizedWorkspaceId,
+        }),
+      });
+      const resolvedWorkspaceId = String(result.workspace_id || "").trim().toLowerCase();
+      const resolvedWorkspaceRoot = String(result.workspace_root || "").trim();
+      state.inventoryOverview = result.skills || result.inventory || state.inventoryOverview;
+      state.inventorySourceDetail = null;
+      state.inventoryAstrbotSelectedWorkspaceId = resolvedWorkspaceId;
+      persistPreferences();
+      if (!quiet) {
+        state.inventoryAstrbotLastActionNote = resolvedWorkspaceId
+          ? `${t("inventory_astrbot_workspace_label")}: ${resolvedWorkspaceId}${resolvedWorkspaceRoot ? ` · ${resolvedWorkspaceRoot}` : ""}`
+          : `${t("inventory_astrbot_workspace_label")}: ${t("inventory_astrbot_workspace_auto")}`;
+      }
+      renderInventoryPanel();
+      await refreshSelectedInventorySourceDetail();
+      await refreshSelectedDeployTargetDetail();
+      return result;
     }
 
     async function initSelectedAstrbotWorkspace() {
@@ -13924,7 +13957,17 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const typedWorkspaceRoot = String(
         astrbotWorkspaceRootInputEl && astrbotWorkspaceRootInputEl.value || "",
       ).trim();
+      const runtimeSelectedWorkspaceId = normalizeWorkspaceId(
+        selectedHostRuntimeSummary && selectedHostRuntimeSummary.selected_workspace_id,
+      );
       let effectiveAstrbotWorkspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
+      if (
+        !effectiveAstrbotWorkspaceId
+        && runtimeSelectedWorkspaceId
+        && astrbotWorkspaceOptions.some((item) => item.id === runtimeSelectedWorkspaceId)
+      ) {
+        effectiveAstrbotWorkspaceId = runtimeSelectedWorkspaceId;
+      }
       if (
         effectiveAstrbotWorkspaceId
         && !astrbotWorkspaceOptions.some((item) => item.id === effectiveAstrbotWorkspaceId)
@@ -16700,7 +16743,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         }
       });
 
-      $("inventoryAstrbotWorkspaceSelect").addEventListener("change", (evt) => {
+      $("inventoryAstrbotWorkspaceSelect").addEventListener("change", async (evt) => {
         const workspaceId = evt && evt.target ? String(evt.target.value || "").trim().toLowerCase() : "";
         state.inventoryAstrbotSelectedWorkspaceId = workspaceId;
         persistPreferences();
@@ -16717,6 +16760,13 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           workspaceRootInputEl.value = workspaceRoot;
         }
         renderInventoryPanel();
+        try {
+          await selectPersistedAstrbotWorkspace(workspaceId, { quiet: false });
+        } catch (err) {
+          state.inventoryAstrbotLastActionNote = String(err && err.message || "").trim();
+          renderInventoryPanel();
+          alert(t("inventory_astrbot_init_error", { msg: err.message }));
+        }
       });
 
       $("inventoryAstrbotWorkspaceIdInput").addEventListener("change", (evt) => {
