@@ -1285,3 +1285,68 @@ class OneSyncPluginAstrbotNeoDetailTests(unittest.TestCase):
             {"skill_key": "demo.skill", "limit": 5, "offset": 0},
             fake_skills_api.last_candidate_kwargs,
         )
+
+
+class OneSyncPluginSkillsAuditTests(unittest.TestCase):
+    def test_append_skills_audit_event_generates_event_id(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            plugin.skills_state_dir = tmp_path / "state"
+            plugin.skills_audit_path = plugin.skills_state_dir / "audit.log.jsonl"
+
+            event_id = OneSyncPlugin._append_skills_audit_event(
+                plugin,
+                "install_unit_rollback",
+                source_id="install:skill_cli",
+                payload={
+                    "request_source": "audit_retry",
+                    "retry_of_event_id": "audit_prev",
+                },
+            )
+
+            self.assertTrue(event_id.startswith("audit_"))
+            payload = OneSyncPlugin.webui_get_skills_audit_payload(
+                plugin,
+                limit=20,
+                action="rollback",
+            )
+            self.assertTrue(payload["ok"])
+            self.assertEqual(1, payload["counts"]["total"])
+            self.assertEqual(event_id, payload["items"][0]["event_id"])
+            self.assertEqual("install_unit_rollback", payload["items"][0]["action"])
+            self.assertEqual("install:skill_cli", payload["items"][0]["source_id"])
+            self.assertEqual(
+                "audit_retry",
+                payload["items"][0]["payload"]["request_source"],
+            )
+
+    def test_webui_get_skills_audit_payload_backfills_legacy_event_id(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            plugin.skills_state_dir = tmp_path / "state"
+            plugin.skills_state_dir.mkdir(parents=True, exist_ok=True)
+            plugin.skills_audit_path = plugin.skills_state_dir / "audit.log.jsonl"
+            plugin.skills_audit_path.write_text(
+                json.dumps(
+                    {
+                        "timestamp": "2026-04-13T12:00:00+00:00",
+                        "action": "install_unit_rollback",
+                        "source_id": "install:skill_cli",
+                        "payload": {"candidate_total": 1},
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = OneSyncPlugin.webui_get_skills_audit_payload(
+                plugin,
+                limit=20,
+                action="rollback",
+            )
+            self.assertTrue(payload["ok"])
+            self.assertEqual(1, payload["counts"]["total"])
+            self.assertEqual("legacy_1", payload["items"][0]["event_id"])

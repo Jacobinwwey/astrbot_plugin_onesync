@@ -439,6 +439,25 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> passed
   - `pytest -q` -> passed
 
+### 2026-04-13 / Step 14
+
+- 已补齐 rollback 审计的“定位聚合”与事件追踪增强：
+  - `main.py`：
+    - `_append_skills_audit_event(...)` 改为返回 `event_id`；
+    - install-unit / collection-group rollback 响应中的 `rollback` 现额外回填 `audit_event_id`。
+  - `webui/index.html`：
+    - 回滚审计每条记录新增 `定位聚合 / Focus Aggregate` 按钮，可直接跳转到对应 Source / Bundle 聚合详情；
+    - 新增 `focusInventorySourceByAggregateId(...)`，统一按 `install_unit_id / collection_group_id` 解析并定位主聚合；
+    - 审计条目新增 event id、request source 与 retry lineage 展示，形成“失败 -> 重试 -> 新事件”的可视追踪链。
+  - 测试新增：
+    - `tests/test_main_git_checkout_runtime.py` 新增 skills audit 用例：
+      - 审计事件会生成 `audit_<uuid>` event_id
+      - legacy 审计行在读取时会回填 `legacy_<line_no>` event_id
+    - `tests/test_webui_inventory_registry_hosts.py` 新增前端定位聚合/事件追踪钩子断言。
+- 本轮定向回归：
+  - `pytest -q tests/test_webui_inventory_registry_hosts.py tests/test_main_git_checkout_runtime.py` -> passed
+  - `pytest -q` -> passed
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

@@ -4801,6 +4801,8 @@
         inventory_rollback_audit_retry_action: "重试失败项",
         inventory_rollback_audit_retry_running: "重试中...",
         inventory_rollback_audit_retry_missing: "该回滚记录没有可重试的 Source 快照。",
+        inventory_rollback_audit_focus_action: "定位聚合",
+        inventory_rollback_audit_focus_error: "无法定位该审计记录对应的聚合: {sourceId}",
         inventory_rollback_audit_retry_confirm: "即将按审计记录重试回滚。\n\n范围: {scope}\nID: {sourceId}\n事件: {eventId}\n候选 Source: {count}\n\n确认继续？",
         inventory_rollback_audit_retry_success: "审计重试完成: 恢复 {restored} 条 Source，未恢复 {notRestored} 条，失败命令 {failed} 条。",
         inventory_rollback_audit_retry_error: "审计重试失败: {msg}",
@@ -5645,6 +5647,8 @@
         inventory_rollback_audit_retry_action: "Retry Failed",
         inventory_rollback_audit_retry_running: "Retrying...",
         inventory_rollback_audit_retry_missing: "This rollback record does not include retryable source snapshots.",
+        inventory_rollback_audit_focus_action: "Focus Aggregate",
+        inventory_rollback_audit_focus_error: "Unable to locate the aggregate for this audit record: {sourceId}",
         inventory_rollback_audit_retry_confirm: "Retry rollback using this audit record.\n\nScope: {scope}\nID: {sourceId}\nEvent: {eventId}\nCandidate sources: {count}\n\nContinue?",
         inventory_rollback_audit_retry_success: "Audit retry finished: {restored} sources restored, {notRestored} not restored, {failed} commands failed.",
         inventory_rollback_audit_retry_error: "Audit retry failed: {msg}",
@@ -8126,6 +8130,31 @@
       return "";
     }
 
+    function inventoryPrimarySourceKeyByAggregateId(overview, aggregateId) {
+      const targetAggregateId = String(aggregateId || "").trim();
+      if (!targetAggregateId) return "";
+      const snapshot = overview && typeof overview === "object" ? overview : {};
+      const primaryRows = inventoryPrimarySourceRows(snapshot);
+      if (!primaryRows.length) {
+        return "";
+      }
+
+      const directMatch = primaryRows.find((item) => (
+        inventorySourceSelectionKey(item) === targetAggregateId
+        || String(item && item.install_unit_id || "").trim() === targetAggregateId
+        || String(item && item.collection_group_id || "").trim() === targetAggregateId
+      ));
+      if (directMatch) {
+        return inventorySourceSelectionKey(directMatch);
+      }
+
+      const installUnitBased = inventoryPrimarySourceKeyByInstallUnitId(snapshot, targetAggregateId);
+      if (installUnitBased) {
+        return installUnitBased;
+      }
+      return "";
+    }
+
     function inventorySourceSelectionKey(item) {
       if (!item || typeof item !== "object") return "";
       return String(item.collection_group_id || item.install_unit_id || item.source_id || item.id || "").trim();
@@ -9208,6 +9237,47 @@
       state.inventorySelectedSourceKey = sourceKey;
       state.inventorySourceDetail = null;
       state.inventorySelectedDetailInstallUnitId = normalizedInstallUnitId;
+      renderInventoryPanel();
+
+      try {
+        await refreshSelectedInventorySourceDetail({ silent: false });
+        return sourceKey;
+      } catch (err) {
+        if (!silent) {
+          throw err;
+        }
+        return null;
+      }
+    }
+
+    async function focusInventorySourceByAggregateId(aggregateId, { silent = false } = {}) {
+      const normalizedAggregateId = String(aggregateId || "").trim();
+      if (!normalizedAggregateId) {
+        if (!silent) {
+          throw new Error(t("inventory_rollback_audit_focus_error", { sourceId: "-" }));
+        }
+        return null;
+      }
+      const overview = state.inventoryOverview && typeof state.inventoryOverview === "object"
+        ? state.inventoryOverview
+        : {};
+      const sourceKey = inventoryPrimarySourceKeyByAggregateId(overview, normalizedAggregateId);
+      if (!sourceKey) {
+        if (!silent) {
+          throw new Error(t("inventory_rollback_audit_focus_error", { sourceId: normalizedAggregateId }));
+        }
+        return null;
+      }
+
+      const installUnitRows = Array.isArray(overview.install_unit_rows) ? overview.install_unit_rows : [];
+      const isInstallUnitId = installUnitRows.some(
+        (item) => String(item && item.install_unit_id || "").trim() === normalizedAggregateId,
+      );
+
+      state.inventoryInspectorTab = "source";
+      state.inventorySelectedSourceKey = sourceKey;
+      state.inventorySourceDetail = null;
+      state.inventorySelectedDetailInstallUnitId = isInstallUnitId ? normalizedAggregateId : "";
       renderInventoryPanel();
 
       try {
@@ -10952,14 +11022,24 @@
         const retryButtonDisabled = !retrySupported || retryBusy;
         const retryButton = retrySupported
           ? `
-            <div class="inventory-rollback-audit-actions">
-              <button
-                type="button"
-                data-inventory-rollback-retry-row-index="${escapeHtml(String(item.row_index || 0))}"
-                ${retryButtonDisabled ? "disabled" : ""}
-              >${escapeHtml(retryButtonLabel)}</button>
-            </div>
+            <button
+              type="button"
+              data-inventory-rollback-retry-row-index="${escapeHtml(String(item.row_index || 0))}"
+              ${retryButtonDisabled ? "disabled" : ""}
+            >${escapeHtml(retryButtonLabel)}</button>
           `
+          : "";
+        const focusButton = String(item.source_id || "").trim()
+          ? `
+            <button
+              type="button"
+              data-inventory-rollback-focus-source-id="${escapeHtml(String(item.source_id || "").trim())}"
+              ${retryBusy ? "disabled" : ""}
+            >${escapeHtml(t("inventory_rollback_audit_focus_action"))}</button>
+          `
+          : "";
+        const actionsHtml = (focusButton || retryButton)
+          ? `<div class="inventory-rollback-audit-actions">${focusButton}${retryButton}</div>`
           : "";
         return `
           <div class="inventory-rollback-audit-item" data-tone="${escapeHtml(tone)}">
@@ -10986,7 +11066,7 @@
             ${item.failure_reason_summary
               ? `<div class="meta">${escapeHtml(t("inventory_rollback_audit_failure_groups", { summary: item.failure_reason_summary }))}</div>`
               : ""}
-            ${retryButton}
+            ${actionsHtml}
           </div>
         `;
         }).join(""),
@@ -16257,15 +16337,29 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const retryEl = evt.target && typeof evt.target.closest === "function"
           ? evt.target.closest("[data-inventory-rollback-retry-row-index]")
           : null;
-        if (!retryEl || retryEl.disabled) return;
-        const rowIndex = Number(retryEl.getAttribute("data-inventory-rollback-retry-row-index"));
-        if (!Number.isFinite(rowIndex)) return;
+        if (retryEl) {
+          if (retryEl.disabled) return;
+          const rowIndex = Number(retryEl.getAttribute("data-inventory-rollback-retry-row-index"));
+          if (!Number.isFinite(rowIndex)) return;
+          try {
+            await retryInventoryRollbackAuditRow(rowIndex);
+          } catch (err) {
+            alert(t("inventory_rollback_audit_retry_error", {
+              msg: err && err.message ? err.message : String(err || "unknown error"),
+            }));
+          }
+          return;
+        }
+        const focusEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-rollback-focus-source-id]")
+          : null;
+        if (!focusEl || focusEl.disabled) return;
+        const aggregateId = String(focusEl.getAttribute("data-inventory-rollback-focus-source-id") || "").trim();
+        if (!aggregateId) return;
         try {
-          await retryInventoryRollbackAuditRow(rowIndex);
-        } catch (err) {
-          alert(t("inventory_rollback_audit_retry_error", {
-            msg: err && err.message ? err.message : String(err || "unknown error"),
-          }));
+          await focusInventorySourceByAggregateId(aggregateId, { silent: false });
+        } catch (_err) {
+          alert(t("inventory_rollback_audit_focus_error", { sourceId: aggregateId }));
         }
       });
 

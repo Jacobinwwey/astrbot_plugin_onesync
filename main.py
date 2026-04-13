@@ -1235,7 +1235,7 @@ class OneSyncPlugin(Star):
         *,
         source_id: str = "",
         payload: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> str:
         event_id = f"audit_{uuid.uuid4().hex}"
         event = {
             "event_id": event_id,
@@ -1250,6 +1250,8 @@ class OneSyncPlugin(Star):
                 f.write(json.dumps(event, ensure_ascii=False) + "\n")
         except Exception as exc:
             logger.error("[onesync] append skills audit failed: %s", exc)
+            return ""
+        return event_id
 
     def _sync_skill_bindings_projection(self, manifest: dict[str, Any]) -> bool:
         projected_bindings = normalize_skill_bindings_payload(manifest_to_binding_rows(manifest))
@@ -6815,7 +6817,7 @@ class OneSyncPlugin(Star):
                 f"{execution.get('restored_source_total', 0)} sources restored"
             ),
         }
-        self._append_skills_audit_event(
+        audit_event_id = self._append_skills_audit_event(
             "install_unit_rollback",
             source_id=normalized_install_unit_id,
             payload={
@@ -6832,6 +6834,7 @@ class OneSyncPlugin(Star):
                 "retry_of_event_id": retry_of_event_id,
             },
         )
+        rollback_summary["audit_event_id"] = audit_event_id
         self._push_debug_log(
             "info" if not execution.get("failure_count") else "warn",
             (
@@ -7062,7 +7065,7 @@ class OneSyncPlugin(Star):
                 f"{restored_source_total} sources restored"
             ),
         }
-        self._append_skills_audit_event(
+        audit_event_id = self._append_skills_audit_event(
             "collection_group_rollback",
             source_id=normalized_collection_group_id,
             payload={
@@ -7080,6 +7083,7 @@ class OneSyncPlugin(Star):
                 "retry_of_event_id": retry_of_event_id,
             },
         )
+        rollback_summary["audit_event_id"] = audit_event_id
         self._push_debug_log(
             "info" if not failure_count else "warn",
             (

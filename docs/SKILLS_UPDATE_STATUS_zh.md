@@ -181,6 +181,9 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
   - 每条审计事件新增 `event_id`；
   - rollback 审计 payload 新增 `request_source` 与 `retry_of_event_id`；
   - 前端审计轨迹会直接展示 event id 与重试来源，便于追踪“哪一次失败引发了哪一次重试”。
+- rollback 审计可操作性再增强：
+  - 每条审计记录新增“定位聚合”按钮，可直接跳转到对应 Source / Bundle 聚合详情；
+  - rollback 响应会回填 `audit_event_id`，便于在动作结果与审计轨迹之间做一跳对齐。
 - 测试稳定性已补齐：
   - 修复 `tests/test_main_git_checkout_runtime.py` 与 `tests/test_webui_server.py` 组合执行时的 fake astrbot module 初始化冲突，
   - 现已可稳定通过：`pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`。
