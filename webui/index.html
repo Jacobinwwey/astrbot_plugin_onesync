@@ -3701,6 +3701,10 @@
                       <label for="inventoryAstrbotWorkspaceIdInput" id="inventoryAstrbotWorkspaceIdLabel">Workspace ID</label>
                       <input id="inventoryAstrbotWorkspaceIdInput" type="text" placeholder="输入用于初始化的 workspace_id">
                     </div>
+                    <div class="inventory-soft-meta">
+                      <label for="inventoryAstrbotWorkspaceRootInput" id="inventoryAstrbotWorkspaceRootLabel">Workspace Root (Optional)</label>
+                      <input id="inventoryAstrbotWorkspaceRootInput" type="text" placeholder="可选：输入 workspace_root（需位于 astrbot data/workspaces 下）">
+                    </div>
                     <div class="inventory-inspector-actions">
                       <button type="button" id="inventoryAstrbotInitWorkspaceBtn">初始化 Workspace</button>
                     </div>
@@ -5079,6 +5083,8 @@
         inventory_astrbot_workspace_auto: "自动选择（默认）",
         inventory_astrbot_workspace_id_label: "Workspace ID",
         inventory_astrbot_workspace_id_placeholder: "输入用于初始化的 workspace_id（如 session_alpha）",
+        inventory_astrbot_workspace_root_label: "Workspace Root（可选）",
+        inventory_astrbot_workspace_root_placeholder: "可选：输入 workspace_root（必须位于 astrbot data/workspaces 下）",
         inventory_astrbot_init_workspace: "初始化 Workspace",
         inventory_astrbot_initializing_workspace: "初始化中",
         inventory_astrbot_skill_name_label: "Skill 名称",
@@ -5939,6 +5945,8 @@
         inventory_astrbot_workspace_auto: "Auto (default)",
         inventory_astrbot_workspace_id_label: "Workspace ID",
         inventory_astrbot_workspace_id_placeholder: "Enter workspace_id to initialize (for example, session_alpha)",
+        inventory_astrbot_workspace_root_label: "Workspace Root (Optional)",
+        inventory_astrbot_workspace_root_placeholder: "Optional: set workspace_root under astrbot data/workspaces",
         inventory_astrbot_init_workspace: "Init Workspace",
         inventory_astrbot_initializing_workspace: "Initializing",
         inventory_astrbot_skill_name_label: "Skill Name",
@@ -7159,6 +7167,8 @@
       $("inventoryAstrbotWorkspaceAutoOption").textContent = t("inventory_astrbot_workspace_auto");
       $("inventoryAstrbotWorkspaceIdLabel").textContent = t("inventory_astrbot_workspace_id_label");
       $("inventoryAstrbotWorkspaceIdInput").placeholder = t("inventory_astrbot_workspace_id_placeholder");
+      $("inventoryAstrbotWorkspaceRootLabel").textContent = t("inventory_astrbot_workspace_root_label");
+      $("inventoryAstrbotWorkspaceRootInput").placeholder = t("inventory_astrbot_workspace_root_placeholder");
       $("inventoryAstrbotInitWorkspaceBtn").textContent = state.inventoryAstrbotInitializingWorkspace
         ? t("inventory_astrbot_initializing_workspace")
         : t("inventory_astrbot_init_workspace");
@@ -11626,9 +11636,13 @@
         return null;
       }
       const workspaceInputEl = $("inventoryAstrbotWorkspaceIdInput");
+      const workspaceRootInputEl = $("inventoryAstrbotWorkspaceRootInput");
       const requestedWorkspaceId = String(
         (workspaceInputEl && workspaceInputEl.value) || context.workspaceId || "",
       ).trim().toLowerCase();
+      const requestedWorkspaceRoot = String(
+        (workspaceRootInputEl && workspaceRootInputEl.value) || "",
+      ).trim();
       if (!requestedWorkspaceId) {
         alert(t("inventory_astrbot_workspace_init_required"));
         return null;
@@ -11636,11 +11650,15 @@
       state.inventoryAstrbotInitializingWorkspace = true;
       renderInventoryPanel();
       try {
+        const requestPayload = {
+          workspace_id: requestedWorkspaceId,
+        };
+        if (requestedWorkspaceRoot) {
+          requestPayload.workspace_root = requestedWorkspaceRoot;
+        }
         const result = await api(`/api/skills/hosts/${encodeURIComponent(context.hostId)}/astrbot/workspaces/init`, {
           method: "POST",
-          body: JSON.stringify({
-            workspace_id: requestedWorkspaceId,
-          }),
+          body: JSON.stringify(requestPayload),
         });
         const resolvedWorkspaceId = String(result.workspace_id || requestedWorkspaceId || "").trim().toLowerCase();
         const workspaceRoot = String(
@@ -11653,6 +11671,9 @@
         state.inventoryAstrbotSelectedWorkspaceId = resolvedWorkspaceId;
         if (workspaceInputEl) {
           workspaceInputEl.value = resolvedWorkspaceId;
+        }
+        if (workspaceRootInputEl && workspaceRoot) {
+          workspaceRootInputEl.value = workspaceRoot;
         }
         state.inventoryAstrbotLastActionNote = t("inventory_astrbot_init_success", {
           workspace: resolvedWorkspaceId || requestedWorkspaceId,
@@ -12401,6 +12422,7 @@
       const astrbotRuntimeSummaryEl = $("inventoryAstrbotRuntimeSummary");
       const astrbotWorkspaceSelectEl = $("inventoryAstrbotWorkspaceSelect");
       const astrbotWorkspaceIdInputEl = $("inventoryAstrbotWorkspaceIdInput");
+      const astrbotWorkspaceRootInputEl = $("inventoryAstrbotWorkspaceRootInput");
       const astrbotInitWorkspaceBtn = $("inventoryAstrbotInitWorkspaceBtn");
       const astrbotSkillNameInputEl = $("inventoryAstrbotSkillNameInput");
       const astrbotEnableBtn = $("inventoryAstrbotEnableBtn");
@@ -13607,6 +13629,10 @@ ${escapeHtml(t("inventory_skill_meta_resolver"))}: ${escapeHtml(resolverPath)}
           astrbotWorkspaceIdInputEl.value = "";
           astrbotWorkspaceIdInputEl.disabled = true;
         }
+        if (astrbotWorkspaceRootInputEl) {
+          astrbotWorkspaceRootInputEl.value = "";
+          astrbotWorkspaceRootInputEl.disabled = true;
+        }
         if (astrbotZipInputEl) astrbotZipInputEl.value = "";
         if (astrbotActionNoteEl) {
           astrbotActionNoteEl.textContent = t("inventory_astrbot_action_unavailable");
@@ -13839,6 +13865,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           return {
             id: normalizedWorkspaceId,
             label,
+            root: workspaceRoot,
           };
         })
         .filter(Boolean);
@@ -13854,6 +13881,9 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const typedWorkspaceId = normalizeWorkspaceId(
         astrbotWorkspaceIdInputEl && astrbotWorkspaceIdInputEl.value,
       );
+      const typedWorkspaceRoot = String(
+        astrbotWorkspaceRootInputEl && astrbotWorkspaceRootInputEl.value || "",
+      ).trim();
       const runtimeSelectedWorkspaceId = normalizeWorkspaceId(selectedHostRuntimeSummary.selected_workspace_id);
       let effectiveAstrbotWorkspaceId = normalizeWorkspaceId(state.inventoryAstrbotSelectedWorkspaceId);
       if (
@@ -13873,6 +13903,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         effectiveAstrbotWorkspaceId = astrbotWorkspaceOptions[0].id;
       }
       state.inventoryAstrbotSelectedWorkspaceId = effectiveAstrbotWorkspaceId;
+      const selectedAstrbotWorkspaceOption = astrbotWorkspaceOptions.find((item) => item.id === effectiveAstrbotWorkspaceId) || null;
       const astrbotInitWorkspaceId = typedWorkspaceId || effectiveAstrbotWorkspaceId;
       const astrbotActionBusy = state.inventoryAstrbotTogglingSkill
         || state.inventoryAstrbotDeletingSkill
@@ -13914,7 +13945,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const optionHtml = [
           `<option value="" id="inventoryAstrbotWorkspaceAutoOption">${escapeHtml(t("inventory_astrbot_workspace_auto"))}</option>`,
           ...astrbotWorkspaceOptions.map((item) => (
-            `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`
+            `<option value="${escapeHtml(item.id)}" data-workspace-root="${escapeHtml(String(item.root || ""))}">${escapeHtml(item.label)}</option>`
           )),
         ];
         astrbotWorkspaceSelectEl.innerHTML = optionHtml.join("");
@@ -13930,6 +13961,19 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           astrbotWorkspaceIdInputEl.value = effectiveAstrbotWorkspaceId;
         }
         astrbotWorkspaceIdInputEl.disabled = !selectedAstrbotHostId || astrbotActionBusy;
+      }
+      if (astrbotWorkspaceRootInputEl) {
+        if ((!selectedAstrbotHostId || !astrbotScopeAvailable) && document.activeElement !== astrbotWorkspaceRootInputEl) {
+          astrbotWorkspaceRootInputEl.value = "";
+        } else if (
+          !typedWorkspaceRoot
+          && selectedAstrbotWorkspaceOption
+          && selectedAstrbotWorkspaceOption.root
+          && document.activeElement !== astrbotWorkspaceRootInputEl
+        ) {
+          astrbotWorkspaceRootInputEl.value = selectedAstrbotWorkspaceOption.root;
+        }
+        astrbotWorkspaceRootInputEl.disabled = !selectedAstrbotHostId || !astrbotScopeAvailable || astrbotActionBusy;
       }
       if (astrbotInitWorkspaceBtn) {
         astrbotInitWorkspaceBtn.textContent = state.inventoryAstrbotInitializingWorkspace
@@ -16627,6 +16671,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         if (workspaceIdInputEl && !String(workspaceIdInputEl.value || "").trim()) {
           workspaceIdInputEl.value = workspaceId;
         }
+        const workspaceRootInputEl = $("inventoryAstrbotWorkspaceRootInput");
+        const selectedOption = evt && evt.target && evt.target.selectedOptions && evt.target.selectedOptions[0]
+          ? evt.target.selectedOptions[0]
+          : null;
+        const workspaceRoot = selectedOption ? String(selectedOption.dataset.workspaceRoot || "").trim() : "";
+        if (workspaceRootInputEl && !String(workspaceRootInputEl.value || "").trim() && workspaceRoot) {
+          workspaceRootInputEl.value = workspaceRoot;
+        }
         renderInventoryPanel();
       });
 
@@ -16634,6 +16686,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         const workspaceId = evt && evt.target ? String(evt.target.value || "").trim().toLowerCase() : "";
         if (evt && evt.target) {
           evt.target.value = workspaceId;
+        }
+        renderInventoryPanel();
+      });
+
+      $("inventoryAstrbotWorkspaceRootInput").addEventListener("change", (evt) => {
+        const workspaceRoot = evt && evt.target ? String(evt.target.value || "").trim() : "";
+        if (evt && evt.target) {
+          evt.target.value = workspaceRoot;
         }
         renderInventoryPanel();
       });
