@@ -203,6 +203,34 @@ class SkillsAstrBotActionsCoreTests(unittest.TestCase):
         payload = json.loads((self.data_dir / "skills.json").read_text(encoding="utf-8"))
         self.assertTrue(payload["skills"]["imported-demo"]["active"])
 
+    def test_import_astrbot_skill_zip_installs_under_workspace_scope_and_marks_workspace_active(self) -> None:
+        archive_path = self._build_zip(
+            {
+                "SKILL.md": "---\ndescription: imported workspace demo\n---\n# Imported Workspace\n",
+                "README.md": "workspace archive\n",
+            },
+            archive_name="workspace-imported.zip",
+        )
+
+        result = import_astrbot_skill_zip(
+            self.layout,
+            str(archive_path),
+            scope="workspace",
+            skill_name_hint="workspace-imported",
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual("workspace", result["scope"])
+        self.assertEqual(["workspace-imported"], result["installed_skill_names"])
+        self.assertTrue((self.workspace_skills_root / "workspace-imported" / "SKILL.md").exists())
+
+        workspace_payload = json.loads((self.workspace_data_dir / "skills.json").read_text(encoding="utf-8"))
+        self.assertTrue(workspace_payload["skills"]["workspace-imported"]["active"])
+
+        global_skills_config_path = self.data_dir / "skills.json"
+        if global_skills_config_path.exists():
+            global_payload = json.loads(global_skills_config_path.read_text(encoding="utf-8"))
+            self.assertNotIn("workspace-imported", global_payload.get("skills", {}))
+
     def test_export_astrbot_skill_zip_creates_archive_for_local_skill(self) -> None:
         self._write_skill("demo")
         (self.skills_root / "demo" / "extra.txt").write_text("hello\n", encoding="utf-8")
