@@ -398,6 +398,10 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory-skill-extra", html)
         self.assertIn("inventory-skill-primary", html)
         self.assertIn("inventory-skill-secondary", html)
+        self.assertRegex(
+            html,
+            re.compile(r'<details class="inventory-collapsible">\s*<summary id="inventorySourceStructureSummary">', re.S),
+        )
 
 
     def test_inventory_panel_exposes_update_plan_support_and_confirmation_hooks(self) -> None:
