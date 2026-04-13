@@ -346,6 +346,32 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - `pytest -q tests/test_webui_server.py` -> `10 passed`
   - `node --check`（提取后的 `webui/index.html` 内联脚本）-> passed
 
+### 2026-04-13 / Step 10
+
+- 聚合更新失败/受阻原因在前端已从“原始 reason_code”升级为“人类可读标签 + reason_code”双轨展示：
+  - 新增 `inventoryAggregateReasonLabel(...)`，统一映射：
+    - `manual_only` / `manual_managed`
+    - `non_syncable_sources_present`
+    - `precheck_failed`
+    - `update_failed`
+    - `source_sync_failed`
+    - `rollback_failed`
+  - 适配范围：
+    - update-all 完成弹窗摘要
+    - 执行历史中的失败/受阻分组
+    - operation plan 的 blocked reason 明细
+- 聚合更新报告新增 precheck 可观测字段前端消费：
+  - `normalizeInventoryAggregateUpdateReport(...)` 新增 `precheck_failure_count`
+  - 报告摘要新增 `Precheck 失败 {count}` 行
+  - guidance 新增 `precheck_failed` / `source_sync_failed` 的专属建议文案
+- Source Detail 信息结构进一步去混杂：
+  - 右侧详情将“来源归因（provenance）”与“更新机制（manager/policy/mode/sync）”拆分为独立板块
+  - 避免此前把 provenance 与 deploy notes 混在同一块导致运维判断成本偏高
+- 本轮验证：
+  - `pytest -q` -> `209 passed`
+  - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> `27 passed`
+  - `node --check`（提取后的 `webui/index.html` 内联脚本）-> passed
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

@@ -317,6 +317,14 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
   - 远端 `releases / candidates` 会按 `updated_at -> created_at` 的时间优先级倒序整理，避免 latest candidate / release 误取旧项
   - 审计查询对 `source_id` 匹配已改为规范化比对，`astrneo:*` 这类带分隔符 id 不再丢失历史
   - WebUI focused inspector 现直接显示 Neo 远端状态与最近活动，无需跳出当前 source detail
+- 聚合更新报告与 operation plan 的失败语义已进一步可读化：
+  - 新增统一 reason 映射层（`inventoryAggregateReasonLabel`），将内部 `reason_code/failure_reason` 转为人类可读标签
+  - update-all 完成弹窗、执行历史分组、operation plan blocked reason 均已接入该映射
+  - 聚合更新报告新增 `precheck_failure_count` 展示与对应 guidance（`precheck_failed`、`source_sync_failed`）
+- Source Detail 现明确分离“来源归因”与“更新机制”：
+  - provenance（origin/package/evidence/confidence）单独展示
+  - update mechanism（manager/policy/mode/sync/latest/check）单独展示
+  - deploy notes 不再混入 provenance 判断信息
 
 ## 9. 补充进展（2026-04-13）
 

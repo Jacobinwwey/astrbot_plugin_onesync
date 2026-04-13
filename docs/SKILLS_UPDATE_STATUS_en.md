@@ -317,6 +317,14 @@ To call the feature "complete", the next implementation steps should be:
   - remote `releases / candidates` are normalized by recency using `updated_at -> created_at`, so latest candidate/release selection no longer drifts to older rows
   - audit filtering now matches normalized `source_id` values, which fixes missing history for separator-heavy ids such as `astrneo:*`
   - the focused WebUI inspector now shows Neo remote state and recent activity inline instead of forcing another ops surface
+- Aggregate update report and operation-plan failures are now more readable:
+  - added a unified reason mapping layer (`inventoryAggregateReasonLabel`) that translates internal `reason_code/failure_reason` into operator-facing labels
+  - update-all completion summary, execution-history groups, and operation-plan blocked reasons now all use this mapping
+  - aggregate update report now surfaces `precheck_failure_count` plus dedicated guidance for `precheck_failed` and `source_sync_failed`
+- Source detail now explicitly separates provenance from update mechanics:
+  - provenance (origin/package/evidence/confidence) is rendered in its own section
+  - update mechanism (manager/policy/mode/sync/latest/check) is rendered in its own section
+  - deploy notes are no longer mixed with provenance diagnosis
 
 ## 9. Follow-up Progress (2026-04-13)
 

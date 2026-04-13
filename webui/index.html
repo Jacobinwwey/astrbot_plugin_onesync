@@ -4655,6 +4655,7 @@
         inventory_operation_plan_blocked_reasons: "受阻原因",
         inventory_operation_plan_blocked_reason: "{installUnit}: {reason}",
         inventory_operation_plan_blocked_reason_with_code: "{installUnit}: {reason}（{code}）",
+        inventory_operation_plan_blocked_reason_with_label: "{installUnit}: {reasonLabel} · {reason}（{code}）",
         inventory_operation_plan_supported_units: "可更新单元",
         inventory_operation_plan_unsupported_units: "受阻单元",
         inventory_operation_plan_will_execute: "将执行单元",
@@ -4690,6 +4691,7 @@
         inventory_aggregate_update_report_workflow_update_all: "流程: 仅更新聚合",
         inventory_aggregate_update_report_workflow_improve_all: "流程: 一键完善 Skills",
         inventory_aggregate_update_report_summary: "执行 {executed} · 失败 {failed} · 跳过 {skipped}",
+        inventory_aggregate_update_report_prechecks: "Precheck 失败 {count}",
         inventory_aggregate_update_report_atom_summary: "Atom 刷新 {success}/{total} · 结构改善 {improved} · 未变化 {unchanged} · 失败 {failed}",
         inventory_aggregate_update_report_failures: "失败分组",
         inventory_aggregate_update_report_blocked: "受阻分组",
@@ -4697,12 +4699,23 @@
         inventory_aggregate_update_report_cache_hits: "Source Sync 结果复用 {count} 次",
         inventory_aggregate_update_report_at: "完成时间: {time}",
         inventory_aggregate_update_group_meta: "聚合 {names} · Manager {managers} · Policy {policies} · Source Kind {sourceKinds}",
+        inventory_aggregate_reason_manual_managed: "手工维护边界",
+        inventory_aggregate_reason_manual_only: "手工维护",
+        inventory_aggregate_reason_non_syncable_sources_present: "存在不可同步成员",
+        inventory_aggregate_reason_update_failed: "更新命令失败",
+        inventory_aggregate_reason_precheck_failed: "Precheck 失败",
+        inventory_aggregate_reason_source_sync_failed: "Source Sync 失败",
+        inventory_aggregate_reason_rollback_failed: "回滚失败",
+        inventory_aggregate_reason_mixed_blocked_reasons: "混合受阻原因",
+        inventory_aggregate_reason_unknown: "未知原因",
         inventory_aggregate_update_guidance_manual_managed: "该分组属于手工维护边界。请改走原生安装/同步流程，或手工维护对应技能目录。",
         inventory_aggregate_update_guidance_manual_git: "该分组落在 git/manual checkout 边界。优先走 sync / rollback，必要时直接维护受管 checkout。",
         inventory_aggregate_update_guidance_manual_local: "该分组来自本地目录边界。请直接维护本地 source 目录，再重新 refresh / deploy。",
         inventory_aggregate_update_guidance_non_syncable_sources_present: "该分组内存在没有 sync adapter 的成员。请先检查 install-unit 详情，再决定是否手工维护。",
         inventory_aggregate_update_guidance_mixed_sources: "该分组混合了多类 source：{sourceKinds}。应先下钻 install-unit 详情，再决定拆分还是手工维护。",
         inventory_aggregate_update_guidance_update_failed: "自动更新命令执行失败。请检查 manager/runtime 环境与命令语义是否匹配。",
+        inventory_aggregate_update_guidance_precheck_failed: "更新前置检查失败。请先修复 precheck 命令对应的运行时依赖，再重新执行更新。",
+        inventory_aggregate_update_guidance_source_sync_failed: "Source Sync 降级路径失败。请检查 sync adapter、远端可达性与鉴权配置。",
         inventory_aggregate_update_guidance_registry_runtime: "这是 package runtime 失败。请确认宿主机可用 manager: {managers}，并核对生成命令是否符合包自身 CLI 语义。",
         inventory_aggregate_update_guidance_git_runtime: "这是受管 checkout 更新失败。请检查 remote 可达性、fast-forward 状态和本地工作树脏状态。",
         inventory_aggregate_update_guidance_default: "查看对应 install-unit/source 详情，确认 manager、policy 与 blocked reason。",
@@ -4736,6 +4749,7 @@
         inventory_aggregate_update_all_source_sync_cache_hits: "Source Sync 结果复用 {count} 次。",
         inventory_aggregate_update_all_skipped: "跳过受阻聚合 {count} 个。",
         inventory_aggregate_update_all_deduped: "已去重重复聚合 {count} 个。",
+        inventory_aggregate_update_all_precheck_failures: "Precheck 失败 {count} 个 install unit。",
         inventory_aggregate_update_all_failure_reasons: "主要失败原因: {summary}",
         inventory_aggregate_update_all_blocked_reasons: "主要受阻原因: {summary}",
         inventory_aggregate_update_all_error: "批量更新全部聚合失败: {msg}",
@@ -4764,6 +4778,10 @@
         inventory_target_metric_available: "可选总数",
         inventory_target_metric_repairable: "可修复动作",
         inventory_target_metric_projection_diff: "投影差异",
+        inventory_target_section_members: "成员预览",
+        inventory_target_section_provenance: "来源归因",
+        inventory_target_section_update_mechanism: "更新机制",
+        inventory_target_section_deploy_notes: "部署目标 / 备注",
         inventory_target_chip_target: "Target",
         inventory_target_chip_path: "Path",
         inventory_target_chip_family: "Family",
@@ -5469,6 +5487,7 @@
         inventory_operation_plan_blocked_reasons: "Blocked Reasons",
         inventory_operation_plan_blocked_reason: "{installUnit}: {reason}",
         inventory_operation_plan_blocked_reason_with_code: "{installUnit}: {reason} ({code})",
+        inventory_operation_plan_blocked_reason_with_label: "{installUnit}: {reasonLabel} · {reason} ({code})",
         inventory_operation_plan_supported_units: "Supported Units",
         inventory_operation_plan_unsupported_units: "Blocked Units",
         inventory_operation_plan_will_execute: "Will Execute Units",
@@ -5504,6 +5523,7 @@
         inventory_aggregate_update_report_workflow_update_all: "Workflow: update aggregates only",
         inventory_aggregate_update_report_workflow_improve_all: "Workflow: improve skills",
         inventory_aggregate_update_report_summary: "Executed {executed} · Failed {failed} · Skipped {skipped}",
+        inventory_aggregate_update_report_prechecks: "Precheck failures {count}",
         inventory_aggregate_update_report_atom_summary: "Atom refresh {success}/{total} · Improved {improved} · Unchanged {unchanged} · Failed {failed}",
         inventory_aggregate_update_report_failures: "Failure Groups",
         inventory_aggregate_update_report_blocked: "Blocked Groups",
@@ -5511,12 +5531,23 @@
         inventory_aggregate_update_report_cache_hits: "Source sync cache reuses: {count}",
         inventory_aggregate_update_report_at: "Completed at: {time}",
         inventory_aggregate_update_group_meta: "Aggregates {names} · Manager {managers} · Policy {policies} · Source kind {sourceKinds}",
+        inventory_aggregate_reason_manual_managed: "manual-managed boundary",
+        inventory_aggregate_reason_manual_only: "manual-only",
+        inventory_aggregate_reason_non_syncable_sources_present: "non-syncable members present",
+        inventory_aggregate_reason_update_failed: "update command failed",
+        inventory_aggregate_reason_precheck_failed: "precheck failed",
+        inventory_aggregate_reason_source_sync_failed: "source sync failed",
+        inventory_aggregate_reason_rollback_failed: "rollback failed",
+        inventory_aggregate_reason_mixed_blocked_reasons: "mixed blocked reasons",
+        inventory_aggregate_reason_unknown: "unknown reason",
         inventory_aggregate_update_guidance_manual_managed: "This group is intentionally manual-managed. Use the native install/sync workflow or maintain the skill directory directly.",
         inventory_aggregate_update_guidance_manual_git: "This group sits behind a git/manual checkout boundary. Prefer sync / rollback first, then maintain the managed checkout directly if needed.",
         inventory_aggregate_update_guidance_manual_local: "This group comes from a local-directory boundary. Update the underlying source directory first, then rerun refresh / deploy.",
         inventory_aggregate_update_guidance_non_syncable_sources_present: "This group contains members without a sync adapter. Review the install-unit detail before deciding on manual maintenance.",
         inventory_aggregate_update_guidance_mixed_sources: "This group mixes multiple source kinds: {sourceKinds}. Drill into the install-unit detail before deciding whether to split or maintain it manually.",
         inventory_aggregate_update_guidance_update_failed: "The automatic update command failed. Check manager/runtime availability and whether the generated command matches the package semantics.",
+        inventory_aggregate_update_guidance_precheck_failed: "A precheck command failed before update execution. Fix runtime/tooling dependencies first, then rerun update.",
+        inventory_aggregate_update_guidance_source_sync_failed: "The source-sync fallback path failed. Verify sync adapter support, remote reachability, and auth configuration.",
         inventory_aggregate_update_guidance_registry_runtime: "This is a package-runtime failure. Verify manager availability on the target host: {managers}, then confirm the generated command matches the package's CLI contract.",
         inventory_aggregate_update_guidance_git_runtime: "This is a managed-checkout failure. Check remote reachability, fast-forward state, and whether the local worktree is dirty.",
         inventory_aggregate_update_guidance_default: "Review the install-unit/source detail to confirm manager, policy, and blocked reason.",
@@ -5550,6 +5581,7 @@
         inventory_aggregate_update_all_source_sync_cache_hits: "Source sync cache reuses: {count}.",
         inventory_aggregate_update_all_skipped: "Blocked aggregates skipped: {count}.",
         inventory_aggregate_update_all_deduped: "Duplicate aggregates deduplicated: {count}.",
+        inventory_aggregate_update_all_precheck_failures: "Precheck failed on {count} install units.",
         inventory_aggregate_update_all_failure_reasons: "Top failure reasons: {summary}",
         inventory_aggregate_update_all_blocked_reasons: "Top blocked reasons: {summary}",
         inventory_aggregate_update_all_error: "Failed to update all aggregates: {msg}",
@@ -5578,6 +5610,10 @@
         inventory_target_metric_available: "Available",
         inventory_target_metric_repairable: "Repair Actions",
         inventory_target_metric_projection_diff: "Projection Diff",
+        inventory_target_section_members: "Members Preview",
+        inventory_target_section_provenance: "Provenance Origin",
+        inventory_target_section_update_mechanism: "Update Mechanism",
+        inventory_target_section_deploy_notes: "Deploy Targets / Notes",
         inventory_target_chip_target: "Target",
         inventory_target_chip_path: "Path",
         inventory_target_chip_family: "Family",
@@ -7720,9 +7756,11 @@
         .slice(0, 3)
         .map((item) => {
           const reasonCode = String(item.reason_code || "").trim();
+          const reasonLabel = inventoryAggregateReasonLabel(reasonCode);
           return reasonCode
-            ? t("inventory_operation_plan_blocked_reason_with_code", {
+            ? t("inventory_operation_plan_blocked_reason_with_label", {
               installUnit: item.install_unit_id || "-",
+              reasonLabel,
               reason: item.message || "-",
               code: reasonCode,
             })
@@ -7843,8 +7881,9 @@
           blockedReasons: !plan.supported && String(plan.message || "").trim()
             ? [
               String(plan.reason_code || "").trim()
-                ? t("inventory_operation_plan_blocked_reason_with_code", {
+                ? t("inventory_operation_plan_blocked_reason_with_label", {
                   installUnit: String(plan.install_unit_id || "-").trim() || "-",
+                  reasonLabel: inventoryAggregateReasonLabel(String(plan.reason_code || "").trim()),
                   reason: String(plan.message || "-").trim() || "-",
                   code: String(plan.reason_code || "").trim(),
                 })
@@ -9594,6 +9633,7 @@
         const update = result.update && typeof result.update === "object" ? result.update : {};
         const sourceSyncInstallUnitTotal = Number(update.source_sync_install_unit_total) || 0;
         const sourceSyncCacheHitTotal = Number(update.source_sync_cache_hit_total) || 0;
+        const precheckFailureCount = Number(update.precheck_failure_count) || 0;
         const skippedInstallUnitTotal = Number(
           update.skipped_install_unit_total ?? update.unsupported_install_unit_total,
         ) || 0;
@@ -9626,6 +9666,11 @@
             t("inventory_aggregate_update_all_source_sync_cache_hits", { count: sourceSyncCacheHitTotal }),
           );
         }
+        if (precheckFailureCount > 0) {
+          summaryLines.push(
+            t("inventory_aggregate_update_all_precheck_failures", { count: precheckFailureCount }),
+          );
+        }
         if (skippedInstallUnitTotal > 0) {
           summaryLines.push(
             t("inventory_aggregate_update_all_skipped", { count: skippedInstallUnitTotal }),
@@ -9639,7 +9684,7 @@
         if (failedReasonGroups.length > 0) {
           const failureReasonSummary = failedReasonGroups
             .slice(0, 3)
-            .map((item) => `${String(item.failure_reason || "unknown")}:${Number(item.count) || 0}`)
+            .map((item) => `${inventoryAggregateReasonLabel(item.failure_reason)}:${Number(item.count) || 0}`)
             .join(", ");
           if (failureReasonSummary) {
             summaryLines.push(
@@ -9650,7 +9695,7 @@
         if (blockedReasonGroups.length > 0) {
           const blockedReasonSummary = blockedReasonGroups
             .slice(0, 3)
-            .map((item) => `${String(item.reason_code || "unknown")}:${Number(item.count) || 0}`)
+            .map((item) => `${inventoryAggregateReasonLabel(item.reason_code)}:${Number(item.count) || 0}`)
             .join(", ");
           if (blockedReasonSummary) {
             summaryLines.push(
@@ -10148,6 +10193,24 @@
       });
     }
 
+    function inventoryAggregateReasonLabel(reasonCode) {
+      const normalized = String(reasonCode || "").trim().toLowerCase();
+      const mapping = {
+        manual_managed: t("inventory_aggregate_reason_manual_managed"),
+        manual_only: t("inventory_aggregate_reason_manual_only"),
+        non_syncable_sources_present: t("inventory_aggregate_reason_non_syncable_sources_present"),
+        update_failed: t("inventory_aggregate_reason_update_failed"),
+        precheck_failed: t("inventory_aggregate_reason_precheck_failed"),
+        source_sync_failed: t("inventory_aggregate_reason_source_sync_failed"),
+        rollback_failed: t("inventory_aggregate_reason_rollback_failed"),
+        mixed_blocked_reasons: t("inventory_aggregate_reason_mixed_blocked_reasons"),
+      };
+      if (!normalized) {
+        return t("inventory_aggregate_reason_unknown");
+      }
+      return mapping[normalized] || normalized;
+    }
+
     function inventoryAggregateUpdateGuidance(reasonCode, installUnitIds = []) {
       const normalized = String(reasonCode || "").trim().toLowerCase();
       const meta = inventoryInstallUnitMetadataSummary(installUnitIds);
@@ -10169,6 +10232,9 @@
         }
         return t("inventory_aggregate_update_guidance_manual_managed");
       }
+      if (normalized === "manual_only") {
+        return t("inventory_aggregate_update_guidance_manual_managed");
+      }
       if (normalized === "non_syncable_sources_present") {
         if (meta.sourceKinds.length > 1) {
           return t("inventory_aggregate_update_guidance_mixed_sources", {
@@ -10176,6 +10242,11 @@
           });
         }
         return t("inventory_aggregate_update_guidance_non_syncable_sources_present");
+      }
+      if (normalized === "mixed_blocked_reasons") {
+        return t("inventory_aggregate_update_guidance_mixed_sources", {
+          sourceKinds: sourceKindsText,
+        });
       }
       if (normalized === "update_failed") {
         if (meta.managers.some((item) => ["bunx", "npx", "pnpm", "npm"].includes(item))) {
@@ -10190,6 +10261,15 @@
           return t("inventory_aggregate_update_guidance_git_runtime");
         }
         return t("inventory_aggregate_update_guidance_update_failed");
+      }
+      if (normalized === "precheck_failed") {
+        return t("inventory_aggregate_update_guidance_precheck_failed");
+      }
+      if (normalized === "source_sync_failed") {
+        return t("inventory_aggregate_update_guidance_source_sync_failed");
+      }
+      if (normalized === "rollback_failed") {
+        return t("inventory_aggregate_update_guidance_git_runtime");
       }
       return t("inventory_aggregate_update_guidance_default");
     }
@@ -10225,6 +10305,7 @@
         ) || 0,
         success_count: Number(update.success_count || 0) || 0,
         failure_count: Number(update.failure_count || 0) || 0,
+        precheck_failure_count: Number(update.precheck_failure_count || 0) || 0,
         skipped_install_unit_total: Number(
           update.skipped_install_unit_total
           ?? update.unsupported_install_unit_total
@@ -10338,8 +10419,13 @@
           failed: Number(report.failure_count || 0) || 0,
           skipped: Number(report.skipped_install_unit_total || 0) || 0,
         }),
+        Number(report.precheck_failure_count || 0) > 0
+          ? t("inventory_aggregate_update_report_prechecks", {
+            count: Number(report.precheck_failure_count || 0) || 0,
+          })
+          : "",
         t("inventory_aggregate_update_report_at", { time: updatedAtText }),
-      ].join(" · ");
+      ].filter(Boolean).join(" · ");
 
       const failedGroups = Array.isArray(report.failed_reason_groups) ? report.failed_reason_groups : [];
       const blockedGroups = Array.isArray(report.blocked_reason_groups) ? report.blocked_reason_groups : [];
@@ -10354,12 +10440,16 @@
               const primaryInstallUnitId = installUnitIds[0] || "";
               const codeValue = String(group[keyName] || "unknown").trim() || "unknown";
               const countValue = Number(group.count || 0) || 0;
+              const reasonLabel = inventoryAggregateReasonLabel(codeValue);
+              const summaryCode = reasonLabel && reasonLabel !== codeValue
+                ? `${reasonLabel} (${codeValue})`
+                : reasonLabel;
               const guidance = inventoryAggregateUpdateGuidance(codeValue, installUnitIds);
               const metaText = inventoryAggregateUpdateGroupMetaText(installUnitIds);
               return `
                 <details>
                   <summary ${primaryInstallUnitId && dataAttrName ? `${dataAttrName}="${escapeHtml(primaryInstallUnitId)}"` : ""}>${escapeHtml(t("inventory_last_update_group_summary", {
-                    code: codeValue,
+                    code: summaryCode,
                     count: countValue,
                   }))}</summary>
                   <div class="inventory-last-update-group-list">
@@ -10391,6 +10481,11 @@
             failed: Number(report.failure_count || 0) || 0,
             skipped: Number(report.skipped_install_unit_total || 0) || 0,
           }))}</div>
+          ${Number(report.precheck_failure_count || 0) > 0 ? `
+            <div class="meta">${escapeHtml(t("inventory_aggregate_update_report_prechecks", {
+              count: Number(report.precheck_failure_count || 0) || 0,
+            }))}</div>
+          ` : ""}
           ${String(report.workflow_kind || "").trim().toLowerCase() === "improve_all" ? `
             <div class="meta">${escapeHtml(t("inventory_aggregate_update_report_atom_summary", {
               success: Number(report.atom_refresh && report.atom_refresh.success || 0) || 0,
@@ -12302,13 +12397,31 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             heroSyncErrorHint,
           ].filter(Boolean)
           : [];
-        const noteItems = deployNotes.length
-          ? [...deployNotes, ...syncNotes]
-          : (
-            provenanceNotes.length
-              ? [...provenanceNotes, ...syncNotes]
-              : (detailWarnings.length ? detailWarnings.slice(0, 4) : (sourceDetail ? [] : ["Detail loading from API..."]))
-          );
+        const updatePolicy = String(
+          (activeDetailInstallUnit && activeDetailInstallUnit.update_policy)
+          || selectedSourceRow.update_policy
+          || (detailSource && detailSource.update_policy)
+          || "-",
+        ).trim() || "-";
+        const updateModeLabel = actionableUpdatePlan && typeof actionableUpdatePlan === "object"
+          ? inventoryOperationPlanModeLabel(actionableUpdatePlan)
+          : t("inventory_operation_plan_mode_manual_only");
+        const updateMechanismNotes = [
+          `${t("inventory_operation_plan_manager")}: ${heroManager}`,
+          `${t("inventory_operation_plan_policy")}: ${updatePolicy}`,
+          `${t("inventory_operation_plan_mode")}: ${updateModeLabel}`,
+          `${t("inventory_skill_meta_sync_status")}: ${syncStatus}`,
+          `${t("inventory_skill_meta_latest_version")}: ${latestVersion}`,
+          `${t("inventory_skill_meta_sync_checked")}: ${toLocalTime(checkedAt)}`,
+          ...syncNotes,
+        ];
+        const deployAndNoteItems = [
+          ...deployNotes,
+          ...detailWarnings.slice(0, 4),
+        ];
+        if (!deployAndNoteItems.length && !sourceDetail) {
+          deployAndNoteItems.push("Detail loading from API...");
+        }
         const subtitleParts = [
           `${installUnitCount || 0} units`,
           `${sourceCount || 0} sources`,
@@ -12404,7 +12517,7 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             </div>
           </div>
           <div class="inventory-target-drift">
-            <div class="inventory-target-drift-title">Members Preview</div>
+            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_members"))}</div>
             <div class="inventory-target-drift-list">
               ${memberPreview.length
                 ? memberPreview.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
@@ -12412,10 +12525,26 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
             </div>
           </div>
           <div class="inventory-target-drift">
-            <div class="inventory-target-drift-title">Deploy Targets / Notes</div>
+            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_provenance"))}</div>
             <div class="inventory-target-drift-list">
-              ${noteItems.length
-                ? noteItems.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+              ${provenanceNotes.length
+                ? provenanceNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">No provenance notes yet.</div>`}
+            </div>
+          </div>
+          <div class="inventory-target-drift">
+            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_update_mechanism"))}</div>
+            <div class="inventory-target-drift-list">
+              ${updateMechanismNotes.length
+                ? updateMechanismNotes.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
+                : `<div class="inventory-target-drift-empty">No update mechanism notes yet.</div>`}
+            </div>
+          </div>
+          <div class="inventory-target-drift">
+            <div class="inventory-target-drift-title">${escapeHtml(t("inventory_target_section_deploy_notes"))}</div>
+            <div class="inventory-target-drift-list">
+              ${deployAndNoteItems.length
+                ? deployAndNoteItems.map((note) => `<div class="inventory-target-drift-item">${escapeHtml(note)}</div>`).join("")
                 : `<div class="inventory-target-drift-empty">No deploy targets linked.</div>`}
             </div>
           </div>
