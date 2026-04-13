@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 import tempfile
 import types as pytypes
@@ -1028,3 +1029,166 @@ class OneSyncPluginAuthorityBoundaryTests(unittest.TestCase):
         self.assertEqual(1, result["inventory"]["counts"]["bindings_total"])
         self.assertTrue(persisted)
         self.assertTrue(any("bindings=1" in item for item in debug_logs))
+
+
+class OneSyncPluginAstrbotNeoDetailTests(unittest.TestCase):
+    def test_get_astrbot_neo_source_payload_enriches_remote_state_and_activity(self) -> None:
+        plugin = object.__new__(OneSyncPlugin)
+
+        plugin.config = {
+            "provider_settings": {
+                "sandbox": {
+                    "shipyard_neo_endpoint": "https://neo.example.com",
+                    "shipyard_neo_access_token": "secret-token",
+                }
+            }
+        }
+        plugin.webui_get_skills_payload = lambda: {
+            "generated_at": "2026-04-13T10:00:00+00:00",
+            "astrbot_neo_source_rows": [
+                {
+                    "source_id": "astrneo:astrbot:demo.skill",
+                    "display_name": "neo-demo",
+                    "source_kind": "astrneo_release",
+                    "astrneo_host_id": "astrbot",
+                    "astrneo_skill_key": "demo.skill",
+                    "astrneo_skill_name": "neo_demo",
+                    "astrneo_release_id": "rel-local",
+                    "astrneo_candidate_id": "cand-local",
+                    "astrneo_payload_ref": "payload-local",
+                    "astrneo_updated_at": "2026-04-13T09:58:00+00:00",
+                    "status": "ready",
+                }
+            ],
+            "warnings": [],
+        }
+
+        class _FakeSkillsApi:
+            def __init__(self) -> None:
+                self.last_release_kwargs = None
+                self.last_candidate_kwargs = None
+
+            async def list_releases(self, **kwargs):
+                self.last_release_kwargs = kwargs
+                return {
+                    "total": 2,
+                    "items": [
+                        {
+                            "id": "rel-stable",
+                            "skill_key": "demo.skill",
+                            "candidate_id": "cand-stable",
+                            "stage": "stable",
+                            "is_active": True,
+                            "created_at": "2026-04-13T09:00:00+00:00",
+                        },
+                        {
+                            "id": "rel-canary",
+                            "skill_key": "demo.skill",
+                            "candidate_id": "cand-canary",
+                            "stage": "canary",
+                            "is_active": True,
+                            "created_at": "2026-04-13T09:30:00+00:00",
+                        },
+                    ],
+                }
+
+            async def list_candidates(self, **kwargs):
+                self.last_candidate_kwargs = kwargs
+                return {
+                    "total": 2,
+                    "items": [
+                        {
+                            "id": "cand-stable",
+                            "skill_key": "demo.skill",
+                            "status": "approved",
+                            "payload_ref": "payload-stable",
+                            "updated_at": "2026-04-13T08:55:00+00:00",
+                        },
+                        {
+                            "id": "cand-canary",
+                            "skill_key": "demo.skill",
+                            "status": "draft",
+                            "payload_ref": "payload-canary",
+                            "updated_at": "2026-04-13T09:25:00+00:00",
+                        },
+                    ],
+                }
+
+        fake_skills_api = _FakeSkillsApi()
+
+        class _FakeBayClient:
+            def __init__(self, *, endpoint_url: str, access_token: str) -> None:
+                self.endpoint_url = endpoint_url
+                self.access_token = access_token
+                self.skills = fake_skills_api
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        shipyard_module = types.ModuleType("shipyard_neo")
+        shipyard_module.BayClient = _FakeBayClient
+        previous_shipyard_module = sys.modules.get("shipyard_neo")
+        sys.modules["shipyard_neo"] = shipyard_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plugin.skills_state_dir = Path(tmpdir)
+            plugin.skills_audit_path = Path(tmpdir) / "audit.log.jsonl"
+            plugin.skills_audit_path.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "timestamp": "2026-04-13T09:59:00+00:00",
+                                "action": "astrbot_neo_source_sync",
+                                "source_id": "astrneo:astrbot:demo.skill",
+                                "payload": {"release_id": "rel-local"},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "timestamp": "2026-04-13T10:01:00+00:00",
+                                "action": "astrbot_neo_source_promote",
+                                "source_id": "astrneo:astrbot:demo.skill",
+                                "payload": {"release_id": "rel-stable", "stage": "stable"},
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            try:
+                detail = OneSyncPlugin.webui_get_astrbot_neo_source_payload(
+                    plugin,
+                    "astrneo:astrbot:demo.skill",
+                )
+            finally:
+                if previous_shipyard_module is None:
+                    sys.modules.pop("shipyard_neo", None)
+                else:
+                    sys.modules["shipyard_neo"] = previous_shipyard_module
+
+        self.assertTrue(detail["ok"])
+        self.assertEqual("demo.skill", detail["neo_state"]["skill_key"])
+        self.assertTrue(detail["neo_remote_state"]["configured"])
+        self.assertEqual("rel-stable", detail["neo_remote_state"]["current"]["active_stable_release_id"])
+        self.assertEqual("cand-canary", detail["neo_remote_state"]["current"]["latest_candidate_id"])
+        self.assertEqual(2, detail["neo_remote_state"]["releases"]["total"])
+        self.assertEqual(2, detail["neo_remote_state"]["candidates"]["total"])
+        self.assertEqual(2, detail["neo_activity"]["counts"]["total"])
+        self.assertEqual(
+            "astrbot_neo_source_promote",
+            detail["neo_activity"]["items"][0]["action"],
+        )
+        self.assertEqual(
+            {"skill_key": "demo.skill", "limit": 5, "offset": 0},
+            fake_skills_api.last_release_kwargs,
+        )
+        self.assertEqual(
+            {"skill_key": "demo.skill", "limit": 5, "offset": 0},
+            fake_skills_api.last_candidate_kwargs,
+        )

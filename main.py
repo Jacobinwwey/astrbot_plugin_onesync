@@ -2850,9 +2850,10 @@ class OneSyncPlugin(Star):
                             continue
                         event_action = str(parsed.get("action") or "").strip()
                         event_source_id = str(parsed.get("source_id") or "").strip()
+                        normalized_event_source_id = _normalize_inventory_id(event_source_id, default="")
                         if action_keyword and action_keyword not in event_action.lower():
                             continue
-                        if normalized_source_id and event_source_id != normalized_source_id:
+                        if normalized_source_id and normalized_event_source_id != normalized_source_id:
                             continue
                         payload = parsed.get("payload", {})
                         if not isinstance(payload, dict):
@@ -2944,7 +2945,7 @@ class OneSyncPlugin(Star):
             },
         }
 
-    def webui_get_astrbot_neo_source_payload(self, source_id: str) -> dict[str, Any]:
+    def _lookup_astrbot_neo_source_payload(self, source_id: str) -> dict[str, Any]:
         normalized_source_id = str(source_id or "").strip()
         if not normalized_source_id:
             return {"ok": False, "message": "source_id is required"}
@@ -2972,6 +2973,215 @@ class OneSyncPlugin(Star):
             **detail_contract,
             "warnings": snapshot.get("warnings", []),
         }
+
+    @staticmethod
+    def _summarize_astrbot_neo_release_rows(items: list[Any] | None) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for item in items or []:
+            payload = _to_jsonable_like(item)
+            if not isinstance(payload, dict):
+                continue
+            stage_raw = payload.get("stage")
+            stage_value = getattr(stage_raw, "value", stage_raw)
+            rows.append(
+                {
+                    "id": str(payload.get("id") or "").strip(),
+                    "skill_key": str(payload.get("skill_key") or "").strip(),
+                    "candidate_id": str(payload.get("candidate_id") or "").strip(),
+                    "stage": str(stage_value or "").strip().lower(),
+                    "is_active": _to_bool(payload.get("is_active"), _to_bool(payload.get("active"), False)),
+                    "created_at": str(payload.get("created_at") or "").strip(),
+                    "updated_at": str(payload.get("updated_at") or "").strip(),
+                }
+            )
+        return [item for item in rows if item.get("id")]
+
+    @staticmethod
+    def _sort_astrbot_neo_rows_by_recency(items: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        rows = [item for item in items or [] if isinstance(item, dict)]
+        return sorted(
+            rows,
+            key=lambda item: (
+                _parse_iso(str(item.get("updated_at") or "").strip())
+                or _parse_iso(str(item.get("created_at") or "").strip())
+                or datetime.min.replace(tzinfo=timezone.utc)
+            ),
+            reverse=True,
+        )
+
+    @staticmethod
+    def _summarize_astrbot_neo_candidate_rows(items: list[Any] | None) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for item in items or []:
+            payload = _to_jsonable_like(item)
+            if not isinstance(payload, dict):
+                continue
+            status_raw = payload.get("status")
+            status_value = getattr(status_raw, "value", status_raw)
+            rows.append(
+                {
+                    "id": str(payload.get("id") or "").strip(),
+                    "skill_key": str(payload.get("skill_key") or "").strip(),
+                    "status": str(status_value or "").strip().lower(),
+                    "payload_ref": str(payload.get("payload_ref") or "").strip(),
+                    "created_at": str(payload.get("created_at") or "").strip(),
+                    "updated_at": str(payload.get("updated_at") or "").strip(),
+                }
+            )
+        return [item for item in rows if item.get("id")]
+
+    async def _load_astrbot_neo_remote_state(self, source_row: dict[str, Any]) -> dict[str, Any]:
+        source = source_row if isinstance(source_row, dict) else {}
+        skill_key = str(source.get("astrneo_skill_key") or "").strip()
+        remote_state: dict[str, Any] = {
+            "configured": False,
+            "endpoint": "",
+            "access_token_discovered": False,
+            "fetched_at": _now_iso(),
+            "reason_code": "",
+            "message": "",
+            "current": {
+                "active_stable_release_id": "",
+                "active_canary_release_id": "",
+                "latest_release_id": str(source.get("astrneo_release_id") or "").strip(),
+                "latest_candidate_id": str(source.get("astrneo_candidate_id") or "").strip(),
+                "latest_candidate_status": "",
+            },
+            "releases": {"total": 0, "items": []},
+            "candidates": {"total": 0, "items": []},
+            "warnings": [],
+        }
+        if not skill_key:
+            remote_state["reason_code"] = "invalid_neo_source"
+            remote_state["message"] = "astrbot neo source missing skill key"
+            return remote_state
+
+        client_config = self._resolve_astrbot_neo_client_config()
+        if not client_config.get("ok"):
+            remote_state["reason_code"] = str(client_config.get("reason_code") or "").strip()
+            remote_state["message"] = str(client_config.get("message") or "").strip()
+            return remote_state
+
+        remote_state["configured"] = True
+        remote_state["endpoint"] = str(client_config.get("endpoint") or "").strip()
+        remote_state["access_token_discovered"] = bool(client_config.get("access_token_discovered"))
+
+        try:
+            from shipyard_neo import BayClient
+        except Exception as exc:
+            remote_state["reason_code"] = "neo_client_unavailable"
+            remote_state["message"] = f"astrbot neo client unavailable: {exc}"
+            return remote_state
+
+        try:
+            async with BayClient(
+                endpoint_url=str(client_config.get("endpoint") or ""),
+                access_token=str(client_config.get("access_token") or ""),
+            ) as client:
+                release_payload = _to_jsonable_like(
+                    await client.skills.list_releases(skill_key=skill_key, limit=5, offset=0)
+                )
+                candidate_payload = _to_jsonable_like(
+                    await client.skills.list_candidates(skill_key=skill_key, limit=5, offset=0)
+                )
+        except Exception as exc:
+            remote_state["reason_code"] = "neo_remote_state_failed"
+            remote_state["message"] = f"astrbot neo remote state fetch failed: {exc}"
+            return remote_state
+
+        release_items = self._sort_astrbot_neo_rows_by_recency(
+            self._summarize_astrbot_neo_release_rows(
+                release_payload.get("items", []) if isinstance(release_payload, dict) else []
+            )
+        )
+        candidate_items = self._sort_astrbot_neo_rows_by_recency(
+            self._summarize_astrbot_neo_candidate_rows(
+                candidate_payload.get("items", []) if isinstance(candidate_payload, dict) else []
+            )
+        )
+        remote_state["releases"] = {
+            "total": int((release_payload.get("total", len(release_items)) if isinstance(release_payload, dict) else len(release_items)) or 0),
+            "items": release_items,
+        }
+        remote_state["candidates"] = {
+            "total": int((candidate_payload.get("total", len(candidate_items)) if isinstance(candidate_payload, dict) else len(candidate_items)) or 0),
+            "items": candidate_items,
+        }
+
+        active_stable = next(
+            (item for item in release_items if str(item.get("stage") or "") == "stable" and _to_bool(item.get("is_active"), False)),
+            None,
+        )
+        active_canary = next(
+            (item for item in release_items if str(item.get("stage") or "") == "canary" and _to_bool(item.get("is_active"), False)),
+            None,
+        )
+        latest_release = release_items[0] if release_items else {}
+        latest_candidate = candidate_items[0] if candidate_items else {}
+        remote_state["current"] = {
+            "active_stable_release_id": str((active_stable or {}).get("id") or "").strip(),
+            "active_canary_release_id": str((active_canary or {}).get("id") or "").strip(),
+            "latest_release_id": str((latest_release or {}).get("id") or remote_state["current"].get("latest_release_id") or "").strip(),
+            "latest_candidate_id": str((latest_candidate or {}).get("id") or remote_state["current"].get("latest_candidate_id") or "").strip(),
+            "latest_candidate_status": str((latest_candidate or {}).get("status") or "").strip(),
+        }
+        return remote_state
+
+    def _build_astrbot_neo_activity_payload(self, source_id: str, *, limit: int = 8) -> dict[str, Any]:
+        audit_payload = self.webui_get_skills_audit_payload(
+            limit=limit,
+            action="astrbot_neo_source",
+            source_id=source_id,
+        )
+        return {
+            "counts": audit_payload.get("counts", {"total": 0}),
+            "items": audit_payload.get("items", []),
+            "warnings": audit_payload.get("warnings", []),
+        }
+
+    def webui_get_astrbot_neo_source_payload(self, source_id: str) -> Any:
+        async def _load() -> dict[str, Any]:
+            detail = self._lookup_astrbot_neo_source_payload(source_id)
+            if not detail.get("ok"):
+                return detail
+            source_row = detail.get("source", {}) if isinstance(detail.get("source"), dict) else {}
+            normalized_source_id = str(source_row.get("source_id") or source_id or "").strip()
+            remote_state = await self._load_astrbot_neo_remote_state(source_row)
+            detail["neo_remote_state"] = remote_state
+            detail["neo_activity"] = self._build_astrbot_neo_activity_payload(normalized_source_id)
+            skill_key = str(source_row.get("astrneo_skill_key") or "").strip()
+            remote_current = remote_state.get("current", {}) if isinstance(remote_state.get("current"), dict) else {}
+            defaults = detail.get("neo_defaults", {}) if isinstance(detail.get("neo_defaults"), dict) else {}
+            capabilities = detail.get("neo_capabilities", {}) if isinstance(detail.get("neo_capabilities"), dict) else {}
+            effective_candidate_id = str(
+                remote_current.get("latest_candidate_id")
+                or defaults.get("candidate_id")
+                or ""
+            ).strip()
+            effective_release_id = str(
+                remote_current.get("active_stable_release_id")
+                or remote_current.get("latest_release_id")
+                or defaults.get("release_id")
+                or ""
+            ).strip()
+            detail["neo_defaults"] = {
+                **defaults,
+                "candidate_id": effective_candidate_id,
+                "release_id": effective_release_id,
+            }
+            detail["neo_capabilities"] = {
+                **capabilities,
+                "sync_supported": bool(skill_key),
+                "promote_supported": bool(skill_key and effective_candidate_id),
+                "rollback_supported": bool(skill_key and effective_release_id),
+            }
+            return detail
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(_load())
+        return _load()
 
     def _resolve_astrbot_neo_client_config(self) -> dict[str, Any]:
         provider_settings = self.config.get("provider_settings", {}) if hasattr(self.config, "get") else {}
@@ -3033,7 +3243,7 @@ class OneSyncPlugin(Star):
         normalized_source_id = str(source_id or "").strip()
         if not normalized_source_id:
             return {"ok": False, "message": "source_id is required"}
-        detail = self.webui_get_astrbot_neo_source_payload(normalized_source_id)
+        detail = self._lookup_astrbot_neo_source_payload(normalized_source_id)
         if not detail.get("ok"):
             return detail
 
@@ -3129,7 +3339,7 @@ class OneSyncPlugin(Star):
     ) -> dict[str, Any]:
         inventory_snapshot = self._refresh_inventory_snapshot(sync_skills=True)
         skills_snapshot = self._skills_state().get("last_overview", {})
-        refreshed_detail = self.webui_get_astrbot_neo_source_payload(source_id)
+        refreshed_detail = self._lookup_astrbot_neo_source_payload(source_id)
         refreshed_source = (
             refreshed_detail.get("source", prior_source_row)
             if isinstance(refreshed_detail, dict)

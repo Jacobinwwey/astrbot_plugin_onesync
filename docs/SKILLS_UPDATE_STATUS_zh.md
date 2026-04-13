@@ -312,6 +312,11 @@ curl -s http://127.0.0.1:8099/api/skills/install-units/npm%3A%40every-env%2Fcomp
   - Neo source detail 新增 `neo_state`、`neo_capabilities`、`neo_defaults`
   - 详情区新增 `同步 Stable / 提升到 Stable / 回滚 Release` 动作条，只在 `astrneo:*` source 上下文中出现
   - 审计事件新增：`astrbot_neo_source_promote`、`astrbot_neo_source_rollback`
+- AstrBot Neo source detail 的可观测性已补齐：
+  - `GET /api/skills/astrbot-neo-sources/{source_id}` 现会额外返回 `neo_remote_state` 与 `neo_activity`
+  - 远端 `releases / candidates` 会按 `updated_at -> created_at` 的时间优先级倒序整理，避免 latest candidate / release 误取旧项
+  - 审计查询对 `source_id` 匹配已改为规范化比对，`astrneo:*` 这类带分隔符 id 不再丢失历史
+  - WebUI focused inspector 现直接显示 Neo 远端状态与最近活动，无需跳出当前 source detail
 
 ## 9. 补充进展（2026-04-13）
 

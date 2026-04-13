@@ -431,6 +431,8 @@ class OneSyncWebUIServer:
         @self.app.get("/api/skills/astrbot-neo-sources/{source_id:path}")
         async def skills_astrbot_neo_source_detail(source_id: str):
             ret = self.plugin.webui_get_astrbot_neo_source_payload(source_id)
+            if asyncio.iscoroutine(ret):
+                ret = await ret
             if not ret.get("ok"):
                 return JSONResponse(_public(ret), status_code=404)
             return _public(ret)

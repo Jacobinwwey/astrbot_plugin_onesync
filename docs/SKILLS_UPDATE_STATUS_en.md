@@ -312,6 +312,11 @@ To call the feature "complete", the next implementation steps should be:
   - Neo source detail now exposes `neo_state`, `neo_capabilities`, and `neo_defaults`
   - the focused source-detail inspector now shows `Sync Stable / Promote Stable / Rollback Release` only for `astrneo:*` sources
   - new audit events: `astrbot_neo_source_promote` and `astrbot_neo_source_rollback`
+- AstrBot Neo source detail observability is now closed:
+  - `GET /api/skills/astrbot-neo-sources/{source_id}` now also returns `neo_remote_state` and `neo_activity`
+  - remote `releases / candidates` are normalized by recency using `updated_at -> created_at`, so latest candidate/release selection no longer drifts to older rows
+  - audit filtering now matches normalized `source_id` values, which fixes missing history for separator-heavy ids such as `astrneo:*`
+  - the focused WebUI inspector now shows Neo remote state and recent activity inline instead of forcing another ops surface
 
 ## 9. Follow-up Progress (2026-04-13)
 

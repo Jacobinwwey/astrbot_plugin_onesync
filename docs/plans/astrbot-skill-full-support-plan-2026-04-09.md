@@ -325,6 +325,27 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
   - `pytest -q tests/test_webui_server.py tests/test_webui_inventory_registry_hosts.py` -> `37 passed`
   - `python3 -m py_compile main.py webui_server.py tests/test_webui_server.py tests/test_webui_inventory_registry_hosts.py`
 
+### 2026-04-13 / Step 9
+
+- 已补齐 AstrBot Neo 详情可观测性闭环：
+  - `webui_get_astrbot_neo_source_payload(...)` 现额外回填：
+    - `neo_remote_state`
+    - `neo_activity`
+  - 远端 `releases / candidates` 不再依赖 Neo 返回顺序，统一按 `updated_at -> created_at` 倒序整理
+  - `neo_defaults.candidate_id / release_id` 会在远端可读时自动对齐到当前远端 stable/candidate，避免前端动作仍引用陈旧本地值
+- 已修复一处跨领域基础缺陷：
+  - `webui_get_skills_audit_payload(...)` 对 `source_id` 的过滤改为“规范化 source_id 比对”
+  - 解决 `astrneo:astrbot:demo.skill` 这类带分隔符 source id 在审计轨迹中查不到历史的问题
+- WebUI focused inspector 已在现有 source detail 中新增：
+  - Neo 远端状态块
+  - 最近 Neo 活动块
+  - 不新增新的顶层面板，避免继续扩大运维界面噪声面
+- 本轮定向回归：
+  - `pytest -q tests/test_main_git_checkout_runtime.py -k astrbot_neo_source_payload_enriches_remote_state_and_activity` -> `1 passed`
+  - `pytest -q tests/test_main_git_checkout_runtime.py` -> `13 passed`
+  - `pytest -q tests/test_webui_server.py` -> `10 passed`
+  - `node --check`（提取后的 `webui/index.html` 内联脚本）-> passed
+
 ### 2026-04-12 / Cross-Cutting Runtime Follow-up
 
 - 虽然本计划主线聚焦 AstrBot runtime/Neo 生命周期，但本轮有一项跨领域改进已经反向增强 AstrBot 宿主管理的稳定性：

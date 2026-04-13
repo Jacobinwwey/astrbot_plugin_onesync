@@ -959,6 +959,15 @@ class _FakePlugin:
                 "astrneo_release_id": "rel-1",
                 "status": "ready",
             },
+            "neo_state": {
+                "host_id": "astrbot",
+                "skill_key": "demo.skill",
+                "local_skill_name": "neo-demo",
+                "release_id": "rel-1",
+                "candidate_id": "cand-1",
+                "payload_ref": "payload-1",
+                "updated_at": self.skills_snapshot["generated_at"],
+            },
             "neo_capabilities": {
                 "sync_supported": True,
                 "promote_supported": True,
@@ -970,6 +979,41 @@ class _FakePlugin:
                 "stage": "stable",
                 "sync_to_local": True,
                 "require_stable": True,
+            },
+            "neo_remote_state": {
+                "configured": True,
+                "endpoint": "https://neo.example.com",
+                "fetched_at": self.skills_snapshot["generated_at"],
+                "current": {
+                    "active_stable_release_id": "rel-1",
+                    "latest_candidate_id": "cand-1",
+                },
+                "releases": {
+                    "total": 1,
+                    "items": [{"id": "rel-1", "stage": "stable"}],
+                },
+                "candidates": {
+                    "total": 1,
+                    "items": [{"id": "cand-1", "status": "approved"}],
+                },
+                "warnings": [],
+            },
+            "neo_activity": {
+                "counts": {"total": 2},
+                "items": [
+                    {
+                        "timestamp": self.skills_snapshot["generated_at"],
+                        "action": "astrbot_neo_source_promote",
+                        "source_id": "astrneo:astrbot:demo.skill",
+                        "payload": {"release_id": "rel-1"},
+                    },
+                    {
+                        "timestamp": self.skills_snapshot["generated_at"],
+                        "action": "astrbot_neo_source_sync",
+                        "source_id": "astrneo:astrbot:demo.skill",
+                        "payload": {"release_id": "rel-1"},
+                    },
+                ],
             },
             "warnings": [],
         }
@@ -1676,6 +1720,8 @@ class WebUIServerTests(unittest.TestCase):
         )
         self.assertTrue(astrbot_neo_source_detail_resp.json()["neo_capabilities"]["promote_supported"])
         self.assertEqual("cand-1", astrbot_neo_source_detail_resp.json()["neo_defaults"]["candidate_id"])
+        self.assertTrue(astrbot_neo_source_detail_resp.json()["neo_remote_state"]["configured"])
+        self.assertEqual(2, astrbot_neo_source_detail_resp.json()["neo_activity"]["counts"]["total"])
 
         missing_astrbot_neo_source_detail_resp = self.client.get("/api/skills/astrbot-neo-sources/missing")
         self.assertEqual(404, missing_astrbot_neo_source_detail_resp.status_code)

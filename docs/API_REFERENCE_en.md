@@ -221,6 +221,14 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
   - action-level booleans for `sync_supported`, `promote_supported`, and `rollback_supported`
 - `neo_defaults`
   - frontend-ready default action parameters: `candidate_id`, `release_id`, `stage`, `sync_to_local`, `require_stable`
+  - when remote state is available, these defaults are aligned to the remote `latest_candidate_id` / `active_stable_release_id`
+- `neo_remote_state`
+  - read-only Neo remote snapshot with `configured`, `endpoint`, `fetched_at`, `reason_code`, and `message`
+  - `current` includes `active_stable_release_id`, `active_canary_release_id`, `latest_release_id`, `latest_candidate_id`, and `latest_candidate_status`
+  - `releases.items[]` and `candidates.items[]` are normalized in descending recency order using `updated_at -> created_at`
+- `neo_activity`
+  - recent audit history for the current Neo source: `counts.total`, `items[]`, and `warnings[]`
+  - audit filtering matches normalized `source_id` values, so `astrneo:*` identifiers with separators still resolve their history correctly
 
 ### 9.2 AstrBot mutation payloads
 

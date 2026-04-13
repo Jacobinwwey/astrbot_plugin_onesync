@@ -222,6 +222,14 @@
   - 当前详情下 `sync_supported`、`promote_supported`、`rollback_supported`
 - `neo_defaults`
   - 前端可直接复用的默认动作参数：`candidate_id`、`release_id`、`stage`、`sync_to_local`、`require_stable`
+  - 当远端可读时，会优先对齐到远端当前 `latest_candidate_id` / `active_stable_release_id`
+- `neo_remote_state`
+  - Neo 远端只读状态快照：`configured`、`endpoint`、`fetched_at`、`reason_code`、`message`
+  - `current` 下包含 `active_stable_release_id`、`active_canary_release_id`、`latest_release_id`、`latest_candidate_id`、`latest_candidate_status`
+  - `releases.items[]` 与 `candidates.items[]` 已按 `updated_at -> created_at` 的时间优先级倒序整理
+- `neo_activity`
+  - 当前 Neo source 的最近审计轨迹：`counts.total`、`items[]`、`warnings[]`
+  - 审计过滤会按标准化后的 `source_id` 匹配，因此 `astrneo:*` 这类带分隔符的 source id 也能稳定返回历史
 
 ### 9.2 AstrBot 变更请求 payload
 
