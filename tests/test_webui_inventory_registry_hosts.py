@@ -586,6 +586,8 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("function withInventoryActionAuditEvent(", html)
         self.assertIn("function inventoryRollbackRetryBeforeRevisions(", html)
         self.assertIn("function inventoryRollbackSuccessMessage(", html)
+        self.assertIn("const actionableUpdatePlanInline = getSelectedSourceAggregateUpdatePlan();", html)
+        self.assertNotIn("const updateModeLabel = actionableUpdatePlan &&", html)
         self.assertIn("function inventoryRollbackAuditActionEndpoint(", html)
         self.assertIn("async function retryInventoryRollbackAuditRow(", html)
         self.assertIn("async function focusInventorySourceByAggregateId(", html)

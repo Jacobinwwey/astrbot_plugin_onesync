@@ -12732,8 +12732,9 @@ ${escapeHtml(t("inventory_skill_meta_sync_status"))}: ${escapeHtml(syncStatus)}
           || (detailSource && detailSource.update_policy)
           || "-",
         ).trim() || "-";
-        const updateModeLabel = actionableUpdatePlan && typeof actionableUpdatePlan === "object"
-          ? inventoryOperationPlanModeLabel(actionableUpdatePlan)
+        const actionableUpdatePlanInline = getSelectedSourceAggregateUpdatePlan();
+        const updateModeLabel = actionableUpdatePlanInline && typeof actionableUpdatePlanInline === "object"
+          ? inventoryOperationPlanModeLabel(actionableUpdatePlanInline)
           : t("inventory_operation_plan_mode_manual_only");
         const updateMechanismNotes = [
           `${t("inventory_operation_plan_manager")}: ${heroManager}`,
