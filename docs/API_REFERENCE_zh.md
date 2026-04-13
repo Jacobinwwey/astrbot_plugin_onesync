@@ -215,6 +215,7 @@
   - 每个范围各自的 `local_skill_total`、`active_skill_total`、`sandbox_cache_exists`、`sandbox_cache_ready` 等摘要。
 - `runtime_state.summary.selected_workspace_id`
   - 与 `layout.selected_workspace_id` 保持同一“仅显式 target 才选中”的语义。
+  - 当其为空且存在 `scope_summaries.workspace` 时，该条目为聚合摘要（`workspace_aggregate=true`），不再回退到“第一个 workspace”。
 - `runtime_state.state_rows[]`
   - 逐 skill 状态行，包含 `scope`、`skill_name`、`state_classification`、`local_exists`、`sandbox_exists`、`active`。
 

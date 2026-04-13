@@ -214,6 +214,7 @@ Key fields returned by `GET /api/skills/hosts/{host_id}/astrbot`:
   - per-scope summaries such as `local_skill_total`, `active_skill_total`, `sandbox_cache_exists`, and `sandbox_cache_ready`
 - `runtime_state.summary.selected_workspace_id`
   - follows the same explicit-target semantics as `layout.selected_workspace_id`
+  - when empty and `scope_summaries.workspace` exists, that workspace scope summary is an aggregate (`workspace_aggregate=true`) instead of an implicit first-workspace fallback
 - `runtime_state.state_rows[]`
   - per-skill rows carrying `scope`, `skill_name`, `state_classification`, `local_exists`, `sandbox_exists`, and `active`
 
