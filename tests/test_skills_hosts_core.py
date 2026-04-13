@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -94,7 +95,7 @@ class SkillsHostsCoreTests(unittest.TestCase):
         self.assertEqual("astrbot", adapter["runtime_state_backend"])
         self.assertEqual(ASTRBOT_HOST_CAPABILITIES, adapter["capabilities"])
 
-    def test_resolve_host_target_path_prefers_hidden_root_for_astrbot_global_and_checkout_for_workspace(self) -> None:
+    def test_resolve_host_target_path_prefers_runtime_data_root_for_astrbot_global(self) -> None:
         host = {
             "id": "astrbot",
             "host_id": "astrbot",
@@ -108,8 +109,27 @@ class SkillsHostsCoreTests(unittest.TestCase):
             ],
         }
 
-        self.assertEqual("/root/.astrbot/data/skills", resolve_host_target_path(host, "global"))
-        self.assertEqual("/root/astrbot/data/skills", resolve_host_target_path(host, "workspace"))
+        self.assertEqual("/root/astrbot/data/skills", resolve_host_target_path(host, "global"))
+        self.assertEqual("", resolve_host_target_path(host, "workspace"))
+
+    def test_resolve_host_target_path_discovers_workspace_skills_under_astrbot_data_workspaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            astrbot_root = Path(tempdir) / "astrbot"
+            global_skills_root = astrbot_root / "data" / "skills"
+            workspace_skills_root = astrbot_root / "data" / "workspaces" / "session_alpha" / "skills"
+            global_skills_root.mkdir(parents=True, exist_ok=True)
+            workspace_skills_root.mkdir(parents=True, exist_ok=True)
+
+            host = {
+                "id": "astrbot",
+                "host_id": "astrbot",
+                "provider_key": "astrbot",
+                "declared_skill_roots": [str(global_skills_root)],
+                "resolved_skill_roots": [str(global_skills_root)],
+            }
+
+            self.assertEqual(str(global_skills_root), resolve_host_target_path(host, "global"))
+            self.assertEqual(str(workspace_skills_root), resolve_host_target_path(host, "workspace"))
 
 
 if __name__ == "__main__":

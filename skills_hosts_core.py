@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 import re
 from typing import Any
 
@@ -248,10 +249,37 @@ def _merged_skill_root_candidates(resolved_roots: list[str], declared_roots: lis
 
 
 def _classify_astrbot_scope(path: str) -> str:
-    normalized = str(path or "").strip().replace("\\", "/").lower()
-    if "/.astrbot/" in normalized:
+    normalized = str(path or "").strip().replace("\\", "/").rstrip("/").lower()
+    if not normalized:
         return "global"
-    return "workspace"
+    if "/data/workspaces/" in normalized and normalized.endswith("/skills"):
+        return "workspace"
+    if normalized.endswith("/data/skills"):
+        return "global"
+    return "global"
+
+
+def _discover_astrbot_workspace_skill_roots(global_candidates: list[str]) -> list[str]:
+    discovered: list[str] = []
+    for candidate in global_candidates:
+        skills_root = Path(str(candidate or "").strip()).expanduser()
+        if not str(skills_root):
+            continue
+        if skills_root.name != "skills":
+            continue
+        data_dir = skills_root.parent
+        if data_dir.name != "data":
+            continue
+        workspaces_dir = data_dir / "workspaces"
+        if not workspaces_dir.is_dir():
+            continue
+        for workspace_dir in sorted(workspaces_dir.iterdir()):
+            if not workspace_dir.is_dir():
+                continue
+            workspace_skills_root = workspace_dir / "skills"
+            if workspace_skills_root.is_dir():
+                discovered.append(str(workspace_skills_root))
+    return _dedupe_keep_order(discovered)
 
 
 def _resolve_astrbot_target_path(resolved_roots: list[str], declared_roots: list[str], scope_name: str) -> str:
@@ -259,23 +287,46 @@ def _resolve_astrbot_target_path(resolved_roots: list[str], declared_roots: list
     if not merged:
         return ""
 
+    normalized_scope = "workspace" if scope_name == "workspace" else "global"
+    resolved_workspace_candidates = [
+        item for item in resolved_roots if _classify_astrbot_scope(item) == "workspace"
+    ]
+    resolved_global_candidates = [
+        item for item in resolved_roots if _classify_astrbot_scope(item) == "global"
+    ]
+    if not resolved_global_candidates:
+        resolved_global_candidates = _dedupe_keep_order(
+            [
+                item
+                for item in resolved_roots
+                if item not in resolved_workspace_candidates
+            ],
+        )
+
     workspace_candidates = [
         item for item in merged if _classify_astrbot_scope(item) == "workspace"
     ]
     global_candidates = [
         item for item in merged if _classify_astrbot_scope(item) == "global"
     ]
-    if scope_name == "workspace":
+    if not global_candidates:
+        global_candidates = _dedupe_keep_order(
+            [item for item in merged if item not in workspace_candidates],
+        )
+    discovered_workspace_candidates = _discover_astrbot_workspace_skill_roots(global_candidates)
+    workspace_candidates = _dedupe_keep_order(
+        workspace_candidates + discovered_workspace_candidates,
+    )
+
+    if normalized_scope == "workspace":
         return (
-            (workspace_candidates[0] if workspace_candidates else "")
-            or (global_candidates[1] if len(global_candidates) > 1 else "")
-            or (global_candidates[0] if global_candidates else "")
-            or merged[0]
+            (resolved_workspace_candidates[0] if resolved_workspace_candidates else "")
+            or (workspace_candidates[0] if workspace_candidates else "")
         )
     return (
-        (global_candidates[0] if global_candidates else "")
-        or (workspace_candidates[1] if len(workspace_candidates) > 1 else "")
-        or (workspace_candidates[0] if workspace_candidates else "")
+        (resolved_global_candidates[0] if resolved_global_candidates else "")
+        or (global_candidates[0] if global_candidates else "")
+        or (resolved_roots[0] if resolved_roots else "")
         or merged[0]
     )
 

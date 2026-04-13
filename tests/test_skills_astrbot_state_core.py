@@ -24,8 +24,8 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
         self.root = Path(self._tempdir.name) / "astrbot-root"
         self.skills_root = self.root / "data" / "skills"
         self.skills_root.mkdir(parents=True, exist_ok=True)
-        self.workspace_root = Path(self._tempdir.name) / "workspace-astrbot"
-        self.workspace_skills_root = self.workspace_root / "data" / "skills"
+        self.workspace_root = self.root / "data" / "workspaces" / "session-alpha"
+        self.workspace_skills_root = self.workspace_root / "skills"
         self.workspace_skills_root.mkdir(parents=True, exist_ok=True)
 
     def _write_skill(self, name: str, description: str = "", *, scope: str = "global") -> None:
@@ -179,6 +179,46 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
         self.assertEqual(["global", "workspace"], layout["available_scopes"])
         self.assertEqual(str(self.workspace_skills_root), layout["scoped_layouts"]["workspace"]["skills_root"])
 
+    def test_resolve_astrbot_host_layout_does_not_treat_secondary_global_root_as_workspace(self) -> None:
+        isolated_skills_root = Path(self._tempdir.name) / "isolated-astrbot" / "data" / "skills"
+        isolated_skills_root.mkdir(parents=True, exist_ok=True)
+        hidden_root = Path(self._tempdir.name) / ".astrbot" / "data" / "skills"
+        host = {
+            "host_id": "astrbot",
+            "provider_key": "astrbot",
+            "installed": True,
+            "target_paths": {"global": "", "workspace": ""},
+            "resolved_skill_roots": [str(isolated_skills_root)],
+            "declared_skill_roots": [str(isolated_skills_root), str(hidden_root)],
+        }
+
+        layout = resolve_astrbot_host_layout(host)
+
+        self.assertEqual(["global"], layout["available_scopes"])
+        self.assertTrue(layout["scoped_layouts"]["global"]["state_available"])
+        self.assertFalse(layout["scoped_layouts"]["workspace"]["state_available"])
+        self.assertEqual(str(isolated_skills_root), layout["scoped_layouts"]["global"]["skills_root"])
+
+    def test_resolve_astrbot_host_layout_discovers_workspace_roots_from_data_workspaces(self) -> None:
+        discovered_workspace_skills_root = self.root / "data" / "workspaces" / "session-alpha" / "skills"
+        discovered_workspace_skills_root.mkdir(parents=True, exist_ok=True)
+        host = {
+            "host_id": "astrbot",
+            "provider_key": "astrbot",
+            "installed": True,
+            "target_paths": {"global": str(self.skills_root), "workspace": ""},
+            "resolved_skill_roots": [str(self.skills_root)],
+            "declared_skill_roots": [str(self.skills_root)],
+        }
+
+        layout = resolve_astrbot_host_layout(host)
+
+        self.assertEqual(["global", "workspace"], layout["available_scopes"])
+        self.assertEqual(
+            str(discovered_workspace_skills_root),
+            layout["scoped_layouts"]["workspace"]["skills_root"],
+        )
+
     def test_build_astrbot_host_runtime_state_tracks_rows_per_scope(self) -> None:
         self._write_skill("global-demo", "global skill", scope="global")
         self._write_skill("workspace-demo", "workspace skill", scope="workspace")
@@ -187,7 +227,7 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
             json.dumps({"skills": {"global-demo": {"active": True}}}, ensure_ascii=False),
             encoding="utf-8",
         )
-        (self.workspace_root / "data" / "skills.json").write_text(
+        (self.workspace_root / "skills.json").write_text(
             json.dumps({"skills": {"workspace-demo": {"active": False}}}, ensure_ascii=False),
             encoding="utf-8",
         )
@@ -195,7 +235,7 @@ class SkillsAstrBotStateCoreTests(unittest.TestCase):
             json.dumps({"version": 1, "skills": []}, ensure_ascii=False),
             encoding="utf-8",
         )
-        (self.workspace_root / "data" / "sandbox_skills_cache.json").write_text(
+        (self.workspace_root / "sandbox_skills_cache.json").write_text(
             json.dumps({"version": 1, "skills": []}, ensure_ascii=False),
             encoding="utf-8",
         )

@@ -1581,6 +1581,18 @@ def _merge_host_rows_with_saved_lock(
             if not str(merged.get("runtime_state_backend") or "").strip():
                 merged["runtime_state_backend"] = str(saved_host.get("runtime_state_backend") or "").strip()
 
+            if str(merged.get("provider_key") or "").strip().lower() == "astrbot":
+                resolution_host = {
+                    **merged,
+                    "declared_skill_roots": declared_roots,
+                    "resolved_skill_roots": resolved_roots,
+                }
+                normalized_global_target_path = resolve_host_target_path(resolution_host, "global")
+                normalized_workspace_target_path = resolve_host_target_path(resolution_host, "workspace")
+                if normalized_global_target_path:
+                    merged_target_paths["global"] = normalized_global_target_path
+                merged_target_paths["workspace"] = normalized_workspace_target_path
+
             if not merged_target_paths["global"]:
                 merged_target_paths["global"] = resolve_host_target_path(merged, "global")
             if not merged_target_paths["workspace"]:

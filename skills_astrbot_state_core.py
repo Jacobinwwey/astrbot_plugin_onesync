@@ -211,6 +211,40 @@ def _normalize_astrbot_scope(value: Any, default: str = "global") -> str:
     return default
 
 
+def _classify_astrbot_scope_by_path(path: str) -> str:
+    normalized = str(path or "").strip().replace("\\", "/").rstrip("/").lower()
+    if not normalized:
+        return "global"
+    if "/data/workspaces/" in normalized and normalized.endswith("/skills"):
+        return "workspace"
+    if normalized.endswith("/data/skills"):
+        return "global"
+    return "global"
+
+
+def _discover_workspace_skill_roots(global_roots: list[str]) -> list[str]:
+    discovered: list[str] = []
+    for candidate in global_roots:
+        skills_root = Path(str(candidate or "").strip()).expanduser()
+        if not str(skills_root):
+            continue
+        if skills_root.name != "skills":
+            continue
+        data_dir = skills_root.parent
+        if data_dir.name != "data":
+            continue
+        workspaces_dir = data_dir / "workspaces"
+        if not workspaces_dir.is_dir():
+            continue
+        for workspace_dir in sorted(workspaces_dir.iterdir()):
+            if not workspace_dir.is_dir():
+                continue
+            workspace_skills_root = workspace_dir / "skills"
+            if workspace_skills_root.is_dir():
+                discovered.append(str(workspace_skills_root))
+    return _dedupe_keep_order(discovered)
+
+
 def _merged_scope_root_candidates(host: dict[str, Any]) -> list[str]:
     resolved_roots = _to_str_list(host.get("resolved_skill_roots", []))
     declared_roots = _to_str_list(host.get("declared_skill_roots", []))
@@ -234,15 +268,37 @@ def _skills_root_candidates_by_scope(host: dict[str, Any]) -> dict[str, list[Pat
     target_paths = host.get("target_paths", {})
     if isinstance(target_paths, dict):
         for scope in ASTRBOT_SCOPE_ORDER:
-            candidates[scope].extend(_to_str_list(target_paths.get(scope, "")))
+            for path_text in _to_str_list(target_paths.get(scope, "")):
+                classified_scope = _classify_astrbot_scope_by_path(path_text)
+                candidates[classified_scope].append(path_text)
 
     merged = _merged_scope_root_candidates(host)
     if merged:
+        merged_workspace_candidates = [
+            item for item in merged
+            if _classify_astrbot_scope_by_path(item) == "workspace"
+        ]
+        merged_global_candidates = [
+            item for item in merged
+            if _classify_astrbot_scope_by_path(item) == "global"
+        ]
+        if not merged_global_candidates:
+            merged_global_candidates = [
+                item for item in merged
+                if item not in merged_workspace_candidates
+            ]
+
         if not candidates["global"]:
-            candidates["global"].append(merged[0])
+            if merged_global_candidates:
+                candidates["global"].append(merged_global_candidates[0])
+            else:
+                candidates["global"].append(merged[0])
         if not candidates["workspace"]:
-            workspace_candidate = merged[1] if len(merged) > 1 else merged[0]
-            candidates["workspace"].append(workspace_candidate)
+            candidates["workspace"].extend(merged_workspace_candidates)
+
+    candidates["workspace"].extend(
+        _discover_workspace_skill_roots(candidates["global"]),
+    )
 
     resolved = {
         scope: [
@@ -252,11 +308,13 @@ def _skills_root_candidates_by_scope(host: dict[str, Any]) -> dict[str, list[Pat
         ]
         for scope in ASTRBOT_SCOPE_ORDER
     }
-    global_root = resolved.get("global", [None])[0]
-    workspace_root = resolved.get("workspace", [None])[0]
+    global_roots = resolved.get("global", [])
+    workspace_roots = resolved.get("workspace", [])
+    global_root = global_roots[0] if global_roots else None
+    workspace_root = workspace_roots[0] if workspace_roots else None
     if global_root is not None and workspace_root is not None and global_root == workspace_root:
         remaining_workspace = [
-            item for item in resolved.get("workspace", [])
+            item for item in workspace_roots
             if item != global_root
         ]
         resolved["workspace"] = remaining_workspace
@@ -276,17 +334,23 @@ def _derive_astrbot_layout(skills_root: Path) -> tuple[Path, Path]:
 
 def _build_scoped_astrbot_layout(scope: str, skills_root: Path) -> dict[str, Any]:
     normalized_scope = _normalize_astrbot_scope(scope)
+    normalized_skills_root = Path(str(skills_root or "").strip()).expanduser()
+    normalized_skills_root_text = str(normalized_skills_root).strip()
+    if normalized_skills_root_text in {"", "."}:
+        normalized_skills_root = Path()
+        normalized_skills_root_text = ""
+
     root_dir = Path()
     data_dir = Path()
-    if str(skills_root):
-        root_dir, data_dir = _derive_astrbot_layout(skills_root)
+    if normalized_skills_root_text:
+        root_dir, data_dir = _derive_astrbot_layout(normalized_skills_root)
     skills_config_path = data_dir / "skills.json" if str(data_dir) else Path()
     sandbox_cache_path = data_dir / "sandbox_skills_cache.json" if str(data_dir) else Path()
-    neo_map_path = skills_root / "neo_skill_map.json" if str(skills_root) else Path()
+    neo_map_path = normalized_skills_root / "neo_skill_map.json" if normalized_skills_root_text else Path()
     return {
         "scope": normalized_scope,
-        "state_available": bool(str(skills_root)),
-        "skills_root": str(skills_root) if str(skills_root) else "",
+        "state_available": bool(normalized_skills_root_text),
+        "skills_root": normalized_skills_root_text,
         "astrbot_root": str(root_dir) if str(root_dir) else "",
         "astrbot_data_dir": str(data_dir) if str(data_dir) else "",
         "skills_config_path": str(skills_config_path) if str(skills_config_path) else "",
