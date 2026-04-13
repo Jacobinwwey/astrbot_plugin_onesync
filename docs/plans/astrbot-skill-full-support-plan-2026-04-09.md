@@ -410,9 +410,13 @@ AstrBot 宿主视角下的 skill 需要最少区分为：
     - 新增重试忙状态管理，避免与 update/sync/deploy 等聚合动作并发冲突
   - `tests/test_webui_inventory_registry_hosts.py`：
     - 新增回滚审计重试相关字符串、函数与 DOM hook 的静态断言
+  - 测试稳定性补丁：
+    - `tests/test_main_git_checkout_runtime.py` 的 fake astrbot module 安装判定从“仅检查 astrbot 根模块”改为“检查完整 required module 集合”，
+    - 修复 `pytest tests/test_webui_server.py tests/test_main_git_checkout_runtime.py` 顺序执行时的模块覆盖冲突。
 - 本轮定向回归：
   - `python3 -m py_compile main.py webui_server.py` -> passed
   - `pytest -q tests/test_webui_inventory_registry_hosts.py` -> passed
+  - `pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py` -> passed
   - `pytest -q tests/test_webui_server.py` -> passed
   - `pytest -q tests/test_main_git_checkout_runtime.py` -> passed
   - `pytest -q` -> passed

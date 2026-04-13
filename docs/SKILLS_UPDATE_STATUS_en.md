@@ -177,6 +177,9 @@ To call the feature "complete", the next implementation steps should be:
     - failure reason grouping (`reason:count`)
     - per-record `Retry Failed` action that reuses `retry_before_revisions` directly against rollback APIs
   - Retry execution is now mutually exclusive with aggregate update/sync/deploy flows to avoid concurrent mutation collisions.
+- Test-order stability is now fixed:
+  - Resolved fake astrbot module initialization conflicts between `tests/test_main_git_checkout_runtime.py` and `tests/test_webui_server.py`.
+  - Combined run now passes consistently: `pytest -q tests/test_webui_server.py tests/test_main_git_checkout_runtime.py`.
 
 - Added Gitea/Forgejo repo metadata sync adapter support:
   - Supports schema-less locator normalization and provider inference for locators like `repo:codeberg.org/<owner>/<repo>#...`
