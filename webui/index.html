@@ -1339,6 +1339,24 @@
       word-break: break-word;
     }
 
+    .inventory-runtime-lines {
+      display: grid;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .inventory-runtime-line {
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      border-radius: 10px;
+      padding: 6px 8px;
+      background: color-mix(in srgb, var(--panel) 82%, transparent);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
     .inventory-runtime-kpis {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3641,6 +3659,9 @@
                   </div>
                   <p class="inventory-utility-copy" id="inventoryUtilitySummaryNote">主工作区只保留精简状态线，完整统计与筛选摘要在这里查看。</p>
                   <p class="inventory-summary inventory-summary-utility" id="inventoryUtilitySummary">等待最新状态...</p>
+                  <div class="inventory-runtime-lines" id="inventoryUtilitySummaryLines">
+                    <div class="inventory-runtime-line">等待最新状态...</div>
+                  </div>
                   <div class="inventory-runtime-kpis" id="inventoryUtilitySummaryKpis">
                     <div class="inventory-runtime-kpi">
                       <p class="inventory-runtime-kpi-label">作用域</p>
@@ -12541,6 +12562,7 @@
       const sourceRowsEl = $("inventorySourceRows");
       const deployRowsEl = $("inventoryDeployRows");
       const utilitySummaryEl = $("inventoryUtilitySummary");
+      const utilitySummaryLinesEl = $("inventoryUtilitySummaryLines");
       const utilitySummaryKpisEl = $("inventoryUtilitySummaryKpis");
       const utilityHealthSummaryEl = $("inventoryUtilityHealthSummary");
       const utilityHistorySummaryEl = $("inventoryUtilityHistorySummary");
@@ -12597,6 +12619,24 @@
         const text = String(value || "").trim();
         el.textContent = text;
         el.title = text;
+      };
+
+      const setInventorySummaryLines = (lines) => {
+        if (!utilitySummaryLinesEl) return;
+        const normalizedLines = Array.isArray(lines)
+          ? lines
+            .map((line) => String(line || "").trim())
+            .filter(Boolean)
+          : [];
+        if (!normalizedLines.length) {
+          utilitySummaryLinesEl.innerHTML = `
+            <div class="inventory-runtime-line">${escapeHtml(t("inventory_runtime_kpi_empty"))}</div>
+          `;
+          return;
+        }
+        utilitySummaryLinesEl.innerHTML = normalizedLines.map((line) => `
+          <div class="inventory-runtime-line" title="${escapeHtml(line)}">${escapeHtml(line)}</div>
+        `).join("");
       };
       const installAtomFilter = normalizeInventoryInstallAtomFilter(state.inventoryInstallAtomFilter);
       const installAtomRefreshStrategy = normalizeInventoryInstallAtomRefreshStrategy(state.inventoryInstallAtomRefreshStrategy);
@@ -13702,6 +13742,7 @@ ${escapeHtml(t("inventory_skill_meta_resolver"))}: ${escapeHtml(resolverPath)}
         if (utilitySummaryEl) {
           setInventorySummaryText(utilitySummaryEl, noVisibleSoftwareText);
         }
+        setInventorySummaryLines([noVisibleSoftwareText]);
         if (utilitySummaryKpisEl) {
           utilitySummaryKpisEl.innerHTML = `
             <div class="inventory-runtime-kpi">
@@ -14641,8 +14682,10 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       summaryEl.textContent = compactSummaryParts.join(" · ");
       summaryEl.title = detailedSummary;
       if (utilitySummaryEl) {
-        setInventorySummaryText(utilitySummaryEl, detailedSummary);
+        utilitySummaryEl.textContent = compactSummaryParts.join(" · ");
+        utilitySummaryEl.title = detailedSummary;
       }
+      setInventorySummaryLines(summaryLines);
       if (utilitySummaryKpisEl) {
         const kpiRows = [
           {
