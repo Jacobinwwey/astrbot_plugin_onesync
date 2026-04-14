@@ -272,6 +272,10 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn('utilitySummaryEl.textContent = compactSummaryParts.join(" · ");', html)
         self.assertIn("setInventorySummaryLines(summaryLines);", html)
         self.assertIn("inventory_runtime_kpi_scope", html)
+        self.assertIn("inventory_runtime_kpi_workflow", html)
+        self.assertIn("inventory_runtime_kpi_progress", html)
+        self.assertIn("inventory_summary_runtime_progress", html)
+        self.assertIn("inventory_summary_compact_runtime", html)
         self.assertIn('summaryEl.title = detailedSummary;', html)
 
     def test_inventory_improve_all_skills_exposes_continuous_progress_contract(self) -> None:

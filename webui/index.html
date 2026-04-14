@@ -4832,9 +4832,14 @@
         inventory_runtime_kpi_software: "软件可见/候选",
         inventory_runtime_kpi_sources: "Source/成员",
         inventory_runtime_kpi_aggregates: "聚合候选",
+        inventory_runtime_kpi_workflow: "当前流程",
+        inventory_runtime_kpi_progress: "执行进度",
         inventory_runtime_kpi_freshness: "Fresh/Aging/Stale",
         inventory_runtime_kpi_warnings: "告警",
         inventory_runtime_kpi_empty: "等待最新状态...",
+        inventory_runtime_workflow_idle: "空闲",
+        inventory_runtime_workflow_update_all: "仅更新聚合",
+        inventory_runtime_workflow_improve_all: "一键完善 Skills",
         inventory_utility_health_title: "运行健康",
         inventory_display_settings_summary: "显示偏好",
         inventory_source_display_note: "调整 Source / Bundle 卡片的阅读密度与横向占用。",
@@ -5128,8 +5133,11 @@
         inventory_summary_compact_sources: "Source {total}",
         inventory_summary_compact_aggregates: "聚合 {total}",
         inventory_summary_compact_freshness: "Fresh/Aging {fresh}/{aging}",
+        inventory_summary_compact_runtime: "流程 {phase} {percent}%",
         inventory_summary_compact_alerts: "告警 {count}",
         inventory_summary_compact_hidden: "隐藏未安装 {count}",
+        inventory_summary_runtime_idle: "流程=空闲",
+        inventory_summary_runtime_progress: "流程={workflow} · 阶段={phase} · 已完成={completed}/{total} · 失败={failed}",
         inventory_summary_freshness: "新鲜度(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{missing}",
         inventory_summary_sync: "同步(syncable/ok/error/pending)={syncable}/{ok}/{error}/{pending}",
         inventory_summary_compatible: "可部署={total} 已选择={selected}",
@@ -5705,9 +5713,14 @@
         inventory_runtime_kpi_software: "Visible/Candidate Hosts",
         inventory_runtime_kpi_sources: "Sources/Members",
         inventory_runtime_kpi_aggregates: "Aggregate Candidates",
+        inventory_runtime_kpi_workflow: "Workflow",
+        inventory_runtime_kpi_progress: "Execution Progress",
         inventory_runtime_kpi_freshness: "Fresh/Aging/Stale",
         inventory_runtime_kpi_warnings: "Warnings",
         inventory_runtime_kpi_empty: "Waiting for latest runtime state...",
+        inventory_runtime_workflow_idle: "Idle",
+        inventory_runtime_workflow_update_all: "Update Aggregates Only",
+        inventory_runtime_workflow_improve_all: "Improve All Skills",
         inventory_utility_health_title: "Runtime Health",
         inventory_display_settings_summary: "Display Preferences",
         inventory_source_display_note: "Tune the reading density and horizontal footprint of Source / Bundle cards.",
@@ -6001,8 +6014,11 @@
         inventory_summary_compact_sources: "Sources {total}",
         inventory_summary_compact_aggregates: "Aggregates {total}",
         inventory_summary_compact_freshness: "Fresh/Aging {fresh}/{aging}",
+        inventory_summary_compact_runtime: "Flow {phase} {percent}%",
         inventory_summary_compact_alerts: "Alerts {count}",
         inventory_summary_compact_hidden: "Hidden uninstalled {count}",
+        inventory_summary_runtime_idle: "workflow=idle",
+        inventory_summary_runtime_progress: "workflow={workflow} · phase={phase} · completed={completed}/{total} · failed={failed}",
         inventory_summary_freshness: "freshness(fresh/aging/stale/missing)={fresh}/{aging}/{stale}/{missing}",
         inventory_summary_sync: "sync(syncable/ok/error/pending)={syncable}/{ok}/{error}/{pending}",
         inventory_summary_compatible: "deployable={total} selected={selected}",
@@ -14595,6 +14611,26 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const scopeLabel = bindingScope === "workspace"
         ? t("inventory_scope_workspace")
         : t("inventory_scope_global");
+      const runtimePhaseLabel = inventoryAggregateProgressPhaseLabel(aggregateProgress.status);
+      const runtimeWorkflowLabel = aggregateProgressVisible
+        ? (
+          aggregateProgressWorkflowIsImprove
+            ? t("inventory_runtime_workflow_improve_all")
+            : t("inventory_runtime_workflow_update_all")
+        )
+        : t("inventory_runtime_workflow_idle");
+      const runtimeProgressLine = aggregateProgressVisible
+        ? t("inventory_summary_runtime_progress", {
+          workflow: runtimeWorkflowLabel,
+          phase: runtimePhaseLabel,
+          completed: aggregateProgress.completedTotal,
+          total: aggregateProgressTotal,
+          failed: aggregateProgress.failureCount,
+        })
+        : t("inventory_summary_runtime_idle");
+      const runtimeProgressKpiValue = aggregateProgressVisible
+        ? `${aggregateProgress.completedTotal}/${aggregateProgressTotal} (${aggregateProgressPercent}%)`
+        : "0/0 (0%)";
       const summaryLines = [
         [
           t("inventory_summary_scope", { scope: scopeLabel }),
@@ -14656,6 +14692,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
             ? t("inventory_summary_candidates", { count: hiddenUninstalledCandidates })
             : "",
         ].filter(Boolean).join(" · "),
+        runtimeProgressLine,
       ];
       const compactSummaryParts = [
         t("inventory_summary_compact_scope", { scope: scopeLabel }),
@@ -14673,6 +14710,12 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           fresh: counts.source_fresh_total || counts.skills_fresh_total || 0,
           aging: counts.source_aging_total || counts.skills_aging_total || 0,
         }),
+        aggregateProgressVisible
+          ? t("inventory_summary_compact_runtime", {
+            phase: runtimePhaseLabel,
+            percent: aggregateProgressPercent,
+          })
+          : "",
         warnings.length ? t("inventory_summary_compact_alerts", { count: warnings.length }) : "",
         (!showUninstalled && hiddenUninstalledCandidates > 0)
           ? t("inventory_summary_compact_hidden", { count: hiddenUninstalledCandidates })
@@ -14703,6 +14746,14 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
           {
             label: t("inventory_runtime_kpi_aggregates"),
             value: String(compatibleSources.length),
+          },
+          {
+            label: t("inventory_runtime_kpi_workflow"),
+            value: runtimeWorkflowLabel,
+          },
+          {
+            label: t("inventory_runtime_kpi_progress"),
+            value: runtimeProgressKpiValue,
           },
           {
             label: t("inventory_runtime_kpi_freshness"),
