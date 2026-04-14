@@ -265,8 +265,10 @@ class WebUIInventoryRegistryHostsTests(unittest.TestCase):
         self.assertIn("inventory_summary_compact_alerts", html)
         self.assertIn("inventory_summary_compact_hidden", html)
         self.assertIn('const utilitySummaryEl = $("inventoryUtilitySummary");', html)
+        self.assertIn('const utilitySummaryKpisEl = $("inventoryUtilitySummaryKpis");', html)
         self.assertIn('summaryEl.textContent = compactSummaryParts.join(" · ");', html)
-        self.assertIn('utilitySummaryEl.textContent = detailedSummary;', html)
+        self.assertIn("setInventorySummaryText(utilitySummaryEl, detailedSummary);", html)
+        self.assertIn("inventory_runtime_kpi_scope", html)
         self.assertIn('summaryEl.title = detailedSummary;', html)
 
     def test_inventory_improve_all_skills_exposes_continuous_progress_contract(self) -> None:

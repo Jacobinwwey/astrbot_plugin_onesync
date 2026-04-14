@@ -1335,6 +1335,41 @@
 
     .inventory-summary-utility {
       margin: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .inventory-runtime-kpis {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .inventory-runtime-kpi {
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+      min-width: 0;
+    }
+
+    .inventory-runtime-kpi-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      letter-spacing: 0.02em;
+    }
+
+    .inventory-runtime-kpi-value {
+      margin: 3px 0 0;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .inventory-grid {
@@ -3046,11 +3081,14 @@
     .inventory-utility-section-note {
       color: var(--muted);
       font-size: 12px;
-      line-height: 1.45;
+      line-height: 1.5;
       min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
       overflow: hidden;
       display: -webkit-box;
-      -webkit-line-clamp: 2;
+      -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
     }
 
@@ -3074,6 +3112,10 @@
 
       .inventory-inspector-state {
         max-width: 100%;
+      }
+
+      .inventory-runtime-kpis {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -3599,6 +3641,12 @@
                   </div>
                   <p class="inventory-utility-copy" id="inventoryUtilitySummaryNote">主工作区只保留精简状态线，完整统计与筛选摘要在这里查看。</p>
                   <p class="inventory-summary inventory-summary-utility" id="inventoryUtilitySummary">等待最新状态...</p>
+                  <div class="inventory-runtime-kpis" id="inventoryUtilitySummaryKpis">
+                    <div class="inventory-runtime-kpi">
+                      <p class="inventory-runtime-kpi-label">作用域</p>
+                      <p class="inventory-runtime-kpi-value">等待最新状态...</p>
+                    </div>
+                  </div>
                 </div>
                 <details class="inventory-utility-section" id="inventoryUtilityHealthSection">
                   <summary>
@@ -4759,6 +4807,13 @@
         inventory_utility_settings_note: "这里只放影响阅读效率的低频偏好：视图、字体和卡片尺寸。主工作区继续聚焦 Source、Deploy 与执行状态。",
         inventory_utility_summary_title: "运行摘要",
         inventory_utility_summary_note: "主工作区只保留精简状态线，完整统计与筛选摘要在这里查看。",
+        inventory_runtime_kpi_scope: "作用域",
+        inventory_runtime_kpi_software: "软件可见/候选",
+        inventory_runtime_kpi_sources: "Source/成员",
+        inventory_runtime_kpi_aggregates: "聚合候选",
+        inventory_runtime_kpi_freshness: "Fresh/Aging/Stale",
+        inventory_runtime_kpi_warnings: "告警",
+        inventory_runtime_kpi_empty: "等待最新状态...",
         inventory_utility_health_title: "运行健康",
         inventory_display_settings_summary: "显示偏好",
         inventory_source_display_note: "调整 Source / Bundle 卡片的阅读密度与横向占用。",
@@ -5625,6 +5680,13 @@
         inventory_utility_settings_note: "Keep low-frequency reading preferences here: view mode, typography, and card size. The main workspace stays focused on sources, deploy targets, and execution state.",
         inventory_utility_summary_title: "Runtime Summary",
         inventory_utility_summary_note: "The primary workspace keeps only a compact status line. Full inventory counts and filters stay here.",
+        inventory_runtime_kpi_scope: "Scope",
+        inventory_runtime_kpi_software: "Visible/Candidate Hosts",
+        inventory_runtime_kpi_sources: "Sources/Members",
+        inventory_runtime_kpi_aggregates: "Aggregate Candidates",
+        inventory_runtime_kpi_freshness: "Fresh/Aging/Stale",
+        inventory_runtime_kpi_warnings: "Warnings",
+        inventory_runtime_kpi_empty: "Waiting for latest runtime state...",
         inventory_utility_health_title: "Runtime Health",
         inventory_display_settings_summary: "Display Preferences",
         inventory_source_display_note: "Tune the reading density and horizontal footprint of Source / Bundle cards.",
@@ -12479,6 +12541,7 @@
       const sourceRowsEl = $("inventorySourceRows");
       const deployRowsEl = $("inventoryDeployRows");
       const utilitySummaryEl = $("inventoryUtilitySummary");
+      const utilitySummaryKpisEl = $("inventoryUtilitySummaryKpis");
       const utilityHealthSummaryEl = $("inventoryUtilityHealthSummary");
       const utilityHistorySummaryEl = $("inventoryUtilityHistorySummary");
       const utilityInstallAtomSectionSummaryEl = $("inventoryUtilityInstallAtomSectionSummary");
@@ -12528,6 +12591,13 @@
       const deployScopeFilter = normalizeInventoryDeployScopeFilter(state.inventoryDeployScopeFilter);
       const deployInstallFilter = normalizeInventoryDeployInstallFilter(state.inventoryDeployInstallFilter);
       const kindFilter = normalizeInventoryKindFilter(state.inventoryKindFilter);
+
+      const setInventorySummaryText = (el, value) => {
+        if (!el) return;
+        const text = String(value || "").trim();
+        el.textContent = text;
+        el.title = text;
+      };
       const installAtomFilter = normalizeInventoryInstallAtomFilter(state.inventoryInstallAtomFilter);
       const installAtomRefreshStrategy = normalizeInventoryInstallAtomRefreshStrategy(state.inventoryInstallAtomRefreshStrategy);
       const executionHistoryMode = normalizeInventoryExecutionHistoryMode(state.inventoryExecutionHistoryMode);
@@ -13439,7 +13509,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       const doctorSummaryText = inventoryDoctorSummaryText(doctor);
       doctorSummaryEl.textContent = doctorSummaryText;
       if (utilityHealthSummaryEl) {
-        utilityHealthSummaryEl.textContent = doctorSummaryText;
+        setInventorySummaryText(utilityHealthSummaryEl, doctorSummaryText);
       }
       const installAtomSummaryText = t("inventory_install_atom_summary", {
         total: installAtomCounts.total || 0,
@@ -13454,7 +13524,7 @@ ${escapeHtml(t("inventory_deploy_meta_path"))}: ${escapeHtml(targetPath)}
       });
       installAtomSummaryEl.textContent = installAtomSummaryText;
       if (utilityInstallAtomSectionSummaryEl) {
-        utilityInstallAtomSectionSummaryEl.textContent = installAtomSummaryText;
+        setInventorySummaryText(utilityInstallAtomSectionSummaryEl, installAtomSummaryText);
       }
       refreshUnresolvedAtomsBtn.textContent = state.inventoryRefreshingInstallAtoms
         ? t("inventory_install_atom_refreshing")
@@ -13630,19 +13700,27 @@ ${escapeHtml(t("inventory_skill_meta_resolver"))}: ${escapeHtml(resolverPath)}
         summaryEl.textContent = noVisibleSoftwareText;
         summaryEl.title = noVisibleSoftwareText;
         if (utilitySummaryEl) {
-          utilitySummaryEl.textContent = noVisibleSoftwareText;
+          setInventorySummaryText(utilitySummaryEl, noVisibleSoftwareText);
+        }
+        if (utilitySummaryKpisEl) {
+          utilitySummaryKpisEl.innerHTML = `
+            <div class="inventory-runtime-kpi">
+              <p class="inventory-runtime-kpi-label">${escapeHtml(t("inventory_runtime_kpi_scope"))}</p>
+              <p class="inventory-runtime-kpi-value">${escapeHtml(t("inventory_runtime_kpi_empty"))}</p>
+            </div>
+          `;
         }
         if (utilityHealthSummaryEl) {
-          utilityHealthSummaryEl.textContent = t("inventory_doctor_waiting");
+          setInventorySummaryText(utilityHealthSummaryEl, t("inventory_doctor_waiting"));
         }
         if (utilityHistorySummaryEl) {
-          utilityHistorySummaryEl.textContent = t("inventory_execution_history_waiting");
+          setInventorySummaryText(utilityHistorySummaryEl, t("inventory_execution_history_waiting"));
         }
         if (utilityInstallAtomSectionSummaryEl) {
-          utilityInstallAtomSectionSummaryEl.textContent = t("inventory_install_atom_waiting");
+          setInventorySummaryText(utilityInstallAtomSectionSummaryEl, t("inventory_install_atom_waiting"));
         }
         if (utilityAstrbotSummaryEl) {
-          utilityAstrbotSummaryEl.textContent = t("inventory_astrbot_runtime_empty");
+          setInventorySummaryText(utilityAstrbotSummaryEl, t("inventory_astrbot_runtime_empty"));
         }
         statusStripEl.innerHTML = `
           <div class="inventory-status-card" data-tone="warn">
@@ -13756,10 +13834,10 @@ ${escapeHtml(t("inventory_skill_meta_resolver"))}: ${escapeHtml(resolverPath)}
         : 0;
       renderInventoryAggregateUpdateReportPanel(actionableAggregate);
       if (utilityHistorySummaryEl) {
-        utilityHistorySummaryEl.textContent = String(
+        setInventorySummaryText(utilityHistorySummaryEl, String(
           $("inventoryAggregateUpdateReportNote") && $("inventoryAggregateUpdateReportNote").textContent
           || t("inventory_execution_history_waiting"),
-        ).trim();
+        ).trim());
       }
       renderInventoryRollbackAuditPanel(actionableAggregate);
       renderInventoryLastUpdatePanel(actionableAggregate);
@@ -14010,7 +14088,7 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       const astrbotRuntimeSummaryText = astrbotRuntimeText || t("inventory_astrbot_runtime_empty");
       astrbotRuntimeSummaryEl.textContent = astrbotRuntimeSummaryText;
       if (utilityAstrbotSummaryEl) {
-        utilityAstrbotSummaryEl.textContent = astrbotRuntimeSummaryText;
+        setInventorySummaryText(utilityAstrbotSummaryEl, astrbotRuntimeSummaryText);
       }
       if (astrbotWorkspaceSelectEl) {
         const optionHtml = [
@@ -14563,7 +14641,41 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
       summaryEl.textContent = compactSummaryParts.join(" · ");
       summaryEl.title = detailedSummary;
       if (utilitySummaryEl) {
-        utilitySummaryEl.textContent = detailedSummary;
+        setInventorySummaryText(utilitySummaryEl, detailedSummary);
+      }
+      if (utilitySummaryKpisEl) {
+        const kpiRows = [
+          {
+            label: t("inventory_runtime_kpi_scope"),
+            value: scopeLabel,
+          },
+          {
+            label: t("inventory_runtime_kpi_software"),
+            value: `${softwareRows.length}/${skillCapableRows.length} (${filteredInstalled} ${t("inventory_meta_installed")})`,
+          },
+          {
+            label: t("inventory_runtime_kpi_sources"),
+            value: `${counts.skills_total || 0}/${counts.skills_members_total || counts.skills_total || 0}`,
+          },
+          {
+            label: t("inventory_runtime_kpi_aggregates"),
+            value: String(compatibleSources.length),
+          },
+          {
+            label: t("inventory_runtime_kpi_freshness"),
+            value: `${counts.source_fresh_total || counts.skills_fresh_total || 0}/${counts.source_aging_total || counts.skills_aging_total || 0}/${counts.source_stale_total || counts.skills_stale_total || 0}`,
+          },
+          {
+            label: t("inventory_runtime_kpi_warnings"),
+            value: String(warnings.length || 0),
+          },
+        ];
+        utilitySummaryKpisEl.innerHTML = kpiRows.map((item) => `
+          <div class="inventory-runtime-kpi" title="${escapeHtml(`${item.label}: ${item.value}`)}">
+            <p class="inventory-runtime-kpi-label">${escapeHtml(item.label)}</p>
+            <p class="inventory-runtime-kpi-value">${escapeHtml(item.value)}</p>
+          </div>
+        `).join("");
       }
     }
 
