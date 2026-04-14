@@ -3004,6 +3004,7 @@
 
     .inventory-inspector-panel {
       display: grid;
+      grid-auto-rows: max-content;
       gap: 12px;
       min-height: 0;
       align-content: start;
@@ -3044,10 +3045,14 @@
       border-radius: 16px;
       background: linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 94%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
       overflow: hidden;
+      min-width: 0;
+      min-height: max-content;
     }
 
-    .inventory-utility-section > summary {
-      list-style: none;
+    .inventory-utility-section-toggle {
+      border: 0;
+      background: transparent;
+      width: 100%;
       cursor: pointer;
       user-select: none;
       display: flex;
@@ -3055,13 +3060,12 @@
       justify-content: space-between;
       gap: 12px;
       padding: 12px 14px;
+      color: inherit;
+      text-align: left;
+      min-height: 50px;
     }
 
-    .inventory-utility-section > summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .inventory-utility-section > summary::after {
+    .inventory-utility-section-toggle::after {
       content: "";
       width: 9px;
       height: 9px;
@@ -3073,12 +3077,12 @@
       transition: transform 0.16s ease, margin-top 0.16s ease;
     }
 
-    .inventory-utility-section[open] > summary {
+    .inventory-utility-section.is-open > .inventory-utility-section-toggle {
       background: color-mix(in srgb, var(--panel-strong) 66%, transparent);
       border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
     }
 
-    .inventory-utility-section[open] > summary::after {
+    .inventory-utility-section.is-open > .inventory-utility-section-toggle::after {
       transform: rotate(225deg);
       margin-top: 8px;
     }
@@ -3114,6 +3118,11 @@
       display: grid;
       gap: 10px;
       padding: 12px 14px 14px;
+      min-width: 0;
+    }
+
+    .inventory-utility-section:not(.is-open) .inventory-utility-section-body {
+      display: none;
     }
 
     .inventory-utility-copy {
@@ -3669,28 +3678,28 @@
                     </div>
                   </div>
                 </div>
-                <details class="inventory-utility-section" id="inventoryUtilityHealthSection">
-                  <summary>
+                <section class="inventory-utility-section is-open" id="inventoryUtilityHealthSection">
+                  <button type="button" class="inventory-utility-section-toggle" data-inventory-utility-toggle="health" aria-expanded="true" aria-controls="inventoryUtilityHealthBody">
                     <span class="inventory-utility-section-head">
                       <span class="inventory-utility-section-title" id="inventoryUtilityHealthTitle">运行健康</span>
                       <span class="inventory-utility-section-note" id="inventoryUtilityHealthSummary">等待最新状态...</span>
                     </span>
-                  </summary>
-                  <div class="inventory-utility-section-body inventory-inspector-card">
+                  </button>
+                  <div class="inventory-utility-section-body inventory-inspector-card" id="inventoryUtilityHealthBody">
                     <div class="skills-subhead">
                       <button id="inventoryDoctorBtn" type="button">健康检查</button>
                     </div>
                     <p class="inventory-doctor-note" id="inventoryDoctorSummary">等待最新状态...</p>
                   </div>
-                </details>
-                <details class="inventory-utility-section" id="inventoryUtilityHistorySection">
-                  <summary>
+                </section>
+                <section class="inventory-utility-section" id="inventoryUtilityHistorySection">
+                  <button type="button" class="inventory-utility-section-toggle" data-inventory-utility-toggle="history" aria-expanded="false" aria-controls="inventoryUtilityHistoryBody">
                     <span class="inventory-utility-section-head">
                       <span class="inventory-utility-section-title" id="inventoryAggregateUpdateReportTitle">执行历史</span>
                       <span class="inventory-utility-section-note" id="inventoryUtilityHistorySummary">等待执行历史...</span>
                     </span>
-                  </summary>
-                  <div class="inventory-utility-section-body inventory-inspector-card">
+                  </button>
+                  <div class="inventory-utility-section-body inventory-inspector-card" id="inventoryUtilityHistoryBody">
                     <div class="skills-subhead">
                       <div class="skills-subhead-tools">
                         <div class="inventory-segment-block">
@@ -3710,15 +3719,15 @@
                       </div>
                     </div>
                   </div>
-                </details>
-                <details class="inventory-utility-section" id="inventoryUtilityInstallAtomSection">
-                  <summary>
+                </section>
+                <section class="inventory-utility-section" id="inventoryUtilityInstallAtomSection">
+                  <button type="button" class="inventory-utility-section-toggle" data-inventory-utility-toggle="install_atom" aria-expanded="false" aria-controls="inventoryUtilityInstallAtomBody">
                     <span class="inventory-utility-section-head">
                       <span class="inventory-utility-section-title" id="inventoryInstallAtomTitle">Install Atom 账本</span>
                       <span class="inventory-utility-section-note" id="inventoryUtilityInstallAtomSectionSummary">等待 install-atom 账本...</span>
                     </span>
-                  </summary>
-                  <div class="inventory-utility-section-body inventory-inspector-card">
+                  </button>
+                  <div class="inventory-utility-section-body inventory-inspector-card" id="inventoryUtilityInstallAtomBody">
                     <div class="skills-subhead">
                       <div class="skills-subhead-tools">
                         <div class="inventory-segment-block">
@@ -3750,15 +3759,15 @@
                       </div>
                     </div>
                   </div>
-                </details>
-                <details class="inventory-utility-section" id="inventoryUtilityAstrbotSection">
-                  <summary>
+                </section>
+                <section class="inventory-utility-section" id="inventoryUtilityAstrbotSection">
+                  <button type="button" class="inventory-utility-section-toggle" data-inventory-utility-toggle="astrbot" aria-expanded="false" aria-controls="inventoryUtilityAstrbotBody">
                     <span class="inventory-utility-section-head">
                       <span class="inventory-utility-section-title" id="inventoryAstrbotRuntimeTitle">AstrBot 运行态</span>
                       <span class="inventory-utility-section-note" id="inventoryUtilityAstrbotSummary">当前软件不是 AstrBot，或运行态尚不可用。</span>
                     </span>
-                  </summary>
-                  <div class="inventory-utility-section-body inventory-inspector-card">
+                  </button>
+                  <div class="inventory-utility-section-body inventory-inspector-card" id="inventoryUtilityAstrbotBody">
                     <div class="inventory-soft-meta" id="inventoryAstrbotRuntimeSummary">当前软件不是 AstrBot，或运行态尚不可用。</div>
                     <div class="inventory-soft-meta">
                       <label for="inventoryAstrbotWorkspaceSelect" id="inventoryAstrbotWorkspaceLabel">Workspace</label>
@@ -3794,7 +3803,7 @@
                     </div>
                     <div class="inventory-soft-meta" id="inventoryAstrbotActionNote">待命</div>
                   </div>
-                </details>
+                </section>
                 <div class="skills-subpanel inventory-inspector-card">
                   <div class="skills-subhead">
                     <p class="inventory-quick-title">当前软件元数据</p>
@@ -4396,6 +4405,12 @@
       inventoryInspectorTab: "source",
       inventoryInspectorOpen: false,
       inventorySourceHeroSectionOpen: {},
+      inventoryUtilitySectionOpen: {
+        health: true,
+        history: false,
+        install_atom: false,
+        astrbot: false,
+      },
       inventoryDraftSkillIds: [],
       inventoryVisibleCompatibleSkillIds: [],
       inventoryVisibleDiscoveredSkillIds: [],
@@ -6820,6 +6835,36 @@
       return normalized;
     }
 
+    function normalizeInventoryUtilitySectionKey(value) {
+      const key = String(value || "").trim().toLowerCase();
+      return ["health", "history", "install_atom", "astrbot"].includes(key) ? key : "";
+    }
+
+    function normalizeInventoryUtilitySectionState(value) {
+      const input = value && typeof value === "object" ? value : {};
+      return {
+        health: input.health !== false,
+        history: Boolean(input.history),
+        install_atom: Boolean(input.install_atom),
+        astrbot: Boolean(input.astrbot),
+      };
+    }
+
+    function inventoryUtilitySectionOpen(sectionKey) {
+      const normalizedKey = normalizeInventoryUtilitySectionKey(sectionKey);
+      if (!normalizedKey) return false;
+      const sectionState = normalizeInventoryUtilitySectionState(state.inventoryUtilitySectionOpen);
+      return Boolean(sectionState[normalizedKey]);
+    }
+
+    function setInventoryUtilitySectionOpen(sectionKey, isOpen) {
+      const normalizedKey = normalizeInventoryUtilitySectionKey(sectionKey);
+      if (!normalizedKey) return;
+      const sectionState = normalizeInventoryUtilitySectionState(state.inventoryUtilitySectionOpen);
+      sectionState[normalizedKey] = Boolean(isOpen);
+      state.inventoryUtilitySectionOpen = sectionState;
+    }
+
     function inventorySourceHeroSectionOpen(sectionKey) {
       const normalizedKey = normalizeInventorySourceHeroSectionKey(sectionKey);
       if (!normalizedKey) return false;
@@ -6887,6 +6932,20 @@
       hintEl.textContent = inspectorOpen
         ? t("inventory_inspector_state_open")
         : t("inventory_inspector_state_closed");
+    }
+
+    function syncInventoryUtilitySectionToggles() {
+      const sectionState = normalizeInventoryUtilitySectionState(state.inventoryUtilitySectionOpen);
+      state.inventoryUtilitySectionOpen = sectionState;
+      document.querySelectorAll("[data-inventory-utility-toggle]").forEach((toggleEl) => {
+        const sectionKey = normalizeInventoryUtilitySectionKey(toggleEl.getAttribute("data-inventory-utility-toggle"));
+        if (!sectionKey) return;
+        const sectionEl = toggleEl.closest(".inventory-utility-section");
+        if (!sectionEl) return;
+        const isOpen = Boolean(sectionState[sectionKey]);
+        sectionEl.classList.toggle("is-open", isOpen);
+        toggleEl.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      });
     }
 
     function syncInventorySourceDetailScopeTabs() {
@@ -7032,6 +7091,9 @@
         if (parsed.inventorySourceHeroSectionOpen && typeof parsed.inventorySourceHeroSectionOpen === "object") {
           state.inventorySourceHeroSectionOpen = normalizeInventorySourceHeroSectionState(parsed.inventorySourceHeroSectionOpen);
         }
+        if (parsed.inventoryUtilitySectionOpen && typeof parsed.inventoryUtilitySectionOpen === "object") {
+          state.inventoryUtilitySectionOpen = normalizeInventoryUtilitySectionState(parsed.inventoryUtilitySectionOpen);
+        }
         if (typeof parsed.inventoryInstallAtomFilter === "string") {
           state.inventoryInstallAtomFilter = normalizeInventoryInstallAtomFilter(parsed.inventoryInstallAtomFilter);
         }
@@ -7073,6 +7135,7 @@
         inventoryShowUninstalled: Boolean(state.inventoryShowUninstalled),
         inventoryInspectorOpen: Boolean(state.inventoryInspectorOpen),
         inventorySourceHeroSectionOpen: normalizeInventorySourceHeroSectionState(state.inventorySourceHeroSectionOpen),
+        inventoryUtilitySectionOpen: normalizeInventoryUtilitySectionState(state.inventoryUtilitySectionOpen),
         inventoryInstallAtomFilter: normalizeInventoryInstallAtomFilter(state.inventoryInstallAtomFilter),
         inventoryInstallAtomRefreshStrategy: normalizeInventoryInstallAtomRefreshStrategy(state.inventoryInstallAtomRefreshStrategy),
         inventoryAstrbotSelectedWorkspaceId: String(state.inventoryAstrbotSelectedWorkspaceId || "").trim().toLowerCase(),
@@ -12661,6 +12724,7 @@
       const inspectorTab = normalizeInventoryInspectorTab(state.inventoryInspectorTab);
       const inspectorOpen = Boolean(state.inventoryInspectorOpen);
       const sourceHeroSectionState = normalizeInventorySourceHeroSectionState(state.inventorySourceHeroSectionOpen);
+      const utilitySectionState = normalizeInventoryUtilitySectionState(state.inventoryUtilitySectionOpen);
       state.inventorySelectedScope = bindingScope;
       state.inventorySourceCardView = sourceCardView;
       state.inventorySourceCardFontSize = sourceCardFontSize;
@@ -12680,6 +12744,7 @@
       state.inventoryInspectorTab = inspectorTab;
       state.inventoryInspectorOpen = inspectorOpen;
       state.inventorySourceHeroSectionOpen = sourceHeroSectionState;
+      state.inventoryUtilitySectionOpen = utilitySectionState;
       if (scopeEl && scopeEl.value !== bindingScope) {
         scopeEl.value = bindingScope;
       }
@@ -12717,6 +12782,7 @@
       syncInventoryExecutionHistoryTabs();
       syncInventoryInspectorTabs();
       syncInventoryInspectorDrawer();
+      syncInventoryUtilitySectionToggles();
       sourceDetailScopeTitleEl.textContent = t("inventory_detail_scope_title");
       fanoutPreviewTitleEl.textContent = t("inventory_fanout_preview_title");
       operationPlanTitleEl.textContent = t("inventory_operation_plan_title");
@@ -16834,6 +16900,19 @@ ${escapeHtml(t("inventory_quick_bindings"))}: ${bindings}
         state.inventoryInspectorOpen = false;
         persistPreferences();
         renderInventoryPanel();
+      });
+
+      $("inventoryInspectorUtilityPanel").addEventListener("click", (evt) => {
+        const toggleEl = evt.target && typeof evt.target.closest === "function"
+          ? evt.target.closest("[data-inventory-utility-toggle]")
+          : null;
+        if (!toggleEl || toggleEl.disabled) return;
+        const sectionKey = normalizeInventoryUtilitySectionKey(toggleEl.getAttribute("data-inventory-utility-toggle"));
+        if (!sectionKey) return;
+        const willOpen = !inventoryUtilitySectionOpen(sectionKey);
+        setInventoryUtilitySectionOpen(sectionKey, willOpen);
+        persistPreferences();
+        syncInventoryUtilitySectionToggles();
       });
 
       $("inventoryRefreshBtn").addEventListener("click", async () => {
